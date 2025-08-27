@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model user {
+  id            Int             @id @default(autoincrement())
+  public_id     String          @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
+  email         String          @unique(map: "email") @db.VarChar(255)
+  username      String          @unique(map: "username") @db.VarChar(100)
+  password_hash String          @db.Text
+  created_at    DateTime?       @default(now()) @db.DateTime(0)
+  journal       journal_entry[]
+}
+
+model strategy {
+  id             String          @id @default(uuid()) @db.Char(36)
+  name           String?         @db.VarChar(255)
+  date_created   DateTime?       @default(now()) @db.DateTime(0)
+  user_id        String          @db.VarChar(36)
+  strategy_rules strategy_rule[]
+}
+
+model rule {
+  id             String   @id @default(uuid()) @db.Char(36)
+  raw_input      String   @db.Text
+  normalized     String   @unique(map: "normalized") @db.VarChar(191)
+  strategy_rules strategy_rule[]
+}
+
+model strategy_rule {
+  id           String    @id @default(uuid()) @db.Char(36)
+  strategy_id  String    @db.Char(36)
+  rule_id      String    @db.Char(36)
+  date_created DateTime? @default(now()) @db.DateTime(0)
+  strategy     strategy  @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
+  rule         rule      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
+
+  @@index([rule_id], map: "rule_id")
+  @@index([strategy_id], map: "strategy_id")
+}
+
+model journal_entry {
+  id                  String               @id @default(uuid()) @db.Char(36)
+  user_id             Int
+  trade_type          Int
+  asset_name          String               @db.VarChar(50)
+  side                journal_entry_side
+  status              journal_entry_status @default(in_progress)
+  entry_price         Decimal              @default(0.00000000) @db.Decimal(18, 8)
+  exit_price          Decimal?             @db.Decimal(18, 8)
+  amount              Decimal              @db.Decimal(18, 8)
+  trade_datetime      DateTime             @db.DateTime(0)
+  strategy_id         String               @db.Char(36)
+  notes_entry         String?              @db.Text
+  notes_review        String?              @db.Text
+  created_at          DateTime             @default(now()) @db.Timestamp(0)
+  strategy_rule_match Int
+  futures_trade       futures_trade[]
+  user                user                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_user")
+  spot_trade          spot_trade[]
+
+  @@index([strategy_id], map: "fk_journal_entry_strategy")
+  @@index([user_id], map: "fk_journal_entry_user")
+}
+
+model spot_trade {
+  id               String        @id @default(uuid()) @db.Char(36)
+  journal_entry_id String        @db.Char(36)
+  journal_entry    journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "spot_trade_ibfk_1")
+
+  @@index([journal_entry_id], map: "journal_entry_id")
+}
+
+model futures_trade {
+  id                String        @id @default(uuid()) @db.Char(36)
+  journal_entry_id  String        @db.Char(36)
+  leverage          Int
+  margin_used       Decimal       @db.Decimal(18, 8)
+  liquidation_price Decimal       @db.Decimal(18, 8)
+  journal_entry     journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "futures_trade_ibfk_1")
+
+  @@index([journal_entry_id], map: "journal_entry_id")
+}
+
+model fear_greed_index {
+  id          String   @id @default(uuid()) @db.Char(36)
+  score       Int
+  value_text  String?  @db.VarChar(50)
+  recorded_at DateTime @db.Date
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model global_crypto_market_snapshot {
+  id             String   @id @default(uuid()) @db.Char(36)
+  market_cap_usd Decimal  @db.Decimal(20, 2)
+  btc_dominance  Decimal  @db.Decimal(5, 2)
+  usdt_dominance Decimal  @db.Decimal(5, 2)
+  recorded_at    DateTime @db.Date
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+}
+
+model funding_rate {
+  id           String   @id @default(uuid()) @db.Char(36)
+  symbol       String   @db.VarChar(20)
+  funding_rate Decimal  @db.Decimal(10, 8)
+  funding_time DateTime @db.DateTime(0)
+  recorded_at  DateTime @db.Date
+  created_at   DateTime @default(now()) @db.Timestamp(0)
+}
+
+model crypto_open_interest {
+  id                  String   @id @default(uuid()) @db.Char(36)
+  symbol              String   @db.VarChar(20)
+  exchange            String?  @db.VarChar(50)
+  open_interest_value Decimal  @db.Decimal(20, 2)
+  currency            String?  @default("USD") @db.VarChar(10)
+  source              String?  @default("coinglass") @db.VarChar(20)
+  recorded_at         DateTime @db.Date
+  fetched_at          DateTime @default(now()) @db.Timestamp(0)
+}
+
+enum journal_entry_side {
+  buy
+  sell
+  long
+  short
+}
+
+enum journal_entry_status {
+  in_progress @map("in-progress")
+  win
+  loss
+  break_even  @map("break-even")
+}
