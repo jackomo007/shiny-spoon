@@ -1,3 +1,5 @@
-export default async function JournalPage() {
-  return <h1>Journal</h1>;
+import JournalClient from "./journal-client"
+
+export default function JournalPage() {
+  return <JournalClient />
 }

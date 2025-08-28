@@ -8,10 +8,10 @@ type Props = {
   onClose: () => void
   children: React.ReactNode
   footer?: React.ReactNode
-  widthClass?: string // ex: "max-w-2xl"
+  widthClass?: string
 }
 
-export default function Modal({ open, onClose, title, children, footer, widthClass = "max-w-2xl" }: Props) {
+export default function Modal({ open, onClose, title, children, footer, widthClass = "max-w-sm" }: Props) {
   useEffect(() => {
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
