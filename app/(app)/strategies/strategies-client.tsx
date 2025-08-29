@@ -166,14 +166,26 @@ export default function StrategiesClient() {
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
-          <div className="text-sm text-gray-600">Top Performing Strategy</div>
-          <div className="mt-2 text-2xl font-semibold">N/A</div>
-          <div className="absolute right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">👥</div>
+          <div className="flex justify-between">
+            <div className="flex flex-col">
+              <div className="text-sm text-gray-600">Top Performing Strategy</div>
+              <div className="mt-2 text-2xl font-semibold">N/A</div>
+            </div>
+              <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">
+                👥
+              </div>
+          </div>
         </Card>
         <Card>
-          <div className="text-sm text-gray-600">Most Used Strategy</div>
-          <div className="mt-2 text-2xl font-semibold">N/A</div>
-          <div className="absolute right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">👁️</div>
+          <div className="flex justify-between">
+            <div className="flex flex-col">
+              <div className="text-sm text-gray-600">Most Used Strategy</div>
+              <div className="mt-2 text-2xl font-semibold">N/A</div>
+            </div>
+            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">
+              👁️
+            </div>
+          </div>
         </Card>
       </div>
 

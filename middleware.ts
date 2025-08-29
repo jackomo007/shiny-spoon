@@ -10,5 +10,6 @@ export const config = {
     "/strategies/:path*",
     "/journal/:path*",
     "/market-analysis/:path*",
+     "/profile/:path*",  
   ],
 }

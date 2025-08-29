@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum account_type {
+  crypto
+  stock
+  forex
+}
+
 model user {
   id            Int             @id @default(autoincrement())
   public_id     String          @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
@@ -14,15 +20,36 @@ model user {
   username      String          @unique(map: "username") @db.VarChar(100)
   password_hash String          @db.Text
   created_at    DateTime?       @default(now()) @db.DateTime(0)
-  journal       journal_entry[]
+
+  accounts      account[]
+}
+
+model account {
+  id         String       @id @default(uuid()) @db.Char(36)
+  user_id    Int
+  type       account_type
+  name       String?      @db.VarChar(100)
+  created_at DateTime     @default(now()) @db.DateTime(0)
+
+  user       user         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
+
+  strategies strategy[]
+  journals   journal_entry[]
+
+  @@index([user_id], map: "idx_account_user")
 }
 
 model strategy {
   id             String          @id @default(uuid()) @db.Char(36)
   name           String?         @db.VarChar(255)
   date_created   DateTime?       @default(now()) @db.DateTime(0)
-  user_id        String          @db.VarChar(36)
+
+  account_id     String          @db.Char(36)
+  account        account         @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
+
   strategy_rules strategy_rule[]
+
+  @@index([account_id], map: "fk_strategy_account")
 }
 
 model rule {
@@ -37,6 +64,7 @@ model strategy_rule {
   strategy_id  String    @db.Char(36)
   rule_id      String    @db.Char(36)
   date_created DateTime? @default(now()) @db.DateTime(0)
+
   strategy     strategy  @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
   rule         rule      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
 
@@ -46,7 +74,10 @@ model strategy_rule {
 
 model journal_entry {
   id                  String               @id @default(uuid()) @db.Char(36)
-  user_id             Int
+
+  account_id          String
+  account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
+
   trade_type          Int
   asset_name          String               @db.VarChar(50)
   side                journal_entry_side
@@ -60,12 +91,12 @@ model journal_entry {
   notes_review        String?              @db.Text
   created_at          DateTime             @default(now()) @db.Timestamp(0)
   strategy_rule_match Int
+
   futures_trade       futures_trade[]
-  user                user                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_user")
   spot_trade          spot_trade[]
 
   @@index([strategy_id], map: "fk_journal_entry_strategy")
-  @@index([user_id], map: "fk_journal_entry_user")
+  @@index([account_id], map: "fk_journal_entry_account")
 }
 
 model spot_trade {

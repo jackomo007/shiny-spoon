@@ -1,49 +1,32 @@
-export const runtime = "nodejs"
-
-import { prisma } from "@/lib/prisma"
-import { hash } from "bcryptjs"
-import { z } from "zod"
 import { NextResponse } from "next/server"
-
-const RegisterSchema = z.object({
-  email: z.string().email(),
-  username: z.string().min(2),
-  password: z.string().min(6),
-})
+import bcrypt from "bcryptjs"
+import { prisma } from "@/lib/prisma"
+import { cookies as nextCookies } from "next/headers"
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
-    const parsed = RegisterSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid payload", details: parsed.error.format() }, { status: 400 })
-    }
+    const { email, username, password } = await req.json()
 
-    const { email, username, password } = parsed.data
+    const exists = await prisma.user.findUnique({ where: { email } })
+    if (exists) return NextResponse.json({ error: "E-mail já está em uso" }, { status: 400 })
 
-    const emailExists = await prisma.user.findUnique({ where: { email } })
-    if (emailExists) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 })
-    }
+    const hash = await bcrypt.hash(password, 10)
 
-    const usernameExists = await prisma.user.findFirst({
-      where: { username },
-    })
-    if (usernameExists) {
-      return NextResponse.json({ error: "Username already in use" }, { status: 409 })
-    }
+    await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({ data: { email, username, password_hash: hash } })
+      const acc = await tx.account.create({
+        data: { user_id: u.id, type: "crypto", name: "My Crypto Account" },
+      })
 
-    const password_hash = await hash(password, 10)
-    await prisma.user.create({
-      data: { email, username, password_hash },
+      const jar = await nextCookies()
+      jar.set("active_account_id", acc.id, {
+        httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365,
+      })
     })
 
-    return NextResponse.json({ ok: true }, { status: 201 })
-  } catch (e: unknown) {
+    return NextResponse.json({ ok: true })
+  } catch (e) {
     console.error(e)
-    const errorMessage = typeof e === "object" && e !== null && "message" in e
-      ? (e as { message?: string }).message
-      : "Internal error";
-    return NextResponse.json({ error: errorMessage ?? "Internal error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to register" }, { status: 500 })
   }
 }

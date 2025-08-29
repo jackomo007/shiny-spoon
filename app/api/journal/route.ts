@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { getActiveAccountId } from "@/lib/account"
 
 const CreateSchema = z.object({
   asset_name: z.string().min(1),
-  trade_type: z.union([z.number(), z.string()]), // 1 spot, 2 futures
+  trade_type: z.union([z.number(), z.string()]), // 1=spot, 2=futures
   trade_datetime: z.string().min(1),             // ISO
   side: z.enum(["buy", "sell", "long", "short"]),
   status: z.enum(["in_progress", "win", "loss", "break_even"]),
@@ -20,30 +21,28 @@ const CreateSchema = z.object({
   futures: z.object({
     leverage: z.number().int().min(1),
     margin_used: z.number().nonnegative(),
-    liquidation_price: z.number().positive()
-  }).optional()
+    liquidation_price: z.number().positive(),
+  }).optional(),
 })
 
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // user_id é INT na tabela
   const userId = Number(session.user.id)
+  const accountId = await getActiveAccountId(userId)
 
   const rows = await prisma.journal_entry.findMany({
-    where: { user_id: userId },
+    where: { account_id: accountId },
     include: { spot_trade: true, futures_trade: true },
     orderBy: { trade_datetime: "desc" },
-    take: 1000
+    take: 1000,
   })
 
   const items = rows.map(r => ({
     id: r.id,
     asset_name: r.asset_name,
-    trade_type: r.trade_type,            // 1 spot | 2 futures
+    trade_type: r.trade_type,
     side: r.side,
     status: r.status,
     entry_price: Number(r.entry_price),
@@ -64,24 +63,28 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
   const parsed = CreateSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  }
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const data = parsed.data
   const userId = Number(session.user.id)
-  const tradeType = Number(data.trade_type) // 1 spot, 2 futures
+  const accountId = await getActiveAccountId(userId)
+  const tradeType = Number(data.trade_type)
+
+  // evita criar journal com strategy de outra conta
+  const okStrategy = await prisma.strategy.findFirst({
+    where: { id: data.strategy_id, account_id: accountId },
+    select: { id: true },
+  })
+  if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
   const created = await prisma.$transaction(async (tx) => {
     const je = await tx.journal_entry.create({
       data: {
-        user_id: userId,
+        account_id: accountId,
         trade_type: tradeType,
         asset_name: data.asset_name,
         trade_datetime: new Date(data.trade_datetime),
@@ -93,8 +96,8 @@ export async function POST(req: Request) {
         notes_review: data.notes_review ?? null,
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
-        exit_price: data.exit_price ?? null
-      }
+        exit_price: data.exit_price ?? null,
+      },
     })
 
     if (tradeType === 1) {
@@ -107,8 +110,8 @@ export async function POST(req: Request) {
           journal_entry_id: je.id,
           leverage: f.leverage,
           margin_used: f.margin_used,
-          liquidation_price: f.liquidation_price
-        }
+          liquidation_price: f.liquidation_price,
+        },
       })
     }
 

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { getActiveAccountId } from "@/lib/account"
 
 const UpdateSchema = z.object({
   asset_name: z.string().min(1),
@@ -20,26 +21,25 @@ const UpdateSchema = z.object({
   futures: z.object({
     leverage: z.number().int().min(1),
     margin_used: z.number().nonnegative(),
-    liquidation_price: z.number().positive()
-  }).optional()
+    liquidation_price: z.number().positive(),
+  }).optional(),
 })
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await ctx.params
+  const userId = Number(session.user.id)
+  const accountId = await getActiveAccountId(userId)
 
   const body = await req.json()
   const parsed = UpdateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const userId = Number(session.user.id)
   const tradeType = Number(parsed.data.trade_type)
 
-  const existing = await prisma.journal_entry.findUnique({ where: { id } })
-  if (!existing || existing.user_id !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
-  }
+  const existing = await prisma.journal_entry.findFirst({ where: { id, account_id: accountId } })
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
@@ -56,17 +56,15 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         notes_review: parsed.data.notes_review ?? null,
         strategy_rule_match: parsed.data.strategy_rule_match ?? 0,
         entry_price: parsed.data.entry_price,
-        exit_price: parsed.data.exit_price ?? null
-      }
+        exit_price: parsed.data.exit_price ?? null,
+      },
     })
 
     if (tradeType === 1) {
-      // garante relação spot
       await tx.futures_trade.deleteMany({ where: { journal_entry_id: id } })
-      const hasSpot = await tx.spot_trade.findFirst({ where: { journal_entry_id: id } })
-      if (!hasSpot) await tx.spot_trade.create({ data: { journal_entry_id: id } })
+      const spot = await tx.spot_trade.findFirst({ where: { journal_entry_id: id } })
+      if (!spot) await tx.spot_trade.create({ data: { journal_entry_id: id } })
     } else {
-      // garante relação futures
       await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } })
       const f = parsed.data.futures
       if (!f) throw new Error("Futures data required")
@@ -74,11 +72,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       if (existF) {
         await tx.futures_trade.update({
           where: { id: existF.id },
-          data: { leverage: f.leverage, margin_used: f.margin_used, liquidation_price: f.liquidation_price }
+          data: { leverage: f.leverage, margin_used: f.margin_used, liquidation_price: f.liquidation_price },
         })
       } else {
         await tx.futures_trade.create({
-          data: { journal_entry_id: id, leverage: f.leverage, margin_used: f.margin_used, liquidation_price: f.liquidation_price }
+          data: { journal_entry_id: id, leverage: f.leverage, margin_used: f.margin_used, liquidation_price: f.liquidation_price },
         })
       }
     }
@@ -91,12 +89,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await ctx.params
-
   const userId = Number(session.user.id)
-  const existing = await prisma.journal_entry.findUnique({ where: { id } })
-  if (!existing || existing.user_id !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
-  }
+  const accountId = await getActiveAccountId(userId)
+
+  const existing = await prisma.journal_entry.findFirst({ where: { id, account_id: accountId } })
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   await prisma.journal_entry.delete({ where: { id } })
   return NextResponse.json({ ok: true })
