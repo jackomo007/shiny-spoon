@@ -18,7 +18,7 @@ export const authOptions: NextAuthOptions = {
         if (!user) return null
         const ok = await bcrypt.compare(creds.password, user.password_hash)
         if (!ok) return null
-        return { id: String(user.id), name: user.username, email: user.email }
+        return { id: String(user.id), email: user.email, username: user.username, name: user.username }
       },
     }),
   ],
@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (token?.userId) (session.user as any).id = token.userId
+      if (token?.userId) session.user.id = token.userId.toString()
       return session
     },
   },

@@ -36,3 +36,20 @@ export async function listAccountsWithActive(userId: number) {
     items: rows,
   }
 }
+
+export async function selectAccount(userId: number, accountId: string) {
+  const acc = await prisma.account.findFirst({
+    where: { id: accountId, user_id: userId },
+    select: { id: true },
+  })
+  if (!acc) return false
+
+  const jar = await cookies()
+  jar.set("active_account_id", acc.id, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  })
+  return true
+}

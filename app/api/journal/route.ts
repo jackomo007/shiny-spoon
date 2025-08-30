@@ -31,6 +31,7 @@ export async function GET() {
 
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
+  if (accountId == null) return NextResponse.json([], { status: 200 })
 
   const rows = await prisma.journal_entry.findMany({
     where: { account_id: accountId },
@@ -72,11 +73,13 @@ export async function POST(req: Request) {
   const data = parsed.data
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
+  if (accountId == null) return NextResponse.json({ error: "Account not found" }, { status: 404 })
   const tradeType = Number(data.trade_type)
 
-  // evita criar journal com strategy de outra conta
+  const strategyId = data.strategy_id as string
+
   const okStrategy = await prisma.strategy.findFirst({
-    where: { id: data.strategy_id, account_id: accountId },
+    where: { id: strategyId, account_id: accountId },
     select: { id: true },
   })
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })

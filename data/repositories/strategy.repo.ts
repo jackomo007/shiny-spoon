@@ -1,9 +1,14 @@
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
+
+type StrategyWithRules = Prisma.strategyGetPayload<{
+  include: { strategy_rules: { include: { rule: true } } }
+}>
 
 export const StrategyRepo = {
-  listByUserPublicId(userPublicId: string) {
+  listByAccountId(accountId: string) {
     return prisma.strategy.findMany({
-      where: { user_id: userPublicId },
+      where: { account_id: accountId },
       orderBy: { date_created: "desc" },
       include: {
         strategy_rules: { include: { rule: true } },
@@ -11,44 +16,88 @@ export const StrategyRepo = {
     })
   },
 
-  async createWithRules(userPublicId: string, name: string, rules: string[]) {
-    const normalized = rules.map(r => r.trim().toLowerCase()).filter(Boolean)
-    return prisma.$transaction(async (tx) => {
-      const data: any = { user_id: userPublicId }
-      if (name && name.trim()) data.name = name.trim()
+  
+  listByUserPublicId(userPublicId: string) {
+    return prisma.strategy.findMany({
+      where: {
+        account: {
+          user: { public_id: userPublicId },
+        },
+      },
+      orderBy: { date_created: "desc" },
+      include: {
+        strategy_rules: { include: { rule: true } },
+      },
+    })
+  },
 
-      const strategy = await tx.strategy.create({ data })
+  async createWithRules(
+    accountId: string,
+    name: string,
+    rules: string[]
+  ): Promise<StrategyWithRules> {
+    const normalized = rules
+      .map((r) => r.trim().toLowerCase())
+      .filter(Boolean)
+
+    return prisma.$transaction(async (tx) => {
+      const strategy = await tx.strategy.create({
+        data: {
+          account: { connect: { id: accountId } },
+          name: name?.trim() || null,
+        },
+        include: {
+          strategy_rules: { include: { rule: true } },
+        },
+      })
 
       for (const raw of normalized) {
-        let rule = await tx.rule.findUnique({ where: { normalized: raw } })
-        if (!rule) {
-          rule = await tx.rule.create({ data: { raw_input: raw, normalized: raw } })
-        }
+        const rule = await tx.rule.upsert({
+          where: { normalized: raw },
+          create: { raw_input: raw, normalized: raw },
+          update: {},
+        })
+
         await tx.strategy_rule.create({
-          data: { strategy_id: strategy.id, rule_id: rule.id }
+          data: { strategy_id: strategy.id, rule_id: rule.id },
         })
       }
-      return strategy
+
+      return tx.strategy.findUniqueOrThrow({
+        where: { id: strategy.id },
+        include: { strategy_rules: { include: { rule: true } } },
+      })
     })
   },
 
   async updateWithRules(id: string, name: string, rules: string[]) {
-    const normalized = rules.map(r => r.trim().toLowerCase()).filter(Boolean)
-    return prisma.$transaction(async (tx) => {
-      const data: any = {}
-      if (name && name.trim()) data.name = name.trim()
-      else data.name = null // se quiser permitir limpar o nome
+    const normalized = rules
+      .map((r) => r.trim().toLowerCase())
+      .filter(Boolean)
 
-      await tx.strategy.update({ where: { id }, data })
+    return prisma.$transaction(async (tx) => {
+      await tx.strategy.update({
+        where: { id },
+        data: { name: name?.trim() || null },
+      })
+
       await tx.strategy_rule.deleteMany({ where: { strategy_id: id } })
 
       for (const raw of normalized) {
-        let rule = await tx.rule.findUnique({ where: { normalized: raw } })
-        if (!rule) {
-          rule = await tx.rule.create({ data: { raw_input: raw, normalized: raw } })
-        }
-        await tx.strategy_rule.create({ data: { strategy_id: id, rule_id: rule.id } })
+        const rule = await tx.rule.upsert({
+          where: { normalized: raw },
+          create: { raw_input: raw, normalized: raw },
+          update: {},
+        })
+        await tx.strategy_rule.create({
+          data: { strategy_id: id, rule_id: rule.id },
+        })
       }
+
+      return tx.strategy.findUniqueOrThrow({
+        where: { id },
+        include: { strategy_rules: { include: { rule: true } } },
+      })
     })
   },
 

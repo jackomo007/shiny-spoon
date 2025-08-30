@@ -8,6 +8,6 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const userId = Number(session.user.id)
-  const { rows, active } = await listAccountsWithActive(userId)
-  return NextResponse.json({ accounts: rows, active })
+  const { items, active } = await listAccountsWithActive(userId)
+  return NextResponse.json({ accounts: items, active })
 }

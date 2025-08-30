@@ -31,6 +31,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const { id } = await ctx.params
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
+  if (!accountId) return NextResponse.json({ error: "Active account not found" }, { status: 404 })
 
   const body = await req.json()
   const parsed = UpdateSchema.safeParse(body)
@@ -91,6 +92,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
+  if (!accountId) return NextResponse.json({ error: "Active account not found" }, { status: 404 })
 
   const existing = await prisma.journal_entry.findFirst({ where: { id, account_id: accountId } })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
