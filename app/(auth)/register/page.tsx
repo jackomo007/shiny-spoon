@@ -1,57 +1,91 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 
+type T = "crypto" | "stock" | "forex"
+
 export default function RegisterPage() {
+  const r = useRouter()
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [types, setTypes] = useState<T[]>(["crypto"])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
 
-  async function onSubmit(e: FormEvent) {
+  function toggle(t: T) {
+    if (t === "crypto") return
+    setTypes((prev) =>
+      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+    )
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError(null)
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, username, password })
-    })
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}))
-      setError(j.error || "Erro ao registrar")
-      return
+    setErr(null); setLoading(true)
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, username, password, types }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      
+      r.push("/login")
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed")
+    } finally {
+      setLoading(false)
     }
-    router.push("/login")
+  }
+
+  const Card = ({ t, locked = false }: { t: T; locked?: boolean }) => {
+    const active = types.includes(t)
+    return (
+      <button
+        type="button"
+        disabled={locked}
+        onClick={() => toggle(t)}
+        className={`rounded-2xl border p-4 text-left hover:bg-gray-50 ${active ? "border-primary" : "border-gray-200"} ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
+      >
+        <div className="text-sm text-gray-500">{t.toUpperCase()}</div>
+        <div className="mt-1 font-semibold">
+          {t === "crypto" ? "Crypto (default)" : t === "stock" ? "Stock" : "Forex"}
+        </div>
+        <div className="mt-2">
+          <input type="checkbox" readOnly checked={active} />{" "}
+          <span className="text-sm">{locked ? "Always on" : "Enable"}</span>
+        </div>
+      </button>
+    )
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-neutral-50">
-      <form onSubmit={onSubmit} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm border border-neutral-200">
-        <h1 className="mb-4 text-xl font-semibold">Register</h1>
-        <div className="mb-3">
-          <label className="block text-sm mb-1">Email</label>
-          <input value={email} onChange={e=>setEmail(e.target.value)}
-                 className="w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
-                 type="email" required />
+    <div className="mx-auto max-w-md py-10 px-4">
+      <h1 className="text-2xl font-semibold mb-6">Create your account</h1>
+
+      <form className="grid gap-4" onSubmit={onSubmit}>
+        <input className="rounded-xl border p-2" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+        <input className="rounded-xl border p-2" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
+        <input className="rounded-xl border p-2" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+
+        <div className="mt-2">
+          <div className="text-sm mb-2">Account types</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Card t="crypto" locked />
+            <Card t="stock" />
+            <Card t="forex" />
+          </div>
         </div>
-        <div className="mb-3">
-          <label className="block text-sm mb-1">Username</label>
-          <input value={username} onChange={e=>setUsername(e.target.value)}
-                 className="w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
-                 required />
-        </div>
-        <div className="mb-4">
-          <label className="block text-sm mb-1">Password</label>
-          <input value={password} onChange={e=>setPassword(e.target.value)}
-                 className="w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-violet-500"
-                 type="password" minLength={6} required />
-        </div>
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-        <button className="w-full rounded-lg bg-violet-600 py-2 text-white hover:bg-violet-700">Criar conta</button>
-        <p className="mt-4 text-sm text-neutral-600">
-          Já tem conta? <a className="text-violet-700 underline" href="/login">Entrar</a>
+
+        {err && <div className="text-sm text-red-600">{err}</div>}
+
+        <button disabled={loading} className="rounded-xl bg-primary text-white px-4 py-2 disabled:opacity-50">
+          {loading ? "Creating…" : "Create account"}
+        </button>
+          <p className="mt-4 text-sm text-neutral-600">
+          Already have an account? <a className="text-violet-700 underline" href="/login">Login</a>
         </p>
       </form>
     </div>

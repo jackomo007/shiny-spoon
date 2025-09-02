@@ -2,21 +2,29 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Card from "@/components/ui/Card"
+
+type AccountType = "crypto" | "stock" | "forex"
 
 type AccountRow = {
   id: string
   name: string | null
-  type: "crypto" | "stock" | "forex"
-  created_at: string | Date
+  type: AccountType
+  created_at?: string | null
 }
 
-export default function AccountSwitcher({ onClose }: { onClose?: () => void }) {
+type ApiListResponse = {
+  items: AccountRow[]
+  activeId: string | null
+}
+
+type Props = { open?: boolean; onClose: () => void }
+
+export default function AccountSwitcher({ open, onClose }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<AccountRow[]>([])
-  const [active, setActive] = useState<string | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   async function load() {
     try {
@@ -24,9 +32,9 @@ export default function AccountSwitcher({ onClose }: { onClose?: () => void }) {
       setError(null)
       const r = await fetch("/api/accounts", { cache: "no-store" })
       if (!r.ok) throw new Error(await r.text())
-      const payload = (await r.json()) as { accounts: AccountRow[]; active: string | null }
-      setItems(Array.isArray(payload.accounts) ? payload.accounts : [])
-      setActive(payload.active ?? null)
+      const data = (await r.json()) as ApiListResponse
+      setItems(Array.isArray(data.items) ? data.items : [])
+      setActiveId(data.activeId ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load accounts")
     } finally {
@@ -34,18 +42,32 @@ export default function AccountSwitcher({ onClose }: { onClose?: () => void }) {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (typeof open === "boolean" && !open) return
+    load()
+  }, [open])
 
-  async function select(accountId: string) {
+  if (typeof open === "boolean" && !open) return null
+
+  async function switchAccount(id: string) {
     try {
-      const r = await fetch("/api/accounts/select", {
+      const r = await fetch("/api/accounts/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
+        body: JSON.stringify({ accountId: id }),
       })
-      if (!r.ok) throw new Error(await r.text())
-      onClose?.()
-      router.refresh() // troca escopo nos dados
+      if (!r.ok) {
+        let msg = "Failed to switch account"
+        try {
+          const data = await r.json()
+          if (data?.error) msg = String(data.error)
+        } catch {
+        }
+        throw new Error(msg)
+      }
+      setActiveId(id)
+      onClose()
+      router.refresh()
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to switch account")
     }
@@ -53,33 +75,50 @@ export default function AccountSwitcher({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="grid gap-3">
-      <div className="text-sm text-gray-500 px-1">Accounts</div>
+      <div className="text-sm text-gray-500">Accounts</div>
 
       {loading ? (
-        <div className="text-sm text-gray-500 p-3">Loading…</div>
+        <div className="text-sm text-gray-500 py-6">Loading…</div>
       ) : error ? (
-        <div className="text-sm text-red-600 p-3">{error}</div>
+        <div className="text-sm text-red-600 py-6">{error}</div>
       ) : items.length === 0 ? (
-        <div className="text-sm text-gray-500 py-4 px-1">No accounts</div>
+        <div className="text-sm text-gray-500 py-6">No accounts</div>
       ) : (
-        items.map(acc => (
-          <Card
-            key={acc.id}
-            className={`cursor-pointer hover:bg-gray-50 border ${
-              active === acc.id ? "border-primary" : "border-transparent"
-            }`}
-            onClick={() => select(acc.id)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{acc.name ?? "Untitled"}</div>
-                <div className="text-xs text-gray-500">{acc.type.toUpperCase()}</div>
+        items.map((acc) => {
+          const isActive = acc.id === activeId
+          return (
+            <button
+              key={acc.id}
+              onClick={() => switchAccount(acc.id)}
+              className={`w-full text-left rounded-2xl border p-4 hover:bg-gray-50 transition ${
+                isActive ? "border-primary/60 bg-primary/5" : "border-gray-200"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{acc.name ?? "Untitled account"}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{acc.type.toUpperCase()}</div>
+                </div>
+                {isActive && (
+                  <span className="text-xs rounded-full px-2 py-1 bg-green-100 text-green-700">
+                    Active
+                  </span>
+                )}
               </div>
-              {active === acc.id && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Active</span>}
-            </div>
-          </Card>
-        ))
+            </button>
+          )
+        })
       )}
+
+      <div className="pt-2">
+        <a
+          href="/profile"
+          className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+          onClick={onClose}
+        >
+          Manage accounts
+        </a>
+      </div>
     </div>
   )
 }

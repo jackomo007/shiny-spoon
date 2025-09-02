@@ -37,6 +37,7 @@ model account {
   journals   journal_entry[]
 
   @@index([user_id], map: "idx_account_user")
+  @@unique([user_id, type], map: "uniq_user_type")
 }
 
 model strategy {

@@ -1,9 +1,16 @@
-import { cookies } from "next/headers"
 import { prisma } from "@/lib/prisma"
+import { cookies } from "next/headers"
+const COOKIE_NAME = "active_account_id"
+const cookieOpts = {
+  httpOnly: true as const,
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 24 * 365,
+}
 
-export async function getActiveAccountId(userId: number): Promise<string | null> {
+export async function getActiveAccountId(userId: number): Promise<string> {
   const jar = await cookies()
-  const fromCookie = jar.get("active_account_id")?.value
+  const fromCookie = jar.get(COOKIE_NAME)?.value ?? null
 
   if (fromCookie) {
     const ok = await prisma.account.findFirst({
@@ -18,12 +25,15 @@ export async function getActiveAccountId(userId: number): Promise<string | null>
     orderBy: { created_at: "asc" },
     select: { id: true },
   })
-  return first?.id ?? null
+  if (!first) throw new Error("User has no accounts")
+
+  jar.set(COOKIE_NAME, first.id, cookieOpts)
+  return first.id
 }
 
 export async function listAccountsWithActive(userId: number) {
   const jar = await cookies()
-  const active = jar.get("active_account_id")?.value ?? null
+  const activeId = jar.get(COOKIE_NAME)?.value ?? null
 
   const rows = await prisma.account.findMany({
     where: { user_id: userId },
@@ -31,10 +41,21 @@ export async function listAccountsWithActive(userId: number) {
     select: { id: true, name: true, type: true, created_at: true },
   })
 
-  return {
-    active,
-    items: rows,
-  }
+  return { items: rows, activeId }
+}
+
+export async function setActiveAccountId(
+  userId: number,
+  accountId: string
+): Promise<boolean> {
+  const ok = await prisma.account.findFirst({
+    where: { id: accountId, user_id: userId },
+    select: { id: true },
+  })
+  if (!ok) return false
+  const jar = await cookies()
+  jar.set(COOKIE_NAME, accountId, cookieOpts)
+  return true
 }
 
 export async function selectAccount(userId: number, accountId: string) {
@@ -45,11 +66,6 @@ export async function selectAccount(userId: number, accountId: string) {
   if (!acc) return false
 
   const jar = await cookies()
-  jar.set("active_account_id", acc.id, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  })
+  jar.set(COOKIE_NAME, acc.id, cookieOpts)
   return true
 }

@@ -29,7 +29,6 @@ export default function DashboardShell({
 
   return (
     <div className="min-h-dvh bg-gray-50">
-      {/* Topbar */}
       <div className="bg-primary text-white">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
@@ -43,7 +42,6 @@ export default function DashboardShell({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Botão Accounts (abre overlay) */}
             <button
               onClick={() => setAccOpen(true)}
               className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20"
@@ -52,7 +50,6 @@ export default function DashboardShell({
               <span>👥</span> Accounts
             </button>
 
-            {/* Perfil (dropdown) */}
             <div className="relative">
               <button
                 onClick={() => setOpenProfile((v) => !v)}
@@ -98,7 +95,6 @@ export default function DashboardShell({
         </div>
       </div>
 
-      {/* Layout com sidebar + conteúdo */}
       <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 px-4 md:px-6 py-6">
         <aside className="hidden md:block">
           <div className="rounded-2xl bg-primary text-white p-6">
@@ -130,8 +126,7 @@ export default function DashboardShell({
         <main>{children}</main>
       </div>
 
-      {/* Overlay do Account Switcher */}
-      {accOpen && (
+     {accOpen && (
         <div
           className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[1px]"
           onClick={() => setAccOpen(false)}
