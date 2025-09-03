@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import Card from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
@@ -106,6 +106,9 @@ export default function JournalClient() {
   const wAmount = watch("amount");
   const wEntry = watch("entry_price");
   const wLev = watch("leverage");
+  type StrategiesApiShape =
+  | StrategyOption[]
+  | { items: StrategyOption[]; summary?: unknown };
 
   useEffect(() => {
     if (wTradeType === 2) {
@@ -121,31 +124,57 @@ export default function JournalClient() {
     }
   }, [wTradeType, wAmount, wEntry, wLev, setValue]);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
       const [jr, st] = await Promise.all([
         fetch("/api/journal", { cache: "no-store" }),
         fetch("/api/strategies", { cache: "no-store" }),
       ]);
+
       if (!jr.ok) throw new Error(await jr.text());
       if (!st.ok) throw new Error(await st.text());
 
-      const journalData = (await jr.json()) as JournalRow[];
-      const strategiesData = (await st.json()) as StrategyOption[];
+      // journal rows
+      const journalPayload: unknown = await jr.json();
+      // se o endpoint /api/journal retornar um array de JournalRow
+      if (Array.isArray(journalPayload)) {
+        setItems(journalPayload as JournalRow[]);
+      } else if (
+        typeof journalPayload === "object" &&
+        journalPayload !== null &&
+        "items" in journalPayload &&
+        Array.isArray((journalPayload as { items: unknown }).items)
+      ) {
+        setItems((journalPayload as { items: JournalRow[] }).items);
+      } else {
+        setItems([]);
+      }
 
-      setItems(journalData);
-      setStrategies(strategiesData);
+      // strategies
+    const strategiesPayload: StrategiesApiShape = await st.json();
+
+    let list: StrategyOption[] = [];
+    if (Array.isArray(strategiesPayload)) {
+      list = strategiesPayload;
+    } else {
+      list = strategiesPayload.items;
+    }
+
+    setStrategies(list.map(({ id, name }) => ({ id, name })));
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal");
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => {
-    load();
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // filtro + sort
   const rows = useMemo(() => {
@@ -343,7 +372,7 @@ export default function JournalClient() {
                   );
                   return total ? `$${total.toLocaleString()}` : "$0";
                 })()}
-              </div>  
+              </div>
             </div>
             <div className="right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-orange-500 text-white">
               $
@@ -444,7 +473,7 @@ export default function JournalClient() {
                   <MenuItem
                     label="Refresh"
                     onClick={() => {
-                      load();
+                      void load();
                       setShowMenu(false);
                     }}
                   />

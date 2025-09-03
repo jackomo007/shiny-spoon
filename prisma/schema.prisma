@@ -54,11 +54,15 @@ model strategy {
 }
 
 model rule {
-  id             String   @id @default(uuid()) @db.Char(36)
-  raw_input      String   @db.Text
-  normalized     String   @unique(map: "normalized") @db.VarChar(191)
+  id             String          @id @default(uuid()) @db.Char(36)
+  title          String          @db.VarChar(191)
+  description    String?         @db.Text
   strategy_rules strategy_rule[]
+
+  @@index([title], map: "rule_title_idx")
+  @@unique([title])
 }
+
 
 model strategy_rule {
   id           String    @id @default(uuid()) @db.Char(36)
@@ -85,6 +89,10 @@ model journal_entry {
   status              journal_entry_status @default(in_progress)
   entry_price         Decimal              @default(0.00000000) @db.Decimal(18, 8)
   exit_price          Decimal?             @db.Decimal(18, 8)
+
+  stop_loss_price     Decimal?             @db.Decimal(18, 8)
+  take_profit_price   Decimal?             @db.Decimal(18, 8)
+
   amount              Decimal              @db.Decimal(18, 8)
   trade_datetime      DateTime             @db.DateTime(0)
   strategy_id         String               @db.Char(36)

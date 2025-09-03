@@ -5,59 +5,46 @@ type StrategyWithRules = Prisma.strategyGetPayload<{
   include: { strategy_rules: { include: { rule: true } } }
 }>
 
+export type UpsertRule = { title: string; description?: string | null }
+
 export const StrategyRepo = {
   listByAccountId(accountId: string) {
     return prisma.strategy.findMany({
       where: { account_id: accountId },
       orderBy: { date_created: "desc" },
-      include: {
-        strategy_rules: { include: { rule: true } },
-      },
+      include: { strategy_rules: { include: { rule: true } } },
     })
   },
 
-  
   listByUserPublicId(userPublicId: string) {
     return prisma.strategy.findMany({
-      where: {
-        account: {
-          user: { public_id: userPublicId },
-        },
-      },
+      where: { account: { user: { public_id: userPublicId } } },
       orderBy: { date_created: "desc" },
-      include: {
-        strategy_rules: { include: { rule: true } },
-      },
+      include: { strategy_rules: { include: { rule: true } } },
     })
   },
 
   async createWithRules(
     accountId: string,
     name: string,
-    rules: string[]
+    rules: UpsertRule[]
   ): Promise<StrategyWithRules> {
     const normalized = rules
-      .map((r) => r.trim().toLowerCase())
-      .filter(Boolean)
+      .map(r => ({ title: r.title.trim(), description: (r.description ?? "").trim() || null }))
+      .filter(r => !!r.title)
 
     return prisma.$transaction(async (tx) => {
       const strategy = await tx.strategy.create({
-        data: {
-          account: { connect: { id: accountId } },
-          name: name?.trim() || null,
-        },
-        include: {
-          strategy_rules: { include: { rule: true } },
-        },
+        data: { account: { connect: { id: accountId } }, name: name?.trim() || null },
+        include: { strategy_rules: { include: { rule: true } } },
       })
 
-      for (const raw of normalized) {
+      for (const r of normalized) {
         const rule = await tx.rule.upsert({
-          where: { normalized: raw },
-          create: { raw_input: raw, normalized: raw },
-          update: {},
+          where: { title: r.title },
+          create: { title: r.title, description: r.description },
+          update: { description: r.description ?? undefined },
         })
-
         await tx.strategy_rule.create({
           data: { strategy_id: strategy.id, rule_id: rule.id },
         })
@@ -70,24 +57,20 @@ export const StrategyRepo = {
     })
   },
 
-  async updateWithRules(id: string, name: string, rules: string[]) {
+  async updateWithRules(id: string, name: string, rules: UpsertRule[]) {
     const normalized = rules
-      .map((r) => r.trim().toLowerCase())
-      .filter(Boolean)
+      .map(r => ({ title: r.title.trim(), description: (r.description ?? "").trim() || null }))
+      .filter(r => !!r.title)
 
     return prisma.$transaction(async (tx) => {
-      await tx.strategy.update({
-        where: { id },
-        data: { name: name?.trim() || null },
-      })
-
+      await tx.strategy.update({ where: { id }, data: { name: name?.trim() || null } })
       await tx.strategy_rule.deleteMany({ where: { strategy_id: id } })
 
-      for (const raw of normalized) {
+      for (const r of normalized) {
         const rule = await tx.rule.upsert({
-          where: { normalized: raw },
-          create: { raw_input: raw, normalized: raw },
-          update: {},
+          where: { title: r.title },
+          create: { title: r.title, description: r.description },
+          update: { description: r.description ?? undefined },
         })
         await tx.strategy_rule.create({
           data: { strategy_id: id, rule_id: rule.id },

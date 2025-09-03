@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useEffect, useMemo, useState, useCallback } from "react"
+import { useForm } from "react-hook-form"
 import Card from "@/components/ui/Card"
 import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
@@ -11,16 +11,10 @@ type Row = {
   name: string | null
   date_created: string | Date
   rules: string[]
-  tradesUsed?: number
-  winRate?: number
-  avgRR?: string | null
-  avgReturnPct?: number
-  pnl?: number
-}
-
-type UpsertPayload = {
-  name: string
-  rules: { value: string }[]
+  tradesUsed: number
+  winRate: number
+  avgRR: string | null
+  pnl: number
 }
 
 export default function StrategiesClient() {
@@ -28,104 +22,147 @@ export default function StrategiesClient() {
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<Row[]>([])
 
-  // toolbar
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState("")
   const [sort, setSort] = useState<"new" | "az" | "za">("new")
   const [showFilter, setShowFilter] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
-  // modal create/edit
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<"create" | "edit">("create")
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  // modal delete
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // form
-  const { register, control, handleSubmit, reset, formState: { isSubmitting } } = useForm<UpsertPayload>({
-    defaultValues: { name: "", rules: [{ value: "" }, { value: "" }] }
+  const [start, setStart] = useState<string>(() => {
+    const end = new Date()
+    const s = new Date(new Date().setMonth(end.getMonth() - 6))
+    return s.toISOString().slice(0, 10)
   })
-  const { fields, append, remove, replace } = useFieldArray({ control, name: "rules" })
+  const [end, setEnd] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [summary, setSummary] = useState<{ topPerformingId: string | null; mostUsedId: string | null }>({ topPerformingId: null, mostUsedId: null })
 
-  async function load() {
+  const { register, getValues, formState: { isSubmitting }, reset } = useForm<{ name: string }>({
+    defaultValues: { name: "" }
+  })
+
+  const load = useCallback(async () => {
     try {
       setLoading(true); setError(null)
-      const r = await fetch("/api/strategies", { cache: "no-store" })
+      const qs = new URLSearchParams({ start, end }).toString()
+      const r = await fetch(`/api/strategies?${qs}`, { cache: "no-store" })
       if (!r.ok) throw new Error(await r.text())
-      const data = (await r.json()) as Row[]
-      const withKpis = data.map(d => ({
-        ...d,
-        tradesUsed: d.tradesUsed ?? 0,
-        winRate: d.winRate ?? 0,
-        avgRR: d.avgRR ?? "N/A",
-        avgReturnPct: d.avgReturnPct ?? 0,
-        pnl: d.pnl ?? 0
-      }))
-      setItems(withKpis)
+      const data = await r.json() as { items: Row[]; summary: { topPerformingId: string|null; mostUsedId: string|null } }
+      setItems(data.items)
+      setSummary(data.summary)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load strategies")
     } finally {
       setLoading(false)
     }
-  }
-  useEffect(() => { load() }, [])
+  }, [start, end])
 
-  // filtro + sort
+  useEffect(() => { void load() }, [load])
+
   const rows = useMemo(() => {
     let arr = items
     const q = query.trim().toLowerCase()
     if (q) arr = arr.filter(i => (i.name ?? "").toLowerCase().includes(q))
     switch (sort) {
-      case "az": return [...arr].sort((a,b) => (a.name ?? "").localeCompare(b.name ?? ""))
-      case "za": return [...arr].sort((a,b) => (b.name ?? "").localeCompare(a.name ?? ""))
-      default:   return [...arr].sort((a,b) => +new Date(b.date_created) - +new Date(a.date_created))
+      case "az": return [...arr].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+      case "za": return [...arr].sort((a, b) => (b.name ?? "").localeCompare(a.name ?? ""))
+      default:   return [...arr].sort((a, b) => +new Date(b.date_created) - +new Date(a.date_created))
     }
   }, [items, query, sort])
 
+  type RuleRow = { id: string; title: string; description?: string | null }
+  const [step, setStep] = useState<"list" | "edit">("list")
+  const [rules, setRules] = useState<RuleRow[]>([])
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
+
   function openCreate() {
     setMode("create"); setEditingId(null)
-    reset({ name: "", rules: [{ value: "" }, { value: "" }] })
-    setOpen(true)
-  }
-  function openEdit(row: Row) {
-    setMode("edit"); setEditingId(row.id)
-    const rulesArray = (row.rules.length ? row.rules : ["",""]).map(v => ({ value: v }))
-    replace(rulesArray)
-    reset({ name: row.name ?? "", rules: rulesArray })
+    reset({ name: "" })
+    setRules([])
+    setSelectedRuleId(null)
+    setStep("list")
     setOpen(true)
   }
 
-  async function onSubmit(data: UpsertPayload) {
+  function openEdit(row: Row) {
+    setMode("edit"); setEditingId(row.id)
+    reset({ name: row.name ?? "" })
+    setRules((row.rules ?? []).map((t, i) => ({ id: String(i + 1), title: t, description: null })))
+    setSelectedRuleId(null)
+    setStep("list")
+    setOpen(true)
+  }
+
+  const [editTitle, setEditTitle] = useState("")
+  const [editDesc, setEditDesc] = useState("")
+
+  useEffect(() => {
+    if (step === "edit" && selectedRuleId) {
+      const rr = rules.find(r => r.id === selectedRuleId)
+      setEditTitle(rr?.title ?? "")
+      setEditDesc(rr?.description ?? "")
+    } else if (step === "edit") {
+      setEditTitle("")
+      setEditDesc("")
+    }
+  }, [step, selectedRuleId, rules])
+
+  function addRule() {
+    setSelectedRuleId(null)
+    setStep("edit")
+  }
+  function editRule(id: string) {
+    setSelectedRuleId(id)
+    setStep("edit")
+  }
+  function deleteRule(id: string) {
+    setRules(prev => prev.filter(r => r.id !== id))
+    if (selectedRuleId === id) setSelectedRuleId(null)
+  }
+  function saveRule() {
+    const title = editTitle.trim()
+    if (!title) { alert("Rule title is required"); return }
+    if (selectedRuleId) {
+      setRules(prev => prev.map(r => r.id === selectedRuleId ? { ...r, title, description: editDesc.trim() || null } : r))
+    } else {
+      const newId = crypto.randomUUID()
+      setRules(prev => [...prev, { id: newId, title, description: editDesc.trim() || null }])
+    }
+    setStep("list")
+  }
+
+  async function onSubmitNameAndRules() {
+    const values = getValues() as { name: string }
     const payload = {
-      name: data.name.trim(),
-      rules: data.rules.map(r => r.value.trim()).filter(Boolean)
+      name: values.name.trim(),
+      rules: rules.map(r => ({
+        title: r.title.trim(),
+        description: (r.description ?? "").trim() || null,
+      })),
     }
-    if (!payload.name) {
-      alert("Strategy Name is required")
-      return
-    }
-    if (payload.rules.length < 1) {
-      alert("Please add at least 1 rule")
-      return
-    }
+    if (!payload.name) { alert("Strategy Name is required"); return }
+    if (payload.rules.length < 1) { alert("Please add at least 1 rule"); return }
 
     try {
       if (mode === "create") {
         const r = await fetch("/api/strategies", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         })
         if (!r.ok) throw new Error(await r.text())
       } else {
         const r = await fetch(`/api/strategies/${editingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         })
         if (!r.ok) throw new Error(await r.text())
       }
@@ -169,28 +206,67 @@ export default function StrategiesClient() {
           <div className="flex justify-between">
             <div className="flex flex-col">
               <div className="text-sm text-gray-600">Top Performing Strategy</div>
-              <div className="mt-2 text-2xl font-semibold">N/A</div>
-            </div>
-              <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">
-                👥
+              <div className="mt-2 text-2xl font-semibold">
+                {(() => {
+                  const it = items.find(i => i.id === summary.topPerformingId)
+                  return it?.name ?? "N/A"
+                })()}
               </div>
+            </div>
+            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">👥</div>
           </div>
         </Card>
+
         <Card>
           <div className="flex justify-between">
             <div className="flex flex-col">
               <div className="text-sm text-gray-600">Most Used Strategy</div>
-              <div className="mt-2 text-2xl font-semibold">N/A</div>
+              <div className="mt-2 text-2xl font-semibold">
+                {(() => {
+                  const it = items.find(i => i.id === summary.mostUsedId)
+                  return it?.name ?? "N/A"
+                })()}
+              </div>
             </div>
-            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">
-              👁️
-            </div>
+            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">👁️</div>
           </div>
         </Card>
       </div>
 
+      <Card>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-sm text-gray-600">Date range:</div>
+            <input
+              type="date"
+              value={start}
+              onChange={e => setStart(e.target.value)}
+              className="rounded-xl border border-gray-200 px-3 py-2"
+            />
+            <span className="text-gray-400">—</span>
+            <input
+              type="date"
+              value={end}
+              onChange={e => setEnd(e.target.value)}
+              className="rounded-xl border border-gray-200 px-3 py-2"
+            />
+            <button
+              className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
+              onClick={() => {
+                const now = new Date()
+                const s = new Date(new Date().setMonth(now.getMonth() - 6))
+                setStart(s.toISOString().slice(0, 10))
+                setEnd(now.toISOString().slice(0, 10))
+              }}
+            >
+              Last 6 months
+            </button>
+            <button className="rounded-xl bg-white px-3 py-2 text-sm border" onClick={load}>
+              Apply
+            </button>
+          </div>
+        </Card>
+
       <Card className="p-0 overflow-hidden">
-        {/* search bar */}
         {showSearch && (
           <div className="px-6 py-4 border-b">
             <div className="flex items-center gap-3">
@@ -216,9 +292,9 @@ export default function StrategiesClient() {
               {showFilter && (
                 <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
                      onMouseLeave={() => setShowFilter(false)}>
-                  <MenuItem label="Newest" onClick={() => { setSort("new"); setShowFilter(false) }} icon="🧾"/>
-                  <MenuItem label="From A-Z" onClick={() => { setSort("az"); setShowFilter(false) }} icon="🔤"/>
-                  <MenuItem label="From Z-A" onClick={() => { setSort("za"); setShowFilter(false) }} icon="🔠"/>
+                  <MenuItem label="Newest" onClick={() => { setSort("new"); setShowFilter(false) }} icon="🧾" />
+                  <MenuItem label="From A-Z" onClick={() => { setSort("az"); setShowFilter(false) }} icon="🔤" />
+                  <MenuItem label="From Z-A" onClick={() => { setSort("za"); setShowFilter(false) }} icon="🔠" />
                 </div>
               )}
             </div>
@@ -250,7 +326,6 @@ export default function StrategiesClient() {
                   <Th>Trades Used</Th>
                   <Th>Win Rate</Th>
                   <Th>Average R:R</Th>
-                  <Th>Average Return %</Th>
                   <Th>Total PNL</Th>
                   <Th> </Th>
                 </tr>
@@ -263,7 +338,6 @@ export default function StrategiesClient() {
                       <Td>{r.tradesUsed}</Td>
                       <Td>{r.winRate}%</Td>
                       <Td>{r.avgRR}</Td>
-                      <Td>{r.avgReturnPct}%</Td>
                       <Td>${r.pnl}</Td>
                       <Td>
                         <div className="flex gap-3 justify-end">
@@ -275,7 +349,7 @@ export default function StrategiesClient() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-sm text-gray-500">No data</td>
+                    <td colSpan={6} className="py-12 text-center text-sm text-gray-500">No data</td>
                   </tr>
                 )}
               </tbody>
@@ -284,62 +358,120 @@ export default function StrategiesClient() {
         </div>
       </Card>
 
-      {/* Modal Create/Edit */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
         title={mode === "create" ? "Add Strategy" : "Edit Strategy"}
         footer={
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => append({ value: "" })}
-            >
-              Add New Rule
-            </button>
-            <div className="flex items-center gap-3">
-              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
+          step === "list" ? (
+            <div className="flex items-center justify-between">
               <button
-                onClick={handleSubmit(onSubmit)}
-                disabled={isSubmitting}
-                className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+                type="button"
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+                onClick={addRule}
               >
-                {mode === "create" ? "Add Strategy" : "Save Changes"}
+                Add New Rule
               </button>
+              <div className="flex items-center gap-3">
+                <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
+                <button
+                  onClick={onSubmitNameAndRules}
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+                >
+                  {mode === "create" ? "Add Strategy" : "Save Changes"}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setStep("list")}>Back</button>
+              <div className="flex items-center gap-3">
+                {selectedRuleId && (
+                  <button
+                    className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90"
+                    onClick={() => { if (selectedRuleId) deleteRule(selectedRuleId); setStep("list") }}
+                  >
+                    Delete
+                  </button>
+                )}
+                <button className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90" onClick={saveRule}>
+                  {selectedRuleId ? "Save" : "Add"}
+                </button>
+              </div>
+            </div>
+          )
         }
       >
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
-            <div>
-              <div className="text-sm mb-1">Strategy Name <span className="text-red-600">*</span></div>
-              <input
-                {...register("name", { required: true })}
-                placeholder=""
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
+          {step === "list" ? (
+            <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
+              <div>
+                <div className="text-sm mb-1">Strategy Name <span className="text-red-600">*</span></div>
+                <input
+                  {...register("name", { required: true })}
+                  placeholder=""
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
 
-            {fields.map((f, idx) => (
-              <div key={f.id}>
-                <div className="text-sm mb-1">
-                  Rule {idx === 0 && <span className="text-red-600">*</span>}
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">Rules</div>
+                  <button type="button" className="rounded-xl bg-gray-100 px-3 py-1.5 text-sm hover:bg-gray-200" onClick={addRule}>＋ Add rule</button>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    {...register(`rules.${idx}.value` as const)}
-                    placeholder="Ex: Another rule…"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  {fields.length > 1 && (
-                    <button type="button" onClick={() => remove(idx)} className="px-3 rounded-xl bg-gray-100 hover:bg-gray-200">✖</button>
-                  )}
+                <div className="border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-3 py-2">Rule Name</th>
+                        <th className="text-left px-3 py-2">Description</th>
+                        <th className="text-right px-3 py-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rules.length ? rules.map(r => (
+                        <tr key={r.id} className="border-t">
+                          <td className="px-3 py-2">{r.title}</td>
+                          <td className="px-3 py-2 text-gray-600">{r.description || "—"}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2 justify-end">
+                              <button type="button" className="text-gray-700 hover:underline" onClick={() => editRule(r.id)}>Edit</button>
+                              <button type="button" className="text-orange-700 hover:underline" onClick={() => deleteRule(r.id)}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={3} className="px-3 py-8 text-center text-gray-500">No rules yet</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            ))}
-          </form>
+            </form>
+          ) : (
+            <div className="grid gap-4">
+              <div>
+                <div className="text-sm mb-1">Rule Name <span className="text-red-600">*</span></div>
+                <input
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  placeholder="e.g. Break of structure on H1"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <div className="text-sm mb-1">Description</div>
+                <textarea
+                  value={editDesc}
+                  onChange={e => setEditDesc(e.target.value)}
+                  rows={3}
+                  placeholder="Optional description..."
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 
