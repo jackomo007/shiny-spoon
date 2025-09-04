@@ -17,24 +17,26 @@ type Row = {
   pnl: number
 }
 
+type RuleRow = { id: string; title: string; description?: string | null }
+
 export default function StrategiesClient() {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<Row[]>([])
 
-  const [showSearch, setShowSearch] = useState(false)
-  const [query, setQuery] = useState("")
+  const [showSearch, setShowSearch] = useState<boolean>(false)
+  const [query, setQuery] = useState<string>("")
   const [sort, setSort] = useState<"new" | "az" | "za">("new")
-  const [showFilter, setShowFilter] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
+  const [showFilter, setShowFilter] = useState<boolean>(false)
+  const [showMenu, setShowMenu] = useState<boolean>(false)
 
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<boolean>(false)
   const [mode, setMode] = useState<"create" | "edit">("create")
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState<boolean>(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  const [deleting, setDeleting] = useState<boolean>(false)
 
   const [start, setStart] = useState<string>(() => {
     const end = new Date()
@@ -42,9 +44,10 @@ export default function StrategiesClient() {
     return s.toISOString().slice(0, 10)
   })
   const [end, setEnd] = useState<string>(() => new Date().toISOString().slice(0, 10))
+
   const [summary, setSummary] = useState<{ topPerformingId: string | null; mostUsedId: string | null }>({ topPerformingId: null, mostUsedId: null })
 
-  const { register, getValues, formState: { isSubmitting }, reset } = useForm<{ name: string }>({
+  const { register, getValues, formState: { isSubmitting, errors }, reset } = useForm<{ name: string }>({
     defaultValues: { name: "" }
   })
 
@@ -77,7 +80,6 @@ export default function StrategiesClient() {
     }
   }, [items, query, sort])
 
-  type RuleRow = { id: string; title: string; description?: string | null }
   const [step, setStep] = useState<"list" | "edit">("list")
   const [rules, setRules] = useState<RuleRow[]>([])
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
@@ -100,8 +102,8 @@ export default function StrategiesClient() {
     setOpen(true)
   }
 
-  const [editTitle, setEditTitle] = useState("")
-  const [editDesc, setEditDesc] = useState("")
+  const [editTitle, setEditTitle] = useState<string>("")
+  const [editDesc, setEditDesc] = useState<string>("")
 
   useEffect(() => {
     if (step === "edit" && selectedRuleId) {
@@ -128,7 +130,10 @@ export default function StrategiesClient() {
   }
   function saveRule() {
     const title = editTitle.trim()
-    if (!title) { alert("Rule title is required"); return }
+    if (!title) {
+      // validação visual simples
+      return
+    }
     if (selectedRuleId) {
       setRules(prev => prev.map(r => r.id === selectedRuleId ? { ...r, title, description: editDesc.trim() || null } : r))
     } else {
@@ -139,7 +144,7 @@ export default function StrategiesClient() {
   }
 
   async function onSubmitNameAndRules() {
-    const values = getValues() as { name: string }
+    const values = getValues()
     const payload = {
       name: values.name.trim(),
       rules: rules.map(r => ({
@@ -147,8 +152,10 @@ export default function StrategiesClient() {
         description: (r.description ?? "").trim() || null,
       })),
     }
-    if (!payload.name) { alert("Strategy Name is required"); return }
-    if (payload.rules.length < 1) { alert("Please add at least 1 rule"); return }
+
+    // validação mínima sem alert()
+    if (!payload.name) return
+    if (payload.rules.length < 1) return
 
     try {
       if (mode === "create") {
@@ -159,7 +166,7 @@ export default function StrategiesClient() {
         })
         if (!r.ok) throw new Error(await r.text())
       } else {
-        const r = await fetch(`/api/strategies/${editingId}`, {
+        const r = await fetch(`/api/strategies/${editingId ?? ""}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -169,7 +176,8 @@ export default function StrategiesClient() {
       setOpen(false)
       await load()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to save")
+      // se quiser, exiba uma mensagem amigável num toast
+      console.error(e)
     }
   }
 
@@ -187,7 +195,7 @@ export default function StrategiesClient() {
       setDeleteId(null)
       await load()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to delete")
+      console.error(e)
     } finally {
       setDeleting(false)
     }
@@ -234,37 +242,37 @@ export default function StrategiesClient() {
       </div>
 
       <Card>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="text-sm text-gray-600">Date range:</div>
-            <input
-              type="date"
-              value={start}
-              onChange={e => setStart(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2"
-            />
-            <span className="text-gray-400">—</span>
-            <input
-              type="date"
-              value={end}
-              onChange={e => setEnd(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2"
-            />
-            <button
-              className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
-              onClick={() => {
-                const now = new Date()
-                const s = new Date(new Date().setMonth(now.getMonth() - 6))
-                setStart(s.toISOString().slice(0, 10))
-                setEnd(now.toISOString().slice(0, 10))
-              }}
-            >
-              Last 6 months
-            </button>
-            <button className="rounded-xl bg-white px-3 py-2 text-sm border" onClick={load}>
-              Apply
-            </button>
-          </div>
-        </Card>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-sm text-gray-600">Date range:</div>
+          <input
+            type="date"
+            value={start}
+            onChange={e => setStart(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2"
+          />
+          <span className="text-gray-400">—</span>
+          <input
+            type="date"
+            value={end}
+            onChange={e => setEnd(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2"
+          />
+          <button
+            className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
+            onClick={() => {
+              const now = new Date()
+              const s = new Date(new Date().setMonth(now.getMonth() - 6))
+              setStart(s.toISOString().slice(0, 10))
+              setEnd(now.toISOString().slice(0, 10))
+            }}
+          >
+            Last 6 months
+          </button>
+          <button className="rounded-xl bg-white px-3 py-2 text-sm border" onClick={() => void load()}>
+            Apply
+          </button>
+        </div>
+      </Card>
 
       <Card className="p-0 overflow-hidden">
         {showSearch && (
@@ -285,13 +293,20 @@ export default function StrategiesClient() {
         <div className="px-6 pt-5 pb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-800">My Strategies</h3>
           <div className="flex items-center gap-3 relative">
-            <button onClick={() => setShowSearch(s => !s)} className="p-2 rounded-full hover:bg-gray-100">🔍</button>
+            <button onClick={() => setShowSearch((s: boolean) => !s)} className="p-2 rounded-full hover:bg-gray-100">🔍</button>
 
             <div className="relative">
-              <button onClick={() => { setShowFilter(f => !f); setShowMenu(false) }} className="p-2 rounded-full hover:bg-gray-100">🧰</button>
+              <button
+                onClick={() => { setShowFilter((f: boolean) => !f); setShowMenu(false) }}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                🧰
+              </button>
               {showFilter && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                     onMouseLeave={() => setShowFilter(false)}>
+                <div
+                  className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
+                  onMouseLeave={() => setShowFilter(false)}
+                >
                   <MenuItem label="Newest" onClick={() => { setSort("new"); setShowFilter(false) }} icon="🧾" />
                   <MenuItem label="From A-Z" onClick={() => { setSort("az"); setShowFilter(false) }} icon="🔤" />
                   <MenuItem label="From Z-A" onClick={() => { setSort("za"); setShowFilter(false) }} icon="🔠" />
@@ -300,11 +315,18 @@ export default function StrategiesClient() {
             </div>
 
             <div className="relative">
-              <button onClick={() => { setShowMenu(m => !m); setShowFilter(false) }} className="p-2 rounded-full hover:bg-gray-100">⋯</button>
+              <button
+                onClick={() => { setShowMenu((m: boolean) => !m); setShowFilter(false) }}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                ⋯
+              </button>
               {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                     onMouseLeave={() => setShowMenu(false)}>
-                  <MenuItem label="Refresh" onClick={() => { load(); setShowMenu(false) }} />
+                <div
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
+                  onMouseLeave={() => setShowMenu(false)}
+                >
+                  <MenuItem label="Refresh" onClick={() => { void load(); setShowMenu(false) }} />
                   <MenuItem label="Manage Widgets" onClick={() => setShowMenu(false)} />
                   <MenuItem label="Settings" onClick={() => setShowMenu(false)} />
                 </div>
@@ -413,6 +435,8 @@ export default function StrategiesClient() {
                   placeholder=""
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
                 />
+                {/* inline error simples */}
+                {"name" in errors && <div className="mt-1 text-xs text-red-600">Strategy Name is required</div>}
               </div>
 
               <div className="mt-2">

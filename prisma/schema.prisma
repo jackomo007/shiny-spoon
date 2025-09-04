@@ -14,14 +14,14 @@ enum account_type {
 }
 
 model user {
-  id            Int             @id @default(autoincrement())
-  public_id     String          @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
-  email         String          @unique(map: "email") @db.VarChar(255)
-  username      String          @unique(map: "username") @db.VarChar(100)
-  password_hash String          @db.Text
-  created_at    DateTime?       @default(now()) @db.DateTime(0)
+  id            Int       @id @default(autoincrement())
+  public_id     String    @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
+  email         String    @unique(map: "email") @db.VarChar(255)
+  username      String    @unique(map: "username") @db.VarChar(100)
+  password_hash String    @db.Text
+  created_at    DateTime? @default(now()) @db.DateTime(0)
 
-  accounts      account[]
+  accounts account[]
 }
 
 model account {
@@ -31,22 +31,23 @@ model account {
   name       String?      @db.VarChar(100)
   created_at DateTime     @default(now()) @db.DateTime(0)
 
-  user       user         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
+  user user @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
 
-  strategies strategy[]
-  journals   journal_entry[]
+  strategies      strategy[]
+  journals        journal[]
+  journal_entries journal_entry[]
 
-  @@index([user_id], map: "idx_account_user")
   @@unique([user_id, type], map: "uniq_user_type")
+  @@index([user_id], map: "idx_account_user")
 }
 
 model strategy {
-  id             String          @id @default(uuid()) @db.Char(36)
-  name           String?         @db.VarChar(255)
-  date_created   DateTime?       @default(now()) @db.DateTime(0)
+  id           String    @id @default(uuid()) @db.Char(36)
+  name         String?   @db.VarChar(255)
+  date_created DateTime? @default(now()) @db.DateTime(0)
 
-  account_id     String          @db.Char(36)
-  account        account         @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
+  account_id String  @db.Char(36)
+  account    account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
 
   strategy_rules strategy_rule[]
 
@@ -59,10 +60,9 @@ model rule {
   description    String?         @db.Text
   strategy_rules strategy_rule[]
 
-  @@index([title], map: "rule_title_idx")
   @@unique([title])
+  @@index([title], map: "rule_title_idx")
 }
-
 
 model strategy_rule {
   id           String    @id @default(uuid()) @db.Char(36)
@@ -70,42 +70,61 @@ model strategy_rule {
   rule_id      String    @db.Char(36)
   date_created DateTime? @default(now()) @db.DateTime(0)
 
-  strategy     strategy  @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
-  rule         rule      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
+  strategy strategy @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
+  rule     rule     @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
 
   @@index([rule_id], map: "rule_id")
   @@index([strategy_id], map: "strategy_id")
 }
 
+model journal {
+  id         String          @id @default(uuid()) @db.Char(36)
+  name       String          @db.VarChar(100)
+  account_id String          @db.Char(36)
+  account    account         @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_account")
+  entries    journal_entry[]
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@unique([account_id, name], map: "uniq_account_name")
+  @@index([account_id], map: "idx_journal_account")
+}
+
 model journal_entry {
-  id                  String               @id @default(uuid()) @db.Char(36)
+  id String @id @default(uuid()) @db.Char(36)
 
-  account_id          String
-  account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
+  account_id String
+  account    account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
 
-  trade_type          Int
-  asset_name          String               @db.VarChar(50)
-  side                journal_entry_side
-  status              journal_entry_status @default(in_progress)
-  entry_price         Decimal              @default(0.00000000) @db.Decimal(18, 8)
-  exit_price          Decimal?             @db.Decimal(18, 8)
+  journal_id String  @db.Char(36)
+  journal    journal @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
 
-  stop_loss_price     Decimal?             @db.Decimal(18, 8)
-  take_profit_price   Decimal?             @db.Decimal(18, 8)
+  trade_type  Int
+  asset_name  String               @db.VarChar(50)
+  side        journal_entry_side
+  status      journal_entry_status @default(in_progress)
+  entry_price Decimal              @default(0.00000000) @db.Decimal(18, 8)
+  exit_price  Decimal?             @db.Decimal(18, 8)
 
-  amount              Decimal              @db.Decimal(18, 8)
-  trade_datetime      DateTime             @db.DateTime(0)
-  strategy_id         String               @db.Char(36)
-  notes_entry         String?              @db.Text
-  notes_review        String?              @db.Text
-  created_at          DateTime             @default(now()) @db.Timestamp(0)
+  stop_loss_price   Decimal? @db.Decimal(18, 8)
+  take_profit_price Decimal? @db.Decimal(18, 8)
+
+  amount_spent Decimal @db.Decimal(18, 8) // novo campo
+  amount       Decimal @db.Decimal(18, 8) // legado (mantido)
+
+  trade_datetime      DateTime @db.DateTime(0)
+  strategy_id         String   @db.Char(36)
+  notes_entry         String?  @db.Text
+  notes_review        String?  @db.Text
+  created_at          DateTime @default(now()) @db.Timestamp(0)
   strategy_rule_match Int
 
-  futures_trade       futures_trade[]
-  spot_trade          spot_trade[]
+  futures_trade futures_trade[]
+  spot_trade    spot_trade[]
 
   @@index([strategy_id], map: "fk_journal_entry_strategy")
   @@index([account_id], map: "fk_journal_entry_account")
+  @@index([journal_id], map: "fk_journal_entry_journal")
 }
 
 model spot_trade {
