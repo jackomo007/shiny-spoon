@@ -1,4 +1,3 @@
-// lib/journal.ts
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getActiveAccountId } from "@/lib/account";
@@ -14,7 +13,6 @@ export async function getActiveJournalId(userId: number): Promise<string> {
   const accountId = await getActiveAccountId(userId);
   if (!accountId) throw new Error("Active account not found");
 
-  // já existe algum journal?
   const first = await prisma.journal.findFirst({
     where: { account_id: accountId },
     select: { id: true },
@@ -25,7 +23,6 @@ export async function getActiveJournalId(userId: number): Promise<string> {
     return first.id;
   }
 
-  // criar "Main" de forma idempotente
   try {
     const created = await prisma.journal.create({
       data: { account_id: accountId, name: "Main" },
@@ -34,7 +31,6 @@ export async function getActiveJournalId(userId: number): Promise<string> {
     jar.set("active_journal_id", created.id, cookieOpts);
     return created.id;
   } catch (err: unknown) {
-    // se outra requisição criou no meio do caminho, buscamos o existente
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       const existing = await prisma.journal.findFirst({
         where: { account_id: accountId, name: "Main" },

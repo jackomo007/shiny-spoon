@@ -109,8 +109,8 @@ model journal_entry {
   stop_loss_price   Decimal? @db.Decimal(18, 8)
   take_profit_price Decimal? @db.Decimal(18, 8)
 
-  amount_spent Decimal @db.Decimal(18, 8) // novo campo
-  amount       Decimal @db.Decimal(18, 8) // legado (mantido)
+  amount_spent Decimal @db.Decimal(18, 8)
+  amount       Decimal @db.Decimal(18, 8)
 
   trade_datetime      DateTime @db.DateTime(0)
   strategy_id         String   @db.Char(36)

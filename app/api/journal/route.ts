@@ -1,4 +1,3 @@
-// app/api/journal/route.ts
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -17,12 +16,7 @@ function parseRange(searchParams: URLSearchParams) {
   return { start, end }
 }
 
-function calcPnl(input: {
-  side: "buy" | "sell" | "long" | "short"
-  entry: number
-  exit: number | null
-  amountSpent: number
-}): number | null {
+function calcPnl(input: { side: "buy" | "sell" | "long" | "short"; entry: number; exit: number | null; amountSpent: number }): number | null {
   if (input.exit == null) return null
   const dir = (input.side === "buy" || input.side === "long") ? 1 : -1
   const change = (input.exit - input.entry) / input.entry
@@ -32,19 +26,17 @@ function calcPnl(input: {
 const BaseSchema = z.object({
   strategy_id: z.string().min(1),
   asset_name: z.string().min(1),
-  trade_type: z.union([z.number(), z.string()]),           // 1=spot, 2=futures
-  trade_datetime: z.string().min(1),                        // ISO string
+  trade_type: z.union([z.number(), z.string()]),
+  trade_datetime: z.string().min(1),
   side: z.enum(["buy", "sell", "long", "short"]),
   status: z.enum(["in_progress", "win", "loss", "break_even"]),
   entry_price: z.number().positive(),
   exit_price: z.number().positive().optional().nullable(),
-  // Novo vs legado:
   amount_spent: z.number().positive().optional(),
   amount: z.number().positive().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
-  // Futures somente quando trade_type === 2
   futures: z.object({
     leverage: z.number().int().min(1),
     liquidation_price: z.number().positive(),
@@ -52,25 +44,17 @@ const BaseSchema = z.object({
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["amount_spent"],
-      message: "Required",
-    })
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
   const t = Number(v.trade_type)
   if (t === 2 && !v.futures) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["futures"],
-      message: "Futures data required",
-    })
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
   }
 })
 .transform(v => ({
   ...v,
   trade_type: Number(v.trade_type),
-  amount_spent: v.amount_spent ?? v.amount!, // garantido pelo superRefine
+  amount_spent: v.amount_spent ?? v.amount!,
 }))
 
 const CreateSchema = BaseSchema
@@ -78,6 +62,16 @@ const CreateSchema = BaseSchema
 function qtyFrom(amountSpent: number, entryPrice: number): number {
   if (entryPrice <= 0) return 0
   return amountSpent / entryPrice
+}
+
+async function isValidSymbol(sym: string): Promise<boolean> {
+  const key = process.env.CMC_API_KEY
+  if (!key) return true // sem chave, não bloqueia
+  const u = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?listing_status=active&symbol=${encodeURIComponent(sym)}&limit=1`
+  const resp = await fetch(u, { headers: { "X-CMC_PRO_API_KEY": key }, cache: "no-store" })
+  if (!resp.ok) return true
+  const js = await resp.json() as { data?: Array<{ symbol: string }> }
+  return (js.data ?? []).some(d => d.symbol.toUpperCase() === sym.toUpperCase())
 }
 
 export async function GET(req: Request) {
@@ -94,11 +88,7 @@ export async function GET(req: Request) {
   const journalId = await getActiveJournalId(userId)
 
   const rows = await prisma.journal_entry.findMany({
-    where: {
-      account_id: accountId,
-      journal_id: journalId,
-      trade_datetime: { gte: start, lte: end },
-    },
+    where: { account_id: accountId, journal_id: journalId, trade_datetime: { gte: start, lte: end } },
     include: { spot_trade: true, futures_trade: true },
     orderBy: { trade_datetime: "desc" },
     take: 1000,
@@ -127,9 +117,7 @@ export async function GET(req: Request) {
       notes_review: r.notes_review ?? null,
       pnl,
       leverage: r.futures_trade[0]?.leverage ?? null,
-      liquidation_price: r.futures_trade[0]?.liquidation_price != null
-        ? Number(r.futures_trade[0].liquidation_price)
-        : null,
+      liquidation_price: r.futures_trade[0]?.liquidation_price != null ? Number(r.futures_trade[0].liquidation_price) : null,
     }
   })
 
@@ -144,6 +132,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const data = parsed.data
+  if (!(await isValidSymbol(data.asset_name))) {
+    return NextResponse.json({ error: "Invalid asset symbol" }, { status: 400 })
+  }
+
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
   if (!accountId) return NextResponse.json({ error: "Account not found" }, { status: 404 })
@@ -151,7 +143,6 @@ export async function POST(req: Request) {
   const journalId = await getActiveJournalId(userId)
   const tradeType = data.trade_type
 
-  // Estratégia precisa ser do mesmo account
   const okStrategy = await prisma.strategy.findFirst({
     where: { id: data.strategy_id, account_id: accountId },
     select: { id: true },
@@ -170,8 +161,8 @@ export async function POST(req: Request) {
         trade_datetime: new Date(data.trade_datetime),
         side: data.side,
         status: data.status,
-        amount_spent: data.amount_spent,       // novo canônico
-        amount: amountQty,                     // legado (mantido)
+        amount_spent: data.amount_spent,
+        amount: amountQty, // legado
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
@@ -185,16 +176,10 @@ export async function POST(req: Request) {
     if (tradeType === 1) {
       await tx.spot_trade.create({ data: { journal_entry_id: je.id } })
     } else {
-      // tradeType === 2 validado no schema -> data.futures existe
       const f = data.futures!
-      const marginUsed = data.amount_spent / Math.max(1, f.leverage) // se ainda existir coluna no DB
+      const marginUsed = data.amount_spent / Math.max(1, f.leverage)
       await tx.futures_trade.create({
-        data: {
-          journal_entry_id: je.id,
-          leverage: f.leverage,
-          liquidation_price: f.liquidation_price,
-          margin_used: marginUsed, // OK manter populado; ignore no front
-        },
+        data: { journal_entry_id: je.id, leverage: f.leverage, liquidation_price: f.liquidation_price, margin_used: marginUsed },
       })
     }
 

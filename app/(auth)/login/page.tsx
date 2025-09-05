@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation"
 
 function LoginInner() {
   const sp = useSearchParams()
-  const cbError = sp.get("error") // e.g. "CredentialsSignin"
+  const cbError = sp.get("error")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -15,7 +15,6 @@ function LoginInner() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    // Let NextAuth handle the redirect
     await signIn("credentials", {
       email,
       password,

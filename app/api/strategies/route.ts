@@ -52,7 +52,6 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const { start, end } = parseRange(searchParams)
 
-  // Estratégias do usuário
   const strategies = await prisma.strategy.findMany({
     where: { account_id: accountId },
     orderBy: { date_created: "desc" },
@@ -67,7 +66,6 @@ export async function GET(req: Request) {
     })
   }
 
-  // Trades no range, agrupados por strategy_id
   const trades = await prisma.journal_entry.findMany({
     where: {
       account_id: accountId,
@@ -127,7 +125,6 @@ export async function GET(req: Request) {
     }
   })
 
-  // Summary
   const mostUsed = items.reduce<{id:string|null; count:number}>(
     (acc, it) => (it.tradesUsed > acc.count ? { id: it.id, count: it.tradesUsed } : acc),
     { id: null, count: -1 }

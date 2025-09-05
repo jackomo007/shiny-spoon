@@ -131,7 +131,6 @@ export default function StrategiesClient() {
   function saveRule() {
     const title = editTitle.trim()
     if (!title) {
-      // validação visual simples
       return
     }
     if (selectedRuleId) {
@@ -153,7 +152,6 @@ export default function StrategiesClient() {
       })),
     }
 
-    // validação mínima sem alert()
     if (!payload.name) return
     if (payload.rules.length < 1) return
 
@@ -176,7 +174,6 @@ export default function StrategiesClient() {
       setOpen(false)
       await load()
     } catch (e: unknown) {
-      // se quiser, exiba uma mensagem amigável num toast
       console.error(e)
     }
   }
@@ -435,7 +432,6 @@ export default function StrategiesClient() {
                   placeholder=""
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                {/* inline error simples */}
                 {"name" in errors && <div className="mt-1 text-xs text-red-600">Strategy Name is required</div>}
               </div>
 

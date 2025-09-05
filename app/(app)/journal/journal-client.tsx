@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import Card from "@/components/ui/Card"
 import Modal from "@/components/ui/Modal"
@@ -30,13 +30,11 @@ type StrategyOption = { id: string; name: string | null }
 type StrategyWithRules = StrategyOption & { rules: { id: string; title: string }[] }
 
 type JournalForm = {
-  // step 1
   strategy_id: string
   asset_name: string
   trade_type: TradeType | string
-  trade_datetime: string // "yyyy-MM-ddTHH:mm"
+  trade_datetime: string
 
-  // step 2
   side?: Side
   status?: Status
   amount_spent?: string
@@ -45,17 +43,28 @@ type JournalForm = {
   leverage?: string
   liquidation_price?: string
 
-  // step 3
   matched_rule_ids?: string[]
   notes_entry?: string
   notes_review?: string
+}
+
+type AssetOption = { id: string; symbol: string; name: string }
+
+function toLocalInputValue(dt: string | Date) {
+  const d = new Date(dt)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const yyyy = d.getFullYear()
+  const mm = pad(d.getMonth() + 1)
+  const dd = pad(d.getDate())
+  const hh = pad(d.getHours())
+  const mi = pad(d.getMinutes())
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
 }
 
 function toISO(dtLocal: string): string {
   return new Date(dtLocal).toISOString()
 }
 
-/** Payloads fortes (união discriminada) */
 type BasePayload = {
   strategy_id: string
   asset_name: string
@@ -77,7 +86,7 @@ type CreateFuturesPayload = BasePayload & {
 }
 type CreatePayload = CreateSpotPayload | CreateFuturesPayload
 
-export default function JournalClient() {
+export default function JournalPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<JournalRow[]>([])
@@ -95,38 +104,44 @@ export default function JournalClient() {
     return d.toISOString().slice(0, 10)
   })
 
-  // toolbar
+  const [movedOutBanner, setMovedOutBanner] = useState<string | null>(null)
+
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState("")
   const [sort, setSort] = useState<"new" | "az" | "za">("new")
   const [showFilter, setShowFilter] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
-  // modal
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<"create" | "edit">("create")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
 
-  // delete
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // form
+  const [assetQuery, setAssetQuery] = useState<string>("")
+  const [assetOptions, setAssetOptions] = useState<AssetOption[]>([])
+  const [showAssetMenu, setShowAssetMenu] = useState<boolean>(false)
+  const [assetError, setAssetError] = useState<string | null>(null)
+  const validSymbolsRef = useRef<Set<string>>(new Set())
+  const assetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const {
     register,
     handleSubmit,
     reset,
     watch,
     trigger,
+    setValue,
     formState: { isSubmitting, errors },
   } = useForm<JournalForm>({
     defaultValues: {
       strategy_id: "",
       asset_name: "",
       trade_type: 1,
-      trade_datetime: new Date().toISOString().slice(0, 16), // datetime-local
+      trade_datetime: toLocalInputValue(new Date()),
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
@@ -142,6 +157,7 @@ export default function JournalClient() {
     try {
       setLoading(true)
       setError(null)
+      setMovedOutBanner(null)
 
       const qs = new URLSearchParams({ start, end }).toString()
       const [jr, st] = await Promise.all([
@@ -157,7 +173,8 @@ export default function JournalClient() {
 
       const sPayload:
         | { items?: Array<{ id: string; name: string | null; strategy_rules?: Array<{ rule: { id: string; title: string } }> }> }
-        | Array<{ id: string; name: string | null }> = await st.json()
+        | Array<{ id: string; name: string | null }>
+        = await st.json()
 
       const arr: StrategyWithRules[] = Array.isArray(sPayload)
         ? sPayload.map((x) => ({ id: x.id, name: x.name, rules: [] }))
@@ -166,6 +183,7 @@ export default function JournalClient() {
             name: x.name,
             rules: (x.strategy_rules ?? []).map((sr) => ({ id: sr.rule.id, title: sr.rule.title })),
           }))
+
       setStrategies(arr)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal")
@@ -196,11 +214,15 @@ export default function JournalClient() {
     setMode("create")
     setEditingId(null)
     setWizardStep(1)
+    validSymbolsRef.current = new Set()
+    setAssetQuery("")
+    setAssetOptions([])
+    setShowAssetMenu(false)
     reset({
       strategy_id: "",
       asset_name: "",
       trade_type: 1,
-      trade_datetime: new Date().toISOString().slice(0, 16),
+      trade_datetime: toLocalInputValue(new Date()),
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
@@ -212,11 +234,15 @@ export default function JournalClient() {
     setMode("edit")
     setEditingId(row.id)
     setWizardStep(1)
+    validSymbolsRef.current = new Set([row.asset_name.toUpperCase()])
+    setAssetQuery(row.asset_name)
+    setAssetOptions([])
+    setShowAssetMenu(false)
     reset({
       strategy_id: row.strategy_id,
       asset_name: row.asset_name,
       trade_type: row.trade_type,
-      trade_datetime: new Date(row.date).toISOString().slice(0, 16),
+      trade_datetime: toLocalInputValue(row.date),
       side: row.side,
       status: row.status,
       amount_spent: String(row.amount_spent),
@@ -231,7 +257,27 @@ export default function JournalClient() {
     setOpen(true)
   }
 
-  /** Validação por passo (mensagens sob os campos) */
+  function askDelete(id: string) {
+    setDeleteId(id)
+    setConfirmOpen(true)
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return
+    try {
+      setDeleting(true)
+      const r = await fetch(`/api/journal/${deleteId}`, { method: "DELETE" })
+      if (!r.ok) throw new Error(await r.text())
+      setConfirmOpen(false)
+      setDeleteId(null)
+      await load()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to delete")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function validateAndNext() {
     if (wizardStep === 1) {
       const ok = await trigger(["strategy_id", "asset_name", "trade_type", "trade_datetime"])
@@ -250,7 +296,6 @@ export default function JournalClient() {
     }
   }
 
-  /** Envio final (sem 'never') */
   async function submitFinal(form: JournalForm) {
     const tradeType = Number(form.trade_type) as TradeType
     const ruleCount = (form.matched_rule_ids ?? []).length
@@ -289,35 +334,44 @@ export default function JournalClient() {
       body: JSON.stringify(payload),
     })
     if (!r.ok) throw new Error(await r.text())
+
+    const savedDate = new Date(base.trade_datetime)
+    const startDate = new Date(start)
+    startDate.setHours(0, 0, 0, 0)
+    const endDate = new Date(end)
+    endDate.setHours(23, 59, 59, 999)
+    await load()
+    const stillThere = items.some(i => i.id === editingId)
+    if (!stillThere && (savedDate < startDate || savedDate > endDate)) {
+      setMovedOutBanner("Heads-up: the edited trade is outside the current date range filter.")
+    }
   }
 
   const onSubmit = async (form: JournalForm) => {
     try {
       await submitFinal(form)
       setOpen(false)
-      await load()
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save")
     }
   }
 
-  function askDelete(id: string) {
-    setDeleteId(id)
-    setConfirmOpen(true)
-  }
-  async function confirmDelete() {
-    if (!deleteId) return
+  async function fetchAssets(q: string) {
     try {
-      setDeleting(true)
-      const r = await fetch(`/api/journal/${deleteId}`, { method: "DELETE" })
-      if (!r.ok) throw new Error(await r.text())
-      setConfirmOpen(false)
-      setDeleteId(null)
-      await load()
+      setAssetError(null)
+      if (q.trim().length < 1) {
+        setAssetOptions([]); setShowAssetMenu(false)
+        return
+      }
+      const r = await fetch(`/api/assets/coins?q=${encodeURIComponent(q)}`)
+      if (!r.ok) throw new Error("Lookup failed")
+      const { items } = (await r.json()) as { items: AssetOption[] }
+      setAssetOptions(items)
+      validSymbolsRef.current = new Set(items.map(i => i.symbol.toUpperCase()))
+      setShowAssetMenu(items.length > 0)
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to delete")
-    } finally {
-      setDeleting(false)
+      setAssetError("Could not load assets")
+      setAssetOptions([]); setShowAssetMenu(false)
     }
   }
 
@@ -332,14 +386,16 @@ export default function JournalClient() {
 
   return (
     <div className="grid gap-6">
-      {/* toolbar */}
       <div className="flex items-center justify-end gap-3">
         <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
         <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
         <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
       </div>
 
-      {/* range cards */}
+      {movedOutBanner && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{movedOutBanner}</div>
+      )}
+
       <div className="grid md:grid-cols-3 gap-6">
         <Card>
           <div className="flex justify-between">
@@ -370,7 +426,6 @@ export default function JournalClient() {
         </Card>
       </div>
 
-      {/* range picker */}
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="text-sm text-gray-600">Date range:</div>
@@ -383,7 +438,6 @@ export default function JournalClient() {
         </div>
       </Card>
 
-      {/* table */}
       <Card className="p-0 overflow-hidden">
         {showSearch && (
           <div className="px-6 py-4 border-b">
@@ -395,9 +449,7 @@ export default function JournalClient() {
                 placeholder="Type and hit enter ..."
                 className="flex-1 outline-none bg-transparent text-gray-700 placeholder:text-gray-400"
               />
-              <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600">
-                ✖
-              </button>
+              <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600">✖</button>
             </div>
           </div>
         )}
@@ -405,13 +457,9 @@ export default function JournalClient() {
         <div className="px-6 pt-5 pb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-800">Trades</h3>
           <div className="flex items-center gap-3 relative">
-            <button onClick={() => setShowSearch((s) => !s)} className="p-2 rounded-full hover:bg-gray-100">
-              🔍
-            </button>
+            <button onClick={() => setShowSearch((s) => !s)} className="p-2 rounded-full hover:bg-gray-100">🔍</button>
             <div className="relative">
-              <button onClick={() => { setShowFilter((f) => !f); setShowMenu(false) }} className="p-2 rounded-full hover:bg-gray-100">
-                🧰
-              </button>
+              <button onClick={() => { setShowFilter((f) => !f); setShowMenu(false) }} className="p-2 rounded-full hover:bg-gray-100">🧰</button>
               {showFilter && (
                 <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20" onMouseLeave={() => setShowFilter(false)}>
                   <MenuItem label="Newest" onClick={() => { setSort("new"); setShowFilter(false) }} icon="🧾" />
@@ -421,9 +469,7 @@ export default function JournalClient() {
               )}
             </div>
             <div className="relative">
-              <button onClick={() => { setShowMenu((m) => !m); setShowFilter(false) }} className="p-2 rounded-full hover:bg-gray-100">
-                ⋯
-              </button>
+              <button onClick={() => { setShowMenu((m) => !m); setShowFilter(false) }} className="p-2 rounded-full hover:bg-gray-100">⋯</button>
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20" onMouseLeave={() => setShowMenu(false)}>
                   <MenuItem label="Refresh" onClick={() => { void load(); setShowMenu(false) }} />
@@ -471,21 +517,15 @@ export default function JournalClient() {
                       <Td>{r.status.replace("_", " ")}</Td>
                       <Td>
                         <div className="flex gap-3 justify-end">
-                          <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">
-                            ✏️
-                          </button>
-                          <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">
-                            🗑️
-                          </button>
+                          <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
+                          <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
                         </div>
                       </Td>
                     </Tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-sm text-gray-500">
-                      No rows
-                    </td>
+                    <td colSpan={10} className="py-12 text-center text-sm text-gray-500">No rows</td>
                   </tr>
                 )}
               </tbody>
@@ -494,7 +534,6 @@ export default function JournalClient() {
         </div>
       </Card>
 
-      {/* Modal wizard */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -503,15 +542,16 @@ export default function JournalClient() {
           <div className="flex items-center justify-between">
             <div>
               {wizardStep > 1 && (
-                <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setWizardStep((s) => (s === 2 ? 1 : 2))}>
+                <button
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+                  onClick={() => setWizardStep((s) => (s === 2 ? 1 : 2))}
+                >
                   Back
                 </button>
               )}
             </div>
             <div className="flex items-center gap-3">
-              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>
-                Cancel
-              </button>
+              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
               {wizardStep < 3 ? (
                 <button className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90" onClick={() => void validateAndNext()}>
                   Next
@@ -544,30 +584,71 @@ export default function JournalClient() {
                       </option>
                     ))}
                   </select>
-                  {errors.strategy_id && <p className="mt-1 text-xs text-red-600">{errors.strategy_id.message as string}</p>}
+                  {errors.strategy_id && <p className="mt-1 text-xs text-red-600">{String(errors.strategy_id.message)}</p>}
                 </div>
 
                 <div>
                   <div className="text-sm mb-1">
-                    Asset Name <span className="text-red-600">*</span>
+                    Asset <span className="text-red-600">*</span>
                   </div>
                   <input
-                    {...register("asset_name", { required: "Asset is required" })}
+                    {...register("asset_name", {
+                      required: "Asset is required",
+                      validate: (v) =>
+                        validSymbolsRef.current.has((v ?? "").toUpperCase()) || "Pick an asset from the list",
+                    })}
+                    value={assetQuery}
+                    onChange={(e) => {
+                      const q = e.target.value
+                      setAssetQuery(q)
+                      setValue("asset_name", q, { shouldValidate: true })
+                      if (assetTimer.current) clearTimeout(assetTimer.current)
+                      assetTimer.current = setTimeout(() => { void fetchAssets(q) }, 300)
+                    }}
+                    onFocus={() => {
+                      if (assetOptions.length > 0) setShowAssetMenu(true)
+                    }}
                     placeholder="e.g. BTC"
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
-                  {errors.asset_name && <p className="mt-1 text-xs text-red-600">{errors.asset_name.message as string}</p>}
+                  {showAssetMenu && (
+                    <div className="mt-1 rounded-xl border bg-white shadow-sm max-h-56 overflow-auto">
+                      {assetOptions.map((opt) => (
+                        <button
+                          type="button"
+                          key={opt.id}
+                          onClick={() => {
+                            setAssetQuery(opt.symbol)
+                            setValue("asset_name", opt.symbol, { shouldValidate: true })
+                            validSymbolsRef.current = new Set([opt.symbol.toUpperCase()])
+                            setShowAssetMenu(false)
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                        >
+                          {opt.symbol} — {opt.name}
+                        </button>
+                      ))}
+                      {assetOptions.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+                      )}
+                    </div>
+                  )}
+                  {assetError && <p className="mt-1 text-xs text-amber-700">{assetError}</p>}
+                  {errors.asset_name && <p className="mt-1 text-xs text-red-600">{String(errors.asset_name.message)}</p>}
                 </div>
 
                 <div>
                   <div className="text-sm mb-1">
                     Trade Type <span className="text-red-600">*</span>
                   </div>
-                  <select {...register("trade_type", { required: "Trade type is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
+                  <select
+                    {...register("trade_type", { required: "Trade type is required" })}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  >
                     <option value={1}>Spot</option>
                     <option value={2}>Futures</option>
                   </select>
-                  {errors.trade_type && <p className="mt-1 text-xs text-red-600">{errors.trade_type.message as string}</p>}
+                  {errors.trade_type && <p className="mt-1 text-xs text-red-600">{String(errors.trade_type.message)}</p>}
                 </div>
 
                 <div>
@@ -579,7 +660,7 @@ export default function JournalClient() {
                     {...register("trade_datetime", { required: "Date & time is required" })}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
-                  {errors.trade_datetime && <p className="mt-1 text-xs text-red-600">{errors.trade_datetime.message as string}</p>}
+                  {errors.trade_datetime && <p className="mt-1 text-xs text-red-600">{String(errors.trade_datetime.message)}</p>}
                 </div>
               </>
             )}
@@ -597,7 +678,7 @@ export default function JournalClient() {
                           <option value="long">Long</option>
                           <option value="short">Short</option>
                         </select>
-                        {errors.side && <p className="mt-1 text-xs text-red-600">{errors.side.message as string}</p>}
+                        {errors.side && <p className="mt-1 text-xs text-red-600">{String(errors.side.message)}</p>}
                       </div>
                       <div>
                         <div className="text-sm mb-1">Status</div>
@@ -607,7 +688,7 @@ export default function JournalClient() {
                           <option value="loss">Loss</option>
                           <option value="break_even">Break-Even</option>
                         </select>
-                        {errors.status && <p className="mt-1 text-xs text-red-600">{errors.status.message as string}</p>}
+                        {errors.status && <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>}
                       </div>
                     </div>
 
@@ -624,7 +705,7 @@ export default function JournalClient() {
                         placeholder="e.g. 500.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{errors.amount_spent.message as string}</p>}
+                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
                     </div>
 
                     <div>
@@ -640,7 +721,7 @@ export default function JournalClient() {
                         placeholder="e.g. 27654.32"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{errors.entry_price.message as string}</p>}
+                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
                     </div>
 
                     <div>
@@ -663,7 +744,7 @@ export default function JournalClient() {
                         placeholder="e.g. 1000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{errors.amount_spent.message as string}</p>}
+                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -680,7 +761,7 @@ export default function JournalClient() {
                           placeholder="e.g. 27654.32"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.entry_price && <p className="mt-1 text-xs text-red-600">{errors.entry_price.message as string}</p>}
+                        {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
                       </div>
                       <div>
                         <div className="text-sm mb-1">Exit Price</div>
@@ -701,7 +782,7 @@ export default function JournalClient() {
                           placeholder="e.g. 10"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.leverage && <p className="mt-1 text-xs text-red-600">{errors.leverage.message as string}</p>}
+                        {errors.leverage && <p className="mt-1 text-xs text-red-600">{String(errors.leverage.message)}</p>}
                       </div>
                       <div>
                         <div className="text-sm mb-1">
@@ -716,7 +797,7 @@ export default function JournalClient() {
                           placeholder="e.g. 10000.32"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.liquidation_price && <p className="mt-1 text-xs text-red-600">{errors.liquidation_price.message as string}</p>}
+                        {errors.liquidation_price && <p className="mt-1 text-xs text-red-600">{String(errors.liquidation_price.message)}</p>}
                       </div>
                     </div>
 
@@ -728,7 +809,7 @@ export default function JournalClient() {
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-                      {errors.status && <p className="mt-1 text-xs text-red-600">{errors.status.message as string}</p>}
+                      {errors.status && <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>}
                     </div>
 
                     <div>
@@ -739,7 +820,7 @@ export default function JournalClient() {
                         <option value="long">Long</option>
                         <option value="short">Short</option>
                       </select>
-                      {errors.side && <p className="mt-1 text-xs text-red-600">{errors.side.message as string}</p>}
+                      {errors.side && <p className="mt-1 text-xs text-red-600">{String(errors.side.message)}</p>}
                     </div>
                   </>
                 )}
@@ -783,7 +864,6 @@ export default function JournalClient() {
         </div>
       </Modal>
 
-      {/* confirm delete */}
       <Modal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -802,18 +882,11 @@ export default function JournalClient() {
         <div className="text-sm text-gray-600">This action cannot be undone.</div>
       </Modal>
 
-      {/* footer */}
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
         <span>© 2025 Maverik AI. All rights reserved.</span>
-        <a href="#" className="hover:underline">
-          Support
-        </a>
-        <a href="#" className="hover:underline">
-          Terms
-        </a>
-        <a href="#" className="hover:underline">
-          Privacy
-        </a>
+        <a href="#" className="hover:underline">Support</a>
+        <a href="#" className="hover:underline">Terms</a>
+        <a href="#" className="hover:underline">Privacy</a>
       </footer>
     </div>
   )

@@ -1,4 +1,3 @@
-// app/api/journal/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -10,7 +9,7 @@ const BaseSchema = z.object({
   strategy_id: z.string().min(1),
   asset_name: z.string().min(1),
   trade_type: z.union([z.number(), z.string()]),
-  trade_datetime: z.string().min(1), // ISO
+  trade_datetime: z.string().min(1),
   side: z.enum(["buy", "sell", "long", "short"]),
   status: z.enum(["in_progress", "win", "loss", "break_even"]),
   entry_price: z.number().positive(),
@@ -27,25 +26,17 @@ const BaseSchema = z.object({
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["amount_spent"],
-      message: "Required",
-    })
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
   const t = Number(v.trade_type)
   if (t === 2 && !v.futures) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["futures"],
-      message: "Futures data required",
-    })
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
   }
 })
 .transform(v => ({
   ...v,
   trade_type: Number(v.trade_type),
-  amount_spent: v.amount_spent ?? v.amount!, // garantido pelo superRefine
+  amount_spent: v.amount_spent ?? v.amount!,
 }))
 
 const UpdateSchema = BaseSchema
@@ -55,7 +46,17 @@ function qtyFrom(amountSpent: number, entryPrice: number): number {
   return amountSpent / entryPrice
 }
 
-// ✅ Next.js 15: params é Promise
+async function isValidSymbol(sym: string): Promise<boolean> {
+  const key = process.env.CMC_API_KEY
+  if (!key) return true
+  const u = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?listing_status=active&symbol=${encodeURIComponent(sym)}&limit=1`
+  const resp = await fetch(u, { headers: { "X-CMC_PRO_API_KEY": key }, cache: "no-store" })
+  if (!resp.ok) return true
+  const js = await resp.json() as { data?: Array<{ symbol: string }> }
+  return (js.data ?? []).some(d => d.symbol.toUpperCase() === sym.toUpperCase())
+}
+
+// Next.js 15: params como Promise
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
 
@@ -66,17 +67,17 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const accountId = await getActiveAccountId(userId)
   if (!accountId) return NextResponse.json({ error: "Active account not found" }, { status: 404 })
 
-  const body = await req.json()
-  const parsed = UpdateSchema.safeParse(body)
+  const parsed = UpdateSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-
   const data = parsed.data
-  const tradeType = data.trade_type
+
+  if (!(await isValidSymbol(data.asset_name))) {
+    return NextResponse.json({ error: "Invalid asset symbol" }, { status: 400 })
+  }
 
   const existing = await prisma.journal_entry.findFirst({ where: { id, account_id: accountId } })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  // estratégia precisa pertencer ao account ativo
   const okStrategy = await prisma.strategy.findFirst({
     where: { id: data.strategy_id, account_id: accountId },
     select: { id: true },
@@ -84,6 +85,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
   const amountQty = qtyFrom(data.amount_spent, data.entry_price)
+  const tradeType = data.trade_type
 
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
@@ -94,8 +96,8 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         trade_datetime: new Date(data.trade_datetime),
         side: data.side,
         status: data.status,
-        amount_spent: data.amount_spent, // canônico
-        amount: amountQty,               // legado
+        amount_spent: data.amount_spent,
+        amount: amountQty,
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
@@ -106,14 +108,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     })
 
     if (tradeType === 1) {
-      // Spot: remover futures e garantir spot_trade
       await tx.futures_trade.deleteMany({ where: { journal_entry_id: id } })
       const hasSpot = await tx.spot_trade.findFirst({ where: { journal_entry_id: id } })
       if (!hasSpot) await tx.spot_trade.create({ data: { journal_entry_id: id } })
     } else {
-      // Futures
       await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } })
-      const f = data.futures! // garantido pelo schema
+      const f = data.futures!
       const marginUsed = data.amount_spent / Math.max(1, f.leverage)
       const existF = await tx.futures_trade.findFirst({ where: { journal_entry_id: id } })
       if (existF) {

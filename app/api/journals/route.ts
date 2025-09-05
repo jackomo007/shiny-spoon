@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
-// ...demais imports
+import { getActiveAccountId } from "@/lib/account"
 
 const BodySchema = z.object({ name: z.string().min(1) })
 
@@ -12,34 +12,26 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const userId = Number(session.user.id)
 
-  // ✅ aceitar JSON ou form-data do <form>
   const ct = req.headers.get("content-type") ?? ""
-  const raw = ct.includes("application/json")
-    ? await req.json()
-    : Object.fromEntries((await req.formData()).entries())
+  const raw = ct.includes("application/json") ? await req.json() : Object.fromEntries((await req.formData()).entries())
 
   const parsed = BodySchema.safeParse(raw)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
+  const accountId = await getActiveAccountId(userId)
+  if (!accountId) return NextResponse.json({ error: "Active account not found" }, { status: 404 })
+
+  try {
+    const created = await prisma.journal.create({
+      data: { name: parsed.data.name.trim(), account_id: accountId },
+      select: { id: true },
+    })
+    return NextResponse.json({ id: created.id })
+  } catch (err: unknown) {
+    const e = err as { code?: string }
+    if (e.code === "P2002") {
+      return NextResponse.json({ error: "A journal with this name already exists." }, { status: 409 })
+    }
+    return NextResponse.json({ error: "Failed to create" }, { status: 500 })
   }
-
-  // pegue o account ativo como você já faz (se precisar)
-  // const accountId = await getActiveAccountId(userId)
-
-  const created = await prisma.journal.create({
-    data: {
-      // account_id: accountId,  // se o schema exigir, inclua
-      name: parsed.data.name.trim(),
-      account_id: await (async () => {
-        // se você já tem util para isso, use; se não, injete o id correto
-        const { getActiveAccountId } = await import("@/lib/account")
-        const accId = await getActiveAccountId(userId)
-        if (!accId) throw new Error("Active account not found")
-        return accId
-      })(),
-    },
-    select: { id: true },
-  })
-
-  return NextResponse.json({ id: created.id })
 }
