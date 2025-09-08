@@ -566,7 +566,7 @@ export default function JournalPage() {
         }
       >
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="grid gap-4" onSubmit={() =>{}}>
             {wizardStep === 1 && (
               <>
                 <div>

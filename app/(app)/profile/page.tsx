@@ -3,7 +3,6 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import { getActiveAccountId } from "@/lib/account"
-import AccountTypeManager from "@/components/account/AccountTypeManager"
 import Card from "@/components/ui/Card"
 
 export default async function ProfilePage() {

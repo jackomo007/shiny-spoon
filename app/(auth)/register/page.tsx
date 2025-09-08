@@ -35,7 +35,7 @@ export default function RegisterPage() {
       if (!res.ok) {
         const msg =
           data?.errors
-            ?.map?.((e: any) => `${e.path}: ${e.message}`)
+            ?.map?.((e: {path:string , message: string}) => `${e.path}: ${e.message}`)
             .join("\n") ||
           data?.message ||
           "Registration failed";
@@ -49,32 +49,33 @@ export default function RegisterPage() {
     }
   }
 
-  const Card = ({ t, locked = false }: { t: T; locked?: boolean }) => {
-    const active = types.includes(t);
-    return (
-      <button
-        type="button"
-        disabled={locked}
-        onClick={() => toggle(t)}
-        className={`rounded-2xl border p-4 text-left hover:bg-gray-50 ${active ? "border-primary" : "border-gray-200"} ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
-      >
-        <div className="text-sm text-gray-500">{t.toUpperCase()}</div>
-        <div className="mt-1 font-semibold">
-          {t === "crypto"
-            ? "Crypto (default)"
-            : t === "stock"
-              ? "Stock"
-              : "Forex"}
-        </div>
-        <div className="mt-2">
-          <input type="checkbox" readOnly checked={active} />{" "}
-          <span className="text-sm">{locked ? "Always on" : "Enable"}</span>
-        </div>
-      </button>
-    );
-  };
+  // const Card = ({ t, locked = false }: { t: T; locked?: boolean }) => {
+  //   const active = types.includes(t);
+  //   return (
+  //     <button
+  //       type="button"
+  //       disabled={locked}
+  //       onClick={() => toggle(t)}
+  //       className={`rounded-2xl border p-4 text-left hover:bg-gray-50 ${active ? "border-primary" : "border-gray-200"} ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
+  //     >
+  //       <div className="text-sm text-gray-500">{t.toUpperCase()}</div>
+  //       <div className="mt-1 font-semibold">
+  //         {t === "crypto"
+  //           ? "Crypto (default)"
+  //           : t === "stock"
+  //             ? "Stock"
+  //             : "Forex"}
+  //       </div>
+  //       <div className="mt-2">
+  //         <input type="checkbox" readOnly checked={active} />{" "}
+  //         <span className="text-sm">{locked ? "Always on" : "Enable"}</span>
+  //       </div>
+  //     </button>
+  //   );
+  // };
 
   // Validations
+  
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const invalidEmail = email.trim().length > 0 && !emailRegex.test(email);
   const tooShortPassword =
