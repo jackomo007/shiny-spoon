@@ -70,14 +70,14 @@ export default function RegisterPage() {
         <input className="rounded-xl border p-2" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
         <input className="rounded-xl border p-2" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
 
-        <div className="mt-2">
+        {/* <div className="mt-2">
           <div className="text-sm mb-2">Account types</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card t="crypto" locked />
             <Card t="stock" />
             <Card t="forex" />
           </div>
-        </div>
+        </div> */}
 
         {err && <div className="text-sm text-red-600">{err}</div>}
 

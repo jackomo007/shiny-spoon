@@ -46,9 +46,9 @@ export default async function ProfilePage() {
         </Card>
       </div>
 
-      <Card>
+      {/* <Card>
         <AccountTypeManager />
-      </Card>
+      </Card> */}
 
       <Card className="p-0 overflow-hidden">
         <div className="px-6 pt-5 pb-3">

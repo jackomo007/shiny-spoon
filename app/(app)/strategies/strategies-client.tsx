@@ -84,6 +84,25 @@ export default function StrategiesClient() {
   const [rules, setRules] = useState<RuleRow[]>([])
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
 
+  function uid(): string {
+  const maybeCrypto =
+    typeof globalThis !== "undefined"
+      ? ((globalThis as unknown as { crypto?: unknown }).crypto as
+          | { randomUUID?: () => string }
+          | undefined)
+      : undefined
+
+  if (typeof maybeCrypto?.randomUUID === "function") {
+    return maybeCrypto.randomUUID()
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0
+    const v = ch === "x" ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
   function openCreate() {
     setMode("create"); setEditingId(null)
     reset({ name: "" })
@@ -136,7 +155,7 @@ export default function StrategiesClient() {
     if (selectedRuleId) {
       setRules(prev => prev.map(r => r.id === selectedRuleId ? { ...r, title, description: editDesc.trim() || null } : r))
     } else {
-      const newId = crypto.randomUUID()
+      const newId = uid()
       setRules(prev => [...prev, { id: newId, title, description: editDesc.trim() || null }])
     }
     setStep("list")
