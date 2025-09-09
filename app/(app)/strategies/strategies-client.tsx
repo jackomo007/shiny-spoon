@@ -18,6 +18,12 @@ type Row = {
 }
 
 type RuleRow = { id: string; title: string; description?: string | null }
+type StrategyDetail = {
+  id: string
+  name: string | null
+  date_created: string | Date | null
+  rules: { id: string; title: string; description: string | null }[]
+}
 
 export default function StrategiesClient() {
   const [loading, setLoading] = useState<boolean>(true)
@@ -112,13 +118,32 @@ export default function StrategiesClient() {
     setOpen(true)
   }
 
-  function openEdit(row: Row) {
+  
+  async function openEdit(row: Row) {
     setMode("edit"); setEditingId(row.id)
     reset({ name: row.name ?? "" })
-    setRules((row.rules ?? []).map((t, i) => ({ id: String(i + 1), title: t, description: null })))
     setSelectedRuleId(null)
     setStep("list")
     setOpen(true)
+
+    try {
+      const r = await fetch(`/api/strategies/${row.id}`, { cache: "no-store" })
+      if (!r.ok) {
+        const msg = await r.text()
+        throw new Error(`Failed to load strategy: ${r.status} ${r.statusText} - ${msg}`)
+      }
+      const data: StrategyDetail = await r.json()
+
+      setRules(
+        (data.rules ?? []).map(rr => ({
+          id: rr.id,
+          title: rr.title,
+          description: rr.description ?? null,
+        }))
+      )
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const [editTitle, setEditTitle] = useState<string>("")
