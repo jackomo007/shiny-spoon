@@ -24,6 +24,8 @@ type JournalRow = {
   pnl: number | null
   leverage: number | null
   liquidation_price: number | null
+  notes_entry: string | null
+  notes_review: string | null
 }
 
 type StrategyOption = { id: string; name: string | null }
@@ -153,6 +155,21 @@ export default function JournalPage() {
   const wStatus = watch("status") as Status | undefined
   const wStrategyId = watch("strategy_id")
 
+  // >>> Alinha automaticamente o "side" quando o tipo muda
+  useEffect(() => {
+    const cur = watch("side") as Side | undefined
+    if (wTradeType === 1) {
+      if (cur !== "buy" && cur !== "sell") {
+        setValue("side", "buy", { shouldValidate: true })
+      }
+    } else {
+      if (cur !== "long" && cur !== "short") {
+        setValue("side", "long", { shouldValidate: true })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wTradeType])
+
   const load = useCallback(async () => {
     try {
       setLoading(true)
@@ -238,6 +255,7 @@ export default function JournalPage() {
     setAssetQuery(row.asset_name)
     setAssetOptions([])
     setShowAssetMenu(false)
+
     reset({
       strategy_id: row.strategy_id,
       asset_name: row.asset_name,
@@ -251,8 +269,8 @@ export default function JournalPage() {
       leverage: row.leverage != null ? String(row.leverage) : "",
       liquidation_price: row.liquidation_price != null ? String(row.liquidation_price) : "",
       matched_rule_ids: [],
-      notes_entry: "",
-      notes_review: "",
+      notes_entry: row.notes_entry ?? "",
+      notes_review: row.notes_review ?? "",
     })
     setOpen(true)
   }
@@ -300,11 +318,18 @@ export default function JournalPage() {
     const tradeType = Number(form.trade_type) as TradeType
     const ruleCount = (form.matched_rule_ids ?? []).length
 
+    let coercedSide: Side = (form.side ?? "buy") as Side
+    if (tradeType === 1) {
+      coercedSide = (coercedSide === "sell" ? "sell" : "buy")
+    } else {
+      coercedSide = (coercedSide === "short" ? "short" : "long")
+    }
+
     const base: BasePayload = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
-      side: (form.side ?? "buy") as Side,
+      side: coercedSide,
       status: (form.status ?? "in_progress") as Status,
       amount_spent: Number(form.amount_spent ?? 0),
       entry_price: Number(form.entry_price ?? 0),
@@ -657,7 +682,14 @@ export default function JournalPage() {
                   </div>
                   <input
                     type="datetime-local"
-                    {...register("trade_datetime", { required: "Date & time is required" })}
+                    {...register("trade_datetime", {
+                      required: "Date & time is required",
+                      validate: (v) => {
+                        const d = new Date(v)
+                        const now = new Date()
+                        return d.getTime() <= now.getTime() + 2 * 60 * 1000 || "Date/time cannot be in the future"
+                      }
+                    })}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
                   {errors.trade_datetime && <p className="mt-1 text-xs text-red-600">{String(errors.trade_datetime.message)}</p>}
@@ -672,11 +704,12 @@ export default function JournalPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <div className="text-sm mb-1">Side</div>
-                        <select {...register("side", { required: "Side is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
+                        <select
+                          {...register("side", { required: "Side is required" })}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        >
                           <option value="buy">Buy</option>
                           <option value="sell">Sell</option>
-                          <option value="long">Long</option>
-                          <option value="short">Short</option>
                         </select>
                         {errors.side && <p className="mt-1 text-xs text-red-600">{String(errors.side.message)}</p>}
                       </div>
@@ -814,9 +847,10 @@ export default function JournalPage() {
 
                     <div>
                       <div className="text-sm mb-1">Side</div>
-                      <select {...register("side", { required: "Side is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
-                        <option value="buy">Buy</option>
-                        <option value="sell">Sell</option>
+                      <select
+                        {...register("side", { required: "Side is required" })}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      >
                         <option value="long">Long</option>
                         <option value="short">Short</option>
                       </select>

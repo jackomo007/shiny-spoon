@@ -28,9 +28,24 @@ const BaseSchema = z.object({
   if (v.amount_spent == null && v.amount == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
+
   const t = Number(v.trade_type)
+
   if (t === 2 && !v.futures) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
+  }
+
+  if (t === 1 && !["buy", "sell"].includes(v.side)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
+  }
+  if (t === 2 && !["long", "short"].includes(v.side)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Futures trades must be long/short" })
+  }
+
+  const dt = new Date(v.trade_datetime)
+  const now = new Date()
+  if (isNaN(dt.getTime()) || dt.getTime() > now.getTime() + 2 * 60 * 1000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["trade_datetime"], message: "Trade time cannot be in the future" })
   }
 })
 .transform(v => ({
