@@ -1,8 +1,63 @@
 import { withAuth } from "next-auth/middleware"
+import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 
-export default withAuth({
-  pages: { signIn: "/login" },
-})
+const RATE_LIMITED_POST = ["/api/journal", "/api/strategies", "/api/billing"]
+
+const buckets = new Map<string, { count: number; resetAt: number }>()
+const WINDOW_MS = 15_000
+const LIMIT = 20  
+
+function rateLimit(key: string) {
+  const now = Date.now()
+  const b = buckets.get(key)
+  if (!b || now > b.resetAt) {
+    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS })
+    return true
+  }
+  if (b.count < LIMIT) {
+    b.count += 1
+    return true
+  }
+  return false
+}
+
+function getClientIp(req: NextRequest): string {
+  const xf = req.headers.get("x-forwarded-for")
+  if (xf) {
+    const first = xf.split(",")[0]?.trim()
+    if (first) return first
+  }
+  const real = req.headers.get("x-real-ip")
+  if (real) return real
+  const cf = req.headers.get("cf-connecting-ip")
+  if (cf) return cf
+  return "unknown"
+}
+
+export default withAuth(
+  async function middleware(req: NextRequest) {
+    const { pathname } = req.nextUrl
+
+    if (pathname.startsWith("/api/")
+        && !["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"].includes(req.method.toUpperCase())) {
+      return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 })
+    }
+
+    if (req.method === "POST" && RATE_LIMITED_POST.some(p => pathname.startsWith(p))) {
+      const ip = getClientIp(req)
+      const key = `post:${pathname}:${ip}`
+      if (!rateLimit(key)) {
+        return NextResponse.json({ error: "Too Many Requests" }, { status: 429 })
+      }
+    }
+
+    return NextResponse.next()
+  },
+  {
+    pages: { signIn: "/login" },
+  }
+)
 
 export const config = {
   matcher: [
@@ -10,6 +65,9 @@ export const config = {
     "/strategies/:path*",
     "/journal/:path*",
     "/market-analysis/:path*",
-     "/profile/:path*",  
+    "/profile/:path*",
+    "/api/journal/:path*",
+    "/api/strategies/:path*",
+    "/api/billing/:path*",
   ],
 }
