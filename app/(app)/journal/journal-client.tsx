@@ -51,6 +51,8 @@ type JournalForm = {
 }
 
 type AssetOption = { id: string; symbol: string; name: string }
+type JournalSummary = { id: string; name: string; created_at: string }
+type JournalsPayload = { items?: JournalSummary[]; activeJournalId?: string | null }
 
 function toLocalInputValue(dt: string | Date) {
   const d = new Date(dt)
@@ -154,6 +156,14 @@ export default function JournalPage() {
   const wTradeType = Number(watch("trade_type") ?? 1) as TradeType
   const wStatus = watch("status") as Status | undefined
   const wStrategyId = watch("strategy_id")
+  const [journals, setJournals] = useState<JournalSummary[]>([])
+  const [activeJournalId, setActiveJournalId] = useState<string | null>(null)
+  const [activeJournalName, setActiveJournalName] = useState<string>("")
+
+  const [firstRunOpen, setFirstRunOpen] = useState(false)
+  const [firstRunName, setFirstRunName] = useState("")
+  const [firstRunSaving, setFirstRunSaving] = useState(false)
+  const [firstRunError, setFirstRunError] = useState<string | null>(null)
 
   useEffect(() => {
     const cur = watch("side") as Side | undefined
@@ -172,9 +182,10 @@ export default function JournalPage() {
       setMovedOutBanner(null)
 
       const qs = new URLSearchParams({ start, end }).toString()
-      const [jr, st] = await Promise.all([
+      const [jr, st, jn] = await Promise.all([
         fetch(`/api/journal?${qs}`, { cache: "no-store" }),
         fetch(`/api/strategies`, { cache: "no-store" }),
+        fetch(`/api/journals`, { cache: "no-store" }),
       ])
 
       if (!jr.ok) throw new Error(await jr.text())
@@ -197,6 +208,26 @@ export default function JournalPage() {
           }))
 
       setStrategies(arr)
+
+      if (!jn.ok) throw new Error(await jn.text())
+      const jnPayload = (await jn.json()) as JournalsPayload
+      const list = jnPayload.items ?? []
+      setJournals(list)
+      setActiveJournalId(jnPayload.activeJournalId ?? null)
+
+      const name =
+        list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? ""
+      setActiveJournalName(name)
+
+      if (
+        (list.length === 1) &&
+        (list[0].name?.toLowerCase() === "main") &&
+        (j.items.length === 0)
+      ) {
+        setFirstRunName(list[0].name)
+        setFirstRunOpen(true)
+      }
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal")
     } finally {
@@ -415,18 +446,27 @@ export default function JournalPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-end gap-3">
-        <a
-          href="/journals"
-          className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
-          title="Manage journals"
-        >
-          📒 Journals
-        </a>
-        <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
-        <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
-        <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
-      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-gray-600">
+          Active Journal:
+          <span className="ml-2 inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm border text-gray-700">
+            {activeJournalName || "—"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <a
+            href="/journals"
+            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
+            title="Manage journals"
+          >
+            📒 Manage Journals
+          </a>
+          <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
+          <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
+          <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
+        </div>
+    </div>
 
       {movedOutBanner && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{movedOutBanner}</div>
@@ -925,6 +965,87 @@ export default function JournalPage() {
         }
       >
         <div className="text-sm text-gray-600">This action cannot be undone.</div>
+      </Modal>
+      <Modal
+        open={firstRunOpen}
+        onClose={() => setFirstRunOpen(false)}
+        title="Name your journal"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              onClick={() => setFirstRunOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!firstRunName.trim()) {
+                  setFirstRunError("Please enter a name.")
+                  return
+                }
+                setFirstRunSaving(true)
+                setFirstRunError(null)
+                try {
+                  if (journals.length === 0) {
+                    const r = await fetch("/api/journals", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: firstRunName.trim() }),
+                    })
+                    if (!r.ok) throw new Error(await r.text())
+                    const created = (await r.json()) as { id: string }
+
+                    await fetch("/api/journals/active", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: created.id }),
+                    })
+                  } else if (
+                    journals.length === 1 &&
+                    journals[0].name?.toLowerCase() === "main"
+                  ) {
+                    const r = await fetch(`/api/journals/${journals[0].id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: firstRunName.trim() }),
+                    })
+                    if (!r.ok) throw new Error(await r.text())
+                  } else {
+                    // should not happen
+                  }
+
+                  await load()
+                  setFirstRunOpen(false)
+                } catch (e) {
+                  setFirstRunError(e instanceof Error ? e.message : "Failed to save")
+                } finally {
+                  setFirstRunSaving(false)
+                }
+              }}
+              disabled={firstRunSaving}
+              className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              {firstRunSaving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        }
+      >
+        <div className="grid gap-2">
+          <p className="text-sm text-gray-600">
+            Choose a name for your first journal. You can manage journals later in “Manage Journals”.
+          </p>
+          <input
+            value={firstRunName}
+            onChange={(e) => setFirstRunName(e.target.value)}
+            placeholder="e.g. Crypto Journal"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+            autoFocus
+          />
+          {firstRunError && (
+            <p className="text-xs text-red-600">{firstRunError}</p>
+          )}
+        </div>
       </Modal>
 
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
