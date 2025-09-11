@@ -66,7 +66,7 @@ function qtyFrom(amountSpent: number, entryPrice: number): number {
 
 async function isValidSymbol(sym: string): Promise<boolean> {
   const key = process.env.CMC_API_KEY
-  if (!key) return true // sem chave, não bloqueia
+  if (!key) return true
   const u = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?listing_status=active&symbol=${encodeURIComponent(sym)}&limit=1`
   const resp = await fetch(u, { headers: { "X-CMC_PRO_API_KEY": key }, cache: "no-store" })
   if (!resp.ok) return true
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
         side: data.side,
         status: data.status,
         amount_spent: data.amount_spent,
-        amount: amountQty, // legado
+        amount: amountQty,
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,

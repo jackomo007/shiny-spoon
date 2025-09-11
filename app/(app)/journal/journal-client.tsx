@@ -155,17 +155,12 @@ export default function JournalPage() {
   const wStatus = watch("status") as Status | undefined
   const wStrategyId = watch("strategy_id")
 
-  // >>> Alinha automaticamente o "side" quando o tipo muda
   useEffect(() => {
     const cur = watch("side") as Side | undefined
     if (wTradeType === 1) {
-      if (cur !== "buy" && cur !== "sell") {
-        setValue("side", "buy", { shouldValidate: true })
-      }
+      if (cur !== "buy" && cur !== "sell") setValue("side", "buy", { shouldValidate: true })
     } else {
-      if (cur !== "long" && cur !== "short") {
-        setValue("side", "long", { shouldValidate: true })
-      }
+      if (cur !== "long" && cur !== "short") setValue("side", "long", { shouldValidate: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wTradeType])
@@ -209,21 +204,16 @@ export default function JournalPage() {
     }
   }, [start, end])
 
-  useEffect(() => {
-    void load()
-  }, [load])
+  useEffect(() => { void load() }, [load])
 
   const rows = useMemo(() => {
     let arr = items
     const q = query.trim().toLowerCase()
     if (q) arr = arr.filter((i) => `${i.asset_name} ${i.status} ${i.side}`.toLowerCase().includes(q))
     switch (sort) {
-      case "az":
-        return [...arr].sort((a, b) => a.asset_name.localeCompare(b.asset_name))
-      case "za":
-        return [...arr].sort((a, b) => b.asset_name.localeCompare(a.asset_name))
-      default:
-        return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      case "az": return [...arr].sort((a, b) => a.asset_name.localeCompare(b.asset_name))
+      case "za": return [...arr].sort((a, b) => b.asset_name.localeCompare(a.asset_name))
+      default:   return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date))
     }
   }, [items, query, sort])
 
@@ -319,11 +309,9 @@ export default function JournalPage() {
     const ruleCount = (form.matched_rule_ids ?? []).length
 
     let coercedSide: Side = (form.side ?? "buy") as Side
-    if (tradeType === 1) {
-      coercedSide = (coercedSide === "sell" ? "sell" : "buy")
-    } else {
-      coercedSide = (coercedSide === "short" ? "short" : "long")
-    }
+    coercedSide = tradeType === 1
+      ? (coercedSide === "sell" ? "sell" : "buy")
+      : (coercedSide === "short" ? "short" : "long")
 
     const base: BasePayload = {
       strategy_id: form.strategy_id,
@@ -361,10 +349,8 @@ export default function JournalPage() {
     if (!r.ok) throw new Error(await r.text())
 
     const savedDate = new Date(base.trade_datetime)
-    const startDate = new Date(start)
-    startDate.setHours(0, 0, 0, 0)
-    const endDate = new Date(end)
-    endDate.setHours(23, 59, 59, 999)
+    const startDate = new Date(start); startDate.setHours(0, 0, 0, 0)
+    const endDate = new Date(end); endDate.setHours(23, 59, 59, 999)
     await load()
     const stillThere = items.some(i => i.id === editingId)
     if (!stillThere && (savedDate < startDate || savedDate > endDate)) {
@@ -404,14 +390,39 @@ export default function JournalPage() {
   const winRate = totalTrades ? Math.round((rows.filter((i) => i.status === "win").length * 100) / totalTrades) : 0
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0)
 
-  const currentStrategyRules = useMemo(() => {
-    const s = strategies.find((x) => x.id === wStrategyId)
-    return s?.rules ?? []
-  }, [strategies, wStrategyId])
+  const [strategyRules, setStrategyRules] = useState<{ id: string; title: string }[]>([])
+  useEffect(() => {
+    let abort = false
+    async function loadRules() {
+      if (!wStrategyId) { setStrategyRules([]); return }
+      try {
+        const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
+        if (!r.ok) throw new Error(await r.text())
+        const data = await r.json() as {
+          id: string
+          name: string | null
+          date_created?: string
+          rules: { id: string; title: string; description?: string | null }[]
+        }
+        if (!abort) setStrategyRules(data.rules ?? [])
+      } catch {
+        if (!abort) setStrategyRules([])
+      }
+    }
+    void loadRules()
+    return () => { abort = true }
+  }, [wStrategyId])
 
   return (
     <div className="grid gap-6">
       <div className="flex items-center justify-end gap-3">
+        <a
+          href="/journals"
+          className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
+          title="Manage journals"
+        >
+          📒 Journals
+        </a>
         <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
         <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
         <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
@@ -867,8 +878,8 @@ export default function JournalPage() {
                   <div>
                     <div className="text-sm mb-2">How Many Strategy Rules Did Your Setup Follow? (Optional)</div>
                     <div className="grid gap-2">
-                      {currentStrategyRules.length ? (
-                        currentStrategyRules.map((r) => (
+                      {strategyRules.length ? (
+                        strategyRules.map((r) => (
                           <label key={r.id} className="flex items-center gap-2 text-sm">
                             <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
                             <span>{r.title}</span>

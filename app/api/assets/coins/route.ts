@@ -12,7 +12,6 @@ export async function GET(req: Request) {
 
   const key = process.env.CMC_API_KEY
   if (!key) {
-    // sem chave? apenas não sugere nada (não quebra UX)
     return NextResponse.json({ items: [] })
   }
 

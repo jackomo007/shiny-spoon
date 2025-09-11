@@ -71,7 +71,6 @@ async function isValidSymbol(sym: string): Promise<boolean> {
   return (js.data ?? []).some(d => d.symbol.toUpperCase() === sym.toUpperCase())
 }
 
-// Next.js 15: params como Promise
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
 
