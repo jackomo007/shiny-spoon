@@ -220,11 +220,10 @@ export default function JournalPage() {
       setActiveJournalName(name)
 
       if (
-        (list.length === 1) &&
-        (list[0].name?.toLowerCase() === "main") &&
-        (j.items.length === 0)
+        list.length === 0 ||
+        (list.length === 1 && list[0].name?.toLowerCase() === "main" && j.items.length === 0)
       ) {
-        setFirstRunName(list[0].name)
+        setFirstRunName(list[0]?.name ?? "")
         setFirstRunOpen(true)
       }
 
