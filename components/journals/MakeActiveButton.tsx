@@ -1,4 +1,3 @@
-// components/journals/MakeActiveButton.tsx
 "use client"
 
 import { useRouter } from "next/navigation"

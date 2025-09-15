@@ -16,11 +16,21 @@ function parseRange(searchParams: URLSearchParams) {
   return { start, end }
 }
 
-function calcPnl(input: { side: "buy" | "sell" | "long" | "short"; entry: number; exit: number | null; amountSpent: number }): number | null {
+function calcPnl(input: {
+  side: "buy" | "sell" | "long" | "short"
+  entry: number
+  exit: number | null
+  amountSpent: number
+  leverage?: number | null
+  tradeType: 1 | 2
+}): number | null {
   if (input.exit == null) return null
   const dir = (input.side === "buy" || input.side === "long") ? 1 : -1
   const change = (input.exit - input.entry) / input.entry
-  return Number((dir * input.amountSpent * change).toFixed(2))
+  const notional = input.tradeType === 2
+    ? input.amountSpent * Math.max(1, input.leverage ?? 1)
+    : input.amountSpent
+  return Number((dir * notional * change).toFixed(2))
 }
 
 const BaseSchema = z.object({
@@ -32,6 +42,7 @@ const BaseSchema = z.object({
   status: z.enum(["in_progress", "win", "loss", "break_even"]),
   entry_price: z.number().positive(),
   exit_price: z.number().positive().optional().nullable(),
+  stop_loss_price: z.number().positive().optional().nullable(),
   amount_spent: z.number().positive().optional(),
   amount: z.number().positive().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
@@ -59,9 +70,11 @@ const BaseSchema = z.object({
 
 const CreateSchema = BaseSchema
 
-function qtyFrom(amountSpent: number, entryPrice: number): number {
+function qtyFrom(params: { amountSpent: number; entryPrice: number; tradeType: number; leverage?: number }): number {
+  const { amountSpent, entryPrice, tradeType, leverage } = params
   if (entryPrice <= 0) return 0
-  return amountSpent / entryPrice
+  const notional = tradeType === 2 ? amountSpent * Math.max(1, leverage ?? 1) : amountSpent
+  return notional / entryPrice
 }
 
 async function isValidSymbol(sym: string): Promise<boolean> {
@@ -95,11 +108,14 @@ export async function GET(req: Request) {
   })
 
   const items = rows.map(r => {
+    const leverage = r.futures_trade[0]?.leverage ?? null
     const pnl = calcPnl({
       side: r.side,
       entry: Number(r.entry_price),
       exit: r.exit_price != null ? Number(r.exit_price) : null,
       amountSpent: Number(r.amount_spent),
+      leverage,
+      tradeType: r.trade_type as 1 | 2,
     })
     return {
       id: r.id,
@@ -116,7 +132,7 @@ export async function GET(req: Request) {
       notes_entry: r.notes_entry ?? null,
       notes_review: r.notes_review ?? null,
       pnl,
-      leverage: r.futures_trade[0]?.leverage ?? null,
+      leverage,
       liquidation_price: r.futures_trade[0]?.liquidation_price != null ? Number(r.futures_trade[0].liquidation_price) : null,
     }
   })
@@ -150,7 +166,12 @@ export async function POST(req: Request) {
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
   const created = await prisma.$transaction(async (tx) => {
-    const amountQty = qtyFrom(data.amount_spent, data.entry_price)
+    const amountQty = qtyFrom({
+      amountSpent: data.amount_spent,
+      entryPrice: data.entry_price,
+      tradeType,
+      leverage: data.futures?.leverage,
+    })
 
     const je = await tx.journal_entry.create({
       data: {
@@ -169,6 +190,7 @@ export async function POST(req: Request) {
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: data.exit_price ?? null,
+        stop_loss_price: data.stop_loss_price ?? null,
       },
       select: { id: true },
     })
@@ -177,7 +199,7 @@ export async function POST(req: Request) {
       await tx.spot_trade.create({ data: { journal_entry_id: je.id } })
     } else {
       const f = data.futures!
-      const marginUsed = data.amount_spent / Math.max(1, f.leverage)
+      const marginUsed = data.amount_spent
       await tx.futures_trade.create({
         data: { journal_entry_id: je.id, leverage: f.leverage, liquidation_price: f.liquidation_price, margin_used: marginUsed },
       })

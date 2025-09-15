@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
+import { setActiveJournalId } from "@/lib/journal" 
 
 const BodySchema = z.object({ name: z.string().min(1) })
 
@@ -56,10 +57,17 @@ export async function POST(req: Request) {
   }
 
   try {
+    const countBefore = await prisma.journal.count({ where: { account_id: accountId } })
+
     const created = await prisma.journal.create({
       data: { name: parsed.data.name.trim(), account_id: accountId },
       select: { id: true },
     })
+
+    if (countBefore === 0) {
+      await setActiveJournalId(created.id)
+    }
+
     return NextResponse.json({ id: created.id })
   } catch (err: unknown) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

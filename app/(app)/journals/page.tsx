@@ -46,11 +46,11 @@ export default function JournalsPage() {
 
   async function makeActive(id: string) {
     try {
-      const res = await fetch("/api/journal/active", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      })
+      const res = await fetch("/api/journals/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
       if (!res.ok) {
         const t = await res.text()
         throw new Error(t || `Failed: ${res.status}`)

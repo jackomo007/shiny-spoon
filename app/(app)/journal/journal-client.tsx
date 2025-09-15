@@ -42,6 +42,7 @@ type JournalForm = {
   amount_spent?: string
   entry_price?: string
   exit_price?: string
+  stop_loss_price?: string
   leverage?: string
   liquidation_price?: string
 
@@ -53,6 +54,17 @@ type JournalForm = {
 type AssetOption = { id: string; symbol: string; name: string }
 type JournalSummary = { id: string; name: string; created_at: string }
 type JournalsPayload = { items?: JournalSummary[]; activeJournalId?: string | null }
+type Rule = { id: string; title: string }
+type HasRules = { rules?: Rule[] | undefined }
+type HasStrategyRules = { strategy_rules?: Array<{ rule?: Rule | null | undefined }> | undefined }
+type MaybeWithRules = HasRules | HasStrategyRules | StrategyWithRules | undefined
+
+function hasRules(x: unknown): x is HasRules {
+  return typeof x === "object" && x !== null && Array.isArray((x as HasRules).rules)
+}
+function hasStrategyRules(x: unknown): x is HasStrategyRules {
+  return typeof x === "object" && x !== null && Array.isArray((x as HasStrategyRules).strategy_rules)
+}
 
 function toLocalInputValue(dt: string | Date) {
   const d = new Date(dt)
@@ -78,6 +90,7 @@ type BasePayload = {
   amount_spent: number
   entry_price: number
   exit_price: number | null
+  stop_loss_price: number | null
   strategy_rule_match: number
   notes_entry: string | null
   notes_review: string | null
@@ -352,6 +365,7 @@ export default function JournalPage() {
       amount_spent: Number(form.amount_spent ?? 0),
       entry_price: Number(form.entry_price ?? 0),
       exit_price: form.exit_price ? Number(form.exit_price) : null,
+      stop_loss_price: form.stop_loss_price ? Number(form.stop_loss_price) : null,
       strategy_rule_match: ruleCount,
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
@@ -420,25 +434,53 @@ export default function JournalPage() {
   const winRate = totalTrades ? Math.round((rows.filter((i) => i.status === "win").length * 100) / totalTrades) : 0
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0)
 
-  const [strategyRules, setStrategyRules] = useState<{ id: string; title: string }[]>([])
+  const [strategyRules, setStrategyRules] = useState<Rule[]>([])
+
+  const strategiesRef = useRef<StrategyWithRules[]>([])
+  useEffect(() => { strategiesRef.current = strategies }, [strategies])
+
+  function normalizeRules(payload: MaybeWithRules): Rule[] {
+    if (!payload) return []
+
+    if (hasRules(payload) && payload.rules) {
+      return payload.rules.map(r => ({ id: r.id, title: r.title }))
+    }
+
+    if (hasStrategyRules(payload) && payload.strategy_rules) {
+      return payload.strategy_rules
+        .map(sr => sr.rule)
+        .filter((r): r is Rule => !!r)
+        .map(r => ({ id: r.id, title: r.title }))
+    }
+
+    return []
+  }
+
   useEffect(() => {
     let abort = false
+
     async function loadRules() {
       if (!wStrategyId) { setStrategyRules([]); return }
+
+      const fromList = normalizeRules(
+        strategiesRef.current.find(s => s.id === wStrategyId)
+      )
+      if (fromList.length) {
+        if (!abort) setStrategyRules(fromList)
+        return
+      }
+
       try {
         const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
         if (!r.ok) throw new Error(await r.text())
-        const data = await r.json() as {
-          id: string
-          name: string | null
-          date_created?: string
-          rules: { id: string; title: string; description?: string | null }[]
-        }
-        if (!abort) setStrategyRules(data.rules ?? [])
+        const data: unknown = await r.json()
+        const normalized = normalizeRules(data as MaybeWithRules)
+        if (!abort) setStrategyRules(normalized)
       } catch {
         if (!abort) setStrategyRules([])
       }
     }
+
     void loadRules()
     return () => { abort = true }
   }, [wStrategyId])
@@ -811,6 +853,11 @@ export default function JournalPage() {
                       <div className="text-sm mb-1">Target Exit Price</div>
                       <input {...register("exit_price")} inputMode="decimal" placeholder="e.g. 28000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
                     </div>
+
+                     <div>
+                      <div className="text-sm mb-1">Stop Loss Price</div>
+                      <input {...register("stop_loss_price")} inputMode="decimal" placeholder="e.g. 25000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                    </div>
                   </>
                 ) : (
                   <>
@@ -850,6 +897,10 @@ export default function JournalPage() {
                         <div className="text-sm mb-1">Exit Price</div>
                         <input {...register("exit_price")} inputMode="decimal" placeholder="e.g. 28000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
                       </div>
+                      <div>
+                        <div className="text-sm mb-1">Stop Loss Price</div>
+                        <input {...register("stop_loss_price")} inputMode="decimal" placeholder="e.g. 25000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                    </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -913,7 +964,7 @@ export default function JournalPage() {
 
             {wizardStep === 3 && (
               <>
-                {wStatus && wStatus !== "in_progress" && (
+                {strategyRules.length > 0 && (
                   <div>
                     <div className="text-sm mb-2">How Many Strategy Rules Did Your Setup Follow? (Optional)</div>
                     <div className="grid gap-2">

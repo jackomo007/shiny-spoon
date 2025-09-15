@@ -14,6 +14,7 @@ const BaseSchema = z.object({
   status: z.enum(["in_progress", "win", "loss", "break_even"]),
   entry_price: z.number().positive(),
   exit_price: z.number().positive().optional().nullable(),
+  stop_loss_price: z.number().positive().optional().nullable(),
   amount_spent: z.number().positive().optional(),
   amount: z.number().positive().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
@@ -56,9 +57,11 @@ const BaseSchema = z.object({
 
 const UpdateSchema = BaseSchema
 
-function qtyFrom(amountSpent: number, entryPrice: number): number {
+function qtyFrom(params: { amountSpent: number; entryPrice: number; tradeType: number; leverage?: number }): number {
+  const { amountSpent, entryPrice, tradeType, leverage } = params
   if (entryPrice <= 0) return 0
-  return amountSpent / entryPrice
+  const notional = tradeType === 2 ? amountSpent * Math.max(1, leverage ?? 1) : amountSpent
+  return notional / entryPrice
 }
 
 async function isValidSymbol(sym: string): Promise<boolean> {
@@ -98,8 +101,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   })
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
-  const amountQty = qtyFrom(data.amount_spent, data.entry_price)
   const tradeType = data.trade_type
+  const amountQty = qtyFrom({
+    amountSpent: data.amount_spent,
+    entryPrice: data.entry_price,
+    tradeType,
+    leverage: data.futures?.leverage,
+  })
 
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
@@ -118,6 +126,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: data.exit_price ?? null,
+        stop_loss_price: data.stop_loss_price ?? null,
       },
     })
 
@@ -128,7 +137,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     } else {
       await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } })
       const f = data.futures!
-      const marginUsed = data.amount_spent / Math.max(1, f.leverage)
+      const marginUsed = data.amount_spent
       const existF = await tx.futures_trade.findFirst({ where: { journal_entry_id: id } })
       if (existF) {
         await tx.futures_trade.update({

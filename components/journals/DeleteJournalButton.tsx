@@ -1,4 +1,3 @@
-// components/journals/DeleteJournalButton.tsx
 "use client"
 
 import { useRouter } from "next/navigation"
