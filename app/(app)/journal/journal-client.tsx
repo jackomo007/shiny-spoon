@@ -24,6 +24,8 @@ type JournalRow = {
   pnl: number | null
   leverage: number | null
   liquidation_price: number | null
+  stop_loss_price: number | null
+  strategy_rule_match: number 
   notes_entry: string | null
   notes_review: string | null
 }
@@ -178,6 +180,54 @@ export default function JournalPage() {
   const [firstRunSaving, setFirstRunSaving] = useState(false)
   const [firstRunError, setFirstRunError] = useState<string | null>(null)
 
+  const FIRST_RUN_KEY = "jrnl.firstRunSeen"
+  function markFirstRunSeen(){ try{ localStorage.setItem(FIRST_RUN_KEY,"1") }catch{} }
+  function hasSeenFirstRun(){ try{ return localStorage.getItem(FIRST_RUN_KEY)==="1" }catch{ return false } }
+
+  const RULE_CACHE_PREFIX = "jrnl.ruleIds."
+  const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
+  function saveRuleIds(entryId: string, ids: string[]) {
+    try { localStorage.setItem(makeRuleKey(entryId), JSON.stringify(ids)) } catch {}
+  }
+  function loadRuleIds(entryId: string): string[] | null {
+    try {
+      const raw = localStorage.getItem(makeRuleKey(entryId))
+      return raw ? (JSON.parse(raw) as string[]) : null
+    } catch { return null }
+  }
+  function clearRuleIds(entryId: string) {
+    try { localStorage.removeItem(makeRuleKey(entryId)) } catch {}
+}
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (loading) return 
+    if (firstRunOpen) return
+    if (hasSeenFirstRun()) return 
+
+    if (activeJournalId) {
+      markFirstRunSeen()
+      return
+    }
+
+    if (journals.length === 0) {
+      setFirstRunName("")
+      setFirstRunOpen(true)
+      return
+    }
+
+    if (
+      journals.length === 1 &&
+      (journals[0].name ?? "").trim().toLowerCase() === "main"
+    ) {
+      setFirstRunName(journals[0].name ?? "")
+      setFirstRunOpen(true)
+      return
+    }
+
+    markFirstRunSeen()
+  }, [loading, journals, activeJournalId, firstRunOpen])
+
   useEffect(() => {
     const cur = watch("side") as Side | undefined
     if (wTradeType === 1) {
@@ -213,14 +263,16 @@ export default function JournalPage() {
         = await st.json()
 
       const arr: StrategyWithRules[] = Array.isArray(sPayload)
-        ? sPayload.map((x) => ({ id: x.id, name: x.name, rules: [] }))
+        ? sPayload.map((x) => {
+            const prev = strategiesRef.current.find(s => s.id === x.id)
+            return { id: x.id, name: x.name, rules: prev?.rules ?? [] }
+          })
         : (sPayload.items ?? []).map((x) => ({
             id: x.id,
             name: x.name,
             rules: (x.strategy_rules ?? []).map((sr) => ({ id: sr.rule.id, title: sr.rule.title })),
           }))
-
-      setStrategies(arr)
+        setStrategies(arr)
 
       if (!jn.ok) throw new Error(await jn.text())
       const jnPayload = (await jn.json()) as JournalsPayload
@@ -231,14 +283,6 @@ export default function JournalPage() {
       const name =
         list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? ""
       setActiveJournalName(name)
-
-      if (
-        list.length === 0 ||
-        (list.length === 1 && list[0].name?.toLowerCase() === "main" && j.items.length === 0)
-      ) {
-        setFirstRunName(list[0]?.name ?? "")
-        setFirstRunOpen(true)
-      }
 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal")
@@ -284,6 +328,7 @@ export default function JournalPage() {
     setMode("edit")
     setEditingId(row.id)
     setWizardStep(1)
+
     validSymbolsRef.current = new Set([row.asset_name.toUpperCase()])
     setAssetQuery(row.asset_name)
     setAssetOptions([])
@@ -299,12 +344,53 @@ export default function JournalPage() {
       amount_spent: String(row.amount_spent),
       entry_price: String(row.entry_price),
       exit_price: row.exit_price != null ? String(row.exit_price) : "",
+      stop_loss_price: row.stop_loss_price != null ? String(row.stop_loss_price) : "",
       leverage: row.leverage != null ? String(row.leverage) : "",
       liquidation_price: row.liquidation_price != null ? String(row.liquidation_price) : "",
       matched_rule_ids: [],
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
     })
+    setValue("strategy_id", row.strategy_id, { shouldValidate: false, shouldDirty: false })
+
+    const rulesForStrategy = normalizeRules(
+      strategiesRef.current.find(s => s.id === row.strategy_id)
+    )
+    setStrategyRules(rulesForStrategy)
+
+    const cached = loadRuleIds(row.id)
+    const validIds = new Set(rulesForStrategy.map(r => r.id))
+    const cachedFiltered = Array.isArray(cached) ? cached.filter(id => validIds.has(id)) : []
+
+    if (cachedFiltered.length) {
+      setValue("matched_rule_ids", cachedFiltered, { shouldDirty: false })
+    } else {
+      const prechecked = rulesForStrategy.slice(0, row.strategy_rule_match || 0).map(r => r.id)
+      setValue("matched_rule_ids", prechecked, { shouldDirty: false })
+    }
+
+    if (!rulesForStrategy.length) {
+      ;(async () => {
+        try {
+          const r = await fetch(`/api/strategies/${row.strategy_id}`, { cache: "no-store" })
+          if (!r.ok) return
+          const data: unknown = await r.json()
+          const normalized = normalizeRules(data as MaybeWithRules)
+          setStrategyRules(normalized)
+
+          const valid2 = new Set(normalized.map(rr => rr.id))
+          const cached2 = loadRuleIds(row.id)
+          const cached2Filtered = Array.isArray(cached2) ? cached2.filter(id => valid2.has(id)) : []
+          if (cached2Filtered.length) {
+            setValue("matched_rule_ids", cached2Filtered, { shouldDirty: false })
+          } else {
+            const pre = normalized.slice(0, row.strategy_rule_match || 0).map(rr => rr.id)
+            setValue("matched_rule_ids", pre, { shouldDirty: false })
+          }
+        } catch {}
+      })()
+    }
+
     setOpen(true)
   }
 
@@ -327,6 +413,7 @@ export default function JournalPage() {
     } finally {
       setDeleting(false)
     }
+    clearRuleIds(deleteId)
   }
 
   async function validateAndNext() {
@@ -405,6 +492,9 @@ export default function JournalPage() {
   const onSubmit = async (form: JournalForm) => {
     try {
       await submitFinal(form)
+        if (mode === "edit" && editingId) {
+          saveRuleIds(editingId, form.matched_rule_ids ?? [])
+        }
       setOpen(false)
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save")
@@ -457,33 +547,31 @@ export default function JournalPage() {
   }
 
   useEffect(() => {
-    let abort = false
+  let abort = false
+  async function loadRules() {
+    if (!wStrategyId) return
 
-    async function loadRules() {
-      if (!wStrategyId) { setStrategyRules([]); return }
-
-      const fromList = normalizeRules(
-        strategiesRef.current.find(s => s.id === wStrategyId)
-      )
-      if (fromList.length) {
-        if (!abort) setStrategyRules(fromList)
-        return
-      }
-
-      try {
-        const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
-        if (!r.ok) throw new Error(await r.text())
-        const data: unknown = await r.json()
-        const normalized = normalizeRules(data as MaybeWithRules)
-        if (!abort) setStrategyRules(normalized)
-      } catch {
-        if (!abort) setStrategyRules([])
-      }
+    const fromList = normalizeRules(
+      strategiesRef.current.find(s => s.id === wStrategyId)
+    )
+    if (fromList.length) {
+      if (!abort) setStrategyRules(fromList)
     }
 
-    void loadRules()
-    return () => { abort = true }
-  }, [wStrategyId])
+    try {
+      const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
+      if (!r.ok) throw new Error(await r.text())
+      const data: unknown = await r.json()
+      const normalized = normalizeRules(data as MaybeWithRules)
+      if (!abort) setStrategyRules(normalized)
+    } catch {
+      if (!abort) setStrategyRules(fromList ?? [])
+    }
+  }
+  void loadRules()
+  return () => { abort = true }
+}, [wStrategyId, open])
+
 
   return (
     <div className="grid gap-6">
@@ -964,23 +1052,23 @@ export default function JournalPage() {
 
             {wizardStep === 3 && (
               <>
-                {strategyRules.length > 0 && (
-                  <div>
-                    <div className="text-sm mb-2">How Many Strategy Rules Did Your Setup Follow? (Optional)</div>
-                    <div className="grid gap-2">
-                      {strategyRules.length ? (
-                        strategyRules.map((r) => (
-                          <label key={r.id} className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
-                            <span>{r.title}</span>
-                          </label>
-                        ))
-                      ) : (
-                        <div className="text-xs text-gray-500">No rules for selected strategy.</div>
-                      )}
-                    </div>
+                 <div>
+                  <div className="text-sm mb-2">
+                    How Many Strategy Rules Did Your Setup Follow? (Optional)
                   </div>
-                )}
+                  <div className="grid gap-2">
+                    {strategyRules.length ? (
+                      strategyRules.map((r) => (
+                        <label key={r.id} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
+                          <span>{r.title}</span>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-500">No rules for selected strategy.</div>
+                    )}
+                  </div>
+                </div>
 
                 <div>
                   <div className="text-sm mb-1">Notes (Optional)</div>
@@ -1024,7 +1112,7 @@ export default function JournalPage() {
           <div className="flex items-center justify-end gap-3">
             <button
               className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => setFirstRunOpen(false)}
+              onClick={() => { markFirstRunSeen(); setFirstRunOpen(false) }}
             >
               Cancel
             </button>
@@ -1046,7 +1134,7 @@ export default function JournalPage() {
                     if (!r.ok) throw new Error(await r.text())
                     const created = (await r.json()) as { id: string }
 
-                    await fetch("/api/journals/active", {
+                    await fetch("/api/journal/active", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ id: created.id }),
@@ -1066,6 +1154,7 @@ export default function JournalPage() {
                   }
 
                   await load()
+                  markFirstRunSeen()
                   setFirstRunOpen(false)
                 } catch (e) {
                   setFirstRunError(e instanceof Error ? e.message : "Failed to save")

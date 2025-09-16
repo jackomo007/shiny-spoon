@@ -46,7 +46,7 @@ export default function JournalsPage() {
 
   async function makeActive(id: string) {
     try {
-      const res = await fetch("/api/journals/active", {
+      const res = await fetch("/api/journal/active", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),

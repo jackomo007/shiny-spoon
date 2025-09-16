@@ -10,7 +10,7 @@ export default function MakeActiveButton({ journalId }: { journalId: string }) {
   async function makeActive() {
     try {
       setLoading(true)
-      const r = await fetch("/api/journals/active", {
+      const r = await fetch("/api/journal/active", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: journalId }),
