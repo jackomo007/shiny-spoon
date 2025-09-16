@@ -17,29 +17,36 @@ function parseRange(searchParams: URLSearchParams) {
 
 function calcPnL(row: {
   side: "buy" | "sell" | "long" | "short"
+  trade_type: 1 | 2
   entry_price: number
   exit_price: number | null
-  amount: number
+  amount_spent: number
+  leverage: number | null
 }) {
   if (row.exit_price == null) return 0
-  const diff = (row.side === "buy" || row.side === "long")
-    ? (row.exit_price - row.entry_price)
-    : (row.entry_price - row.exit_price)
-  return diff * row.amount
+  const qtyBase = row.amount_spent / row.entry_price
+  const lev = row.trade_type === 2 ? (row.leverage ?? 1) : 1
+  const qty = qtyBase * lev
+  const diff =
+    row.side === "buy" || row.side === "long"
+      ? row.exit_price - row.entry_price
+      : row.entry_price - row.exit_price
+  return diff * qty
 }
 
 function calcRR(row: {
   entry_price: number
   stop_loss_price: number | null
-  take_profit_price: number | null
+  exit_price: number | null
 }) {
-  const { entry_price: ep, stop_loss_price: sl, take_profit_price: tp } = row
-  if (sl == null || tp == null) return null
+  const { entry_price: ep, stop_loss_price: sl, exit_price: ex } = row
+  if (sl == null || ex == null) return null
   const risk = Math.abs(ep - sl)
-  const reward = Math.abs(tp - ep)
+  const reward = Math.abs(ex - ep)
   if (!risk || !reward) return null
   return reward / risk
 }
+
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
@@ -76,11 +83,14 @@ export async function GET(req: Request) {
       strategy_id: true,
       status: true,
       side: true,
+      trade_type: true,
       entry_price: true,
       exit_price: true,
-      amount: true,
+      amount_spent: true,
       stop_loss_price: true,
-      take_profit_price: true,
+      futures_trade: {
+        select: { leverage: true, liquidation_price: true },
+      },
     },
   })
 
@@ -97,19 +107,29 @@ export async function GET(req: Request) {
     const wins = ts.filter(t => t.status === "win").length
     const winRate = tradesUsed ? Math.round((wins / tradesUsed) * 100) : 0
 
-    const pnls = ts.map(t => calcPnL({
+  const pnls = ts.map(t =>
+    calcPnL({
       side: t.side as "buy" | "sell" | "long" | "short",
+      trade_type: t.trade_type as 1 | 2,
       entry_price: Number(t.entry_price),
       exit_price: t.exit_price != null ? Number(t.exit_price) : null,
-      amount: Number(t.amount),
-    }))
+      amount_spent: Number(t.amount_spent),
+      leverage:
+        t.futures_trade && t.futures_trade.length
+          ? Number(t.futures_trade[0].leverage)
+          : null,
+    })
+  )
+
     const pnl = pnls.reduce((acc, n) => acc + n, 0)
 
-    const rrs = ts.map(t => calcRR({
-      entry_price: Number(t.entry_price),
-      stop_loss_price: t.stop_loss_price != null ? Number(t.stop_loss_price) : null,
-      take_profit_price: t.take_profit_price != null ? Number(t.take_profit_price) : null,
-    })).filter((x): x is number => x != null)
+    const rrs = ts
+      .map(t => calcRR({
+        entry_price: Number(t.entry_price),
+        stop_loss_price: t.stop_loss_price != null ? Number(t.stop_loss_price) : null,
+        exit_price: t.exit_price != null ? Number(t.exit_price) : null,
+      }))
+      .filter((x): x is number => x != null)
 
     const avgRR = rrs.length ? (rrs.reduce((a,b)=>a+b,0) / rrs.length) : null
 
