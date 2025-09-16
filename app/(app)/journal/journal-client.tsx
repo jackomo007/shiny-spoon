@@ -180,10 +180,6 @@ export default function JournalPage() {
   const [firstRunSaving, setFirstRunSaving] = useState(false)
   const [firstRunError, setFirstRunError] = useState<string | null>(null)
 
-  const FIRST_RUN_KEY = "jrnl.firstRunSeen"
-  function markFirstRunSeen(){ try{ localStorage.setItem(FIRST_RUN_KEY,"1") }catch{} }
-  function hasSeenFirstRun(){ try{ return localStorage.getItem(FIRST_RUN_KEY)==="1" }catch{ return false } }
-
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
   const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
   function saveRuleIds(entryId: string, ids: string[]) {
@@ -200,33 +196,18 @@ export default function JournalPage() {
 }
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    if (loading) return 
-    if (firstRunOpen) return
-    if (hasSeenFirstRun()) return 
+  if (typeof window === "undefined") return
+  if (loading) return
+  if (firstRunOpen) return
 
-    if (activeJournalId) {
-      markFirstRunSeen()
-      return
-    }
+  if (journals.length === 0) {
+    setFirstRunName("")
+    setFirstRunOpen(true)
+    return
+  }
 
-    if (journals.length === 0) {
-      setFirstRunName("")
-      setFirstRunOpen(true)
-      return
-    }
+}, [loading, journals, firstRunOpen])
 
-    if (
-      journals.length === 1 &&
-      (journals[0].name ?? "").trim().toLowerCase() === "main"
-    ) {
-      setFirstRunName(journals[0].name ?? "")
-      setFirstRunOpen(true)
-      return
-    }
-
-    markFirstRunSeen()
-  }, [loading, journals, activeJournalId, firstRunOpen])
 
   useEffect(() => {
     const cur = watch("side") as Side | undefined
@@ -1112,7 +1093,7 @@ export default function JournalPage() {
           <div className="flex items-center justify-end gap-3">
             <button
               className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => { markFirstRunSeen(); setFirstRunOpen(false) }}
+              onClick={() => setFirstRunOpen(false)}
             >
               Cancel
             </button>
@@ -1154,7 +1135,6 @@ export default function JournalPage() {
                   }
 
                   await load()
-                  markFirstRunSeen()
                   setFirstRunOpen(false)
                 } catch (e) {
                   setFirstRunError(e instanceof Error ? e.message : "Failed to save")
