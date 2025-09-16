@@ -134,6 +134,7 @@ export async function GET(req: Request) {
       pnl,
       leverage,
       liquidation_price: r.futures_trade[0]?.liquidation_price != null ? Number(r.futures_trade[0].liquidation_price) : null,
+      stop_loss_price: r.stop_loss_price != null ? Number(r.stop_loss_price) : null,
     }
   })
 
