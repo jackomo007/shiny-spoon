@@ -56,6 +56,25 @@ export default withAuth(
   },
   {
     pages: { signIn: "/login" },
+    callbacks: {
+      authorized: ({ req, token }) => {
+        const pathname = (req as NextRequest).nextUrl.pathname
+
+        if (pathname.startsWith("/api/tracker/run")) {
+          const key = (req as NextRequest).headers.get("x-cron-key")
+          const devKey =
+            process.env.NODE_ENV !== "production"
+              ? process.env.NEXT_PUBLIC_DEV_CRON_SECRET
+              : undefined
+          const ok = key && (key === process.env.CRON_SECRET || key === devKey)
+          return !!ok
+        }
+
+        if (pathname.startsWith("/api/tracker")) return !!token
+
+        return !!token
+      },
+    },
   }
 )
 
@@ -64,10 +83,11 @@ export const config = {
     "/dashboard/:path*",
     "/strategies/:path*",
     "/journal/:path*",
-    "/market-analysis/:path*",
+    "/chart-tracker/:path*",
     "/profile/:path*",
     "/api/journal/:path*",
     "/api/strategies/:path*",
     "/api/billing/:path*",
+    "/api/tracker/:path*", 
   ],
 }

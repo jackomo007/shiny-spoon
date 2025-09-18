@@ -13,7 +13,7 @@ type Props = {
 
 const nav = [
   { href: "/dashboard", label: "Home", icon: "🏠" },
-  { href: "/market-analysis", label: "Market Analysis", icon: "⚙️" },
+  { href: "/chart-tracker", label: "Chart Tracker", icon: "⚙️" },
   { href: "/trading-course", label: "Trading Course", icon: "🎓" },
   { href: "/journal", label: "Trading Journal", icon: "🗒️" },
   { href: "/strategies", label: "Strategy Creator", icon: "🧭" },

@@ -37,6 +37,8 @@ model account {
   journals        journal[]
   journal_entries journal_entry[]
 
+  subscriptions chart_subscription[]
+
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
 }
@@ -195,4 +197,56 @@ enum journal_entry_status {
   win
   loss
   break_even  @map("break-even")
+}
+
+enum timeframe {
+  h1
+  h4
+  d1
+}
+
+model chart_tracker {
+  id             String    @id @default(uuid()) @db.Char(36)
+  tv_symbol      String    @db.VarChar(100)
+  display_symbol String    @db.VarChar(50)
+  tf             timeframe
+  active         Boolean   @default(true)
+  last_run_at    DateTime? @db.DateTime(0)
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  subscriptions chart_subscription[]
+  analyses      chart_analysis[]
+
+  @@unique([tv_symbol, tf], name: "tv_symbol_tf", map: "uniq_tv_symbol_tf")
+  @@index([tf], map: "idx_chart_tf")
+}
+
+model chart_subscription {
+  id         String   @id @default(uuid()) @db.Char(36)
+  account_id String   @db.Char(36)
+  tracker_id String   @db.Char(36)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  account account       @relation(fields: [account_id], references: [id], onDelete: Cascade, map: "fk_subscription_account")
+  tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_subscription_tracker")
+
+  @@unique([account_id, tracker_id], map: "uniq_account_tracker")
+  @@index([tracker_id], map: "idx_subscription_tracker")
+}
+
+model chart_analysis {
+  id            String  @id @default(uuid()) @db.Char(36)
+  tracker_id    String  @db.Char(36)
+  image_url     String  @db.Text
+  analysis_text String  @db.Text
+  model_used    String? @db.VarChar(50)
+  prompt_used   String? @db.Text
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_analysis_tracker")
+
+  @@index([tracker_id, created_at], map: "idx_analysis_tracker_created")
 }
