@@ -1,0 +1,18 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/tick",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "functions": {
+    "api/cron/tick/route.ts": {
+      "maxDuration": 60,
+      "memory": 2048
+    },
+    "api/tracker/**": {
+      "maxDuration": 60,
+      "memory": 2048
+    }
+  }
+}
