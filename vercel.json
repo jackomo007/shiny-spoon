@@ -6,11 +6,11 @@
     }
   ],
   "functions": {
-    "api/cron/tick/route.ts": {
+    "app/api/cron/tick/route.ts": {
       "maxDuration": 60,
       "memory": 2048
     },
-    "api/tracker/**": {
+    "app/api/tracker/**/route.ts": {
       "maxDuration": 60,
       "memory": 2048
     }
