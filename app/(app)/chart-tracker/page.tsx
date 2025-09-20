@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
+import Modal from "@/components/ui/Modal"
+
+type Timeframe = "h1" | "h4" | "d1"
 
 type Sub = {
   tracker: {
     id: string
     tv_symbol: string
     display_symbol: string
-    tf: "h1" | "h4" | "d1"
+    tf: Timeframe
   }
 }
 
@@ -26,44 +29,82 @@ export default function ChartTrackerPage() {
   const [loadingAnalyses, setLoadingAnalyses] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   async function refreshSubs() {
     const r = await fetch("/api/tracker/coins", { cache: "no-store" })
     if (r.ok) setSubs(await r.json())
   }
 
-  useEffect(() => {
-    refreshSubs()
-  }, [])
+  async function refetchAnalyses(trackerId: string) {
+    setLoadingAnalyses(true)
+    try {
+      const r = await fetch(
+        `/api/tracker/analyses?trackerId=${encodeURIComponent(trackerId)}`,
+        { cache: "no-store" }
+      )
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data: Analysis[] = await r.json()
+      setAnalyses(data)
+    } catch (err) {
+      console.error("[ChartTracker] fetch analyses failed:", err)
+      setAnalyses([])
+    } finally {
+      setLoadingAnalyses(false)
+    }
+  }
+
+  useEffect(() => { void refreshSubs() }, [])
 
   useEffect(() => {
     if (!openFor?.id) return
-
     const ctrl = new AbortController()
-
     ;(async () => {
       try {
         setLoadingAnalyses(true)
-        console.log("[ChartTracker] fetching analyses for", openFor.id)
-
         const r = await fetch(
           `/api/tracker/analyses?trackerId=${encodeURIComponent(openFor.id)}`,
           { signal: ctrl.signal, cache: "no-store" }
         )
-
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
-
         const data: Analysis[] = await r.json()
         setAnalyses(data)
       } catch (err) {
-        console.error("[ChartTracker] fetch analyses failed:", err)
-        setAnalyses([])
+        if ((err as Error).name !== "AbortError") {
+          console.error("[ChartTracker] fetch analyses failed:", err)
+          setAnalyses([])
+        }
       } finally {
         setLoadingAnalyses(false)
       }
     })()
-
     return () => ctrl.abort()
   }, [openFor?.id])
+
+  function askRemoveCoin(id: string) {
+    setPendingDeleteId(id)
+    setConfirmOpen(true)
+  }
+
+  async function confirmRemoveCoin() {
+    if (!pendingDeleteId) return
+    try {
+      setDeleting(true)
+      await fetch(`/api/tracker/coins/${pendingDeleteId}`, { method: "DELETE" })
+      if (openFor?.id === pendingDeleteId) setOpenFor(null)
+      await refreshSubs()
+      setConfirmOpen(false)
+      setPendingDeleteId(null)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to remove coin")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const hasCoins = subs.length > 0
 
   return (
     <div className="space-y-4">
@@ -78,53 +119,66 @@ export default function ChartTrackerPage() {
         </button>
       </div>
 
-      {/* grade de cards de coins do usuário */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {subs.map((s) => (
-          <div
-            key={s.tracker.id}
-            className="rounded-2xl p-4 border shadow hover:shadow-md transition"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{s.tracker.display_symbol}</div>
-                <div className="text-xs text-muted-foreground">
-                  {s.tracker.tv_symbol} · {s.tracker.tf}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="text-sm underline"
-                onClick={() => setOpenFor(s.tracker)}
-              >
-                View analyses
-              </button>
-            </div>
-
-            <div className="mt-3">
-              <button
-                type="button"
-                className="text-xs text-red-500"
-                onClick={async () => {
-                  await fetch(`/api/tracker/coins/${s.tracker.id}`, {
-                    method: "DELETE",
-                  })
-                  if (openFor?.id === s.tracker.id) setOpenFor(null)
-                  refreshSubs()
-                }}
-              >
-                Remove coin
-              </button>
-            </div>
+      {!hasCoins && (
+        <div className="rounded-2xl border bg-white p-8 text-center">
+          <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-purple-100 grid place-items-center text-purple-600 text-xl">
+            📈
           </div>
-        ))}
-      </div>
+          <h3 className="text-lg font-semibold">Track your first coin</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Add a coin and timeframe. We’ll analyze the chart automatically and keep the latest 10 analyses.
+          </p>
+          <button
+            className="mt-4 rounded-lg bg-black text-white px-4 py-2"
+            onClick={() => setShowAdd(true)}
+          >
+            Add your first coin
+          </button>
+        </div>
+      )}
+
+      {hasCoins && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {subs.map((s) => (
+            <div
+              key={s.tracker.id}
+              className="rounded-2xl p-4 border shadow hover:shadow-md transition bg-white"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold">{s.tracker.display_symbol}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {s.tracker.tv_symbol} · {s.tracker.tf}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm underline"
+                  onClick={() => setOpenFor(s.tracker)}
+                >
+                  View analyses
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="text-xs text-red-500"
+                  onClick={() => askRemoveCoin(s.tracker.id)}
+                >
+                  Remove coin
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showAdd && (
         <AddCoinModal
           onClose={() => {
             setShowAdd(false)
-            refreshSubs()
+            void refreshSubs()
           }}
         />
       )}
@@ -135,8 +189,36 @@ export default function ChartTrackerPage() {
           loading={loadingAnalyses}
           analyses={analyses}
           onClose={() => setOpenFor(null)}
+          onRefetch={() => openFor?.id && refetchAnalyses(openFor.id)}
         />
       )}
+
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Remove coin?"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              onClick={() => setConfirmOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmRemoveCoin}
+              disabled={deleting}
+              className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              {deleting ? "Removing…" : "Remove"}
+            </button>
+          </div>
+        }
+      >
+        <div className="text-sm text-gray-600">
+          This will stop future analyses for this coin unless you add it again.
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -144,11 +226,11 @@ export default function ChartTrackerPage() {
 function AddCoinModal({ onClose }: { onClose: () => void }) {
   const [tvSymbol, setTvSymbol] = useState("BINANCE:BTCUSDT")
   const [displaySymbol, setDisplaySymbol] = useState("BTCUSDT")
-  const [tf, setTf] = useState<"h1" | "h4" | "d1">("h1")
+  const [tf, setTf] = useState<Timeframe>("h1")
   const [saving, setSaving] = useState(false)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4">
         <h3 className="text-lg font-semibold">Add Coin</h3>
 
@@ -161,7 +243,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
             placeholder="BINANCE:BTCUSDT"
           />
 
-          <label className="text-sm">Display Symbol</label>
+        <label className="text-sm">Display Symbol</label>
           <input
             className="w-full border rounded p-2"
             value={displaySymbol}
@@ -174,7 +256,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
             className="w-full border rounded p-2"
             value={tf}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              setTf(e.target.value as "h1" | "h4" | "d1")
+              setTf(e.target.value as Timeframe)
             }
           >
             <option value="h1">1h</option>
@@ -216,16 +298,18 @@ function AnalysesModal({
   analyses,
   loading,
   onClose,
+  onRefetch,
 }: {
-  tracker: { id: string; display_symbol: string; tf: "h1" | "h4" | "d1" }
+  tracker: { id: string; display_symbol: string; tf: Timeframe }
   analyses: Analysis[]
   loading: boolean
   onClose: () => void
+  onRefetch: () => void
 }) {
   return (
-    <div className="fixed inset-0 bg-black/60 p-4 overflow-y-auto">
-      <div className="mx-auto max-w-5xl bg-white rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="fixed inset-0 bg-black/60 p-4 overflow-y-auto z-50">
+      <div className="mx-auto max-w-5xl bg-white rounded-2xl p-0 md:p-6">
+        <div className="flex items-center justify-between px-4 py-3 md:px-0 md:py-0 md:mb-4">
           <h3 className="text-lg font-semibold">
             {tracker.display_symbol} · {tracker.tf}
           </h3>
@@ -235,28 +319,46 @@ function AnalysesModal({
         </div>
 
         {loading && (
-          <div className="text-sm text-muted-foreground">Loading analyses…</div>
+          <div className="px-4 pb-4 md:px-0 text-sm text-muted-foreground">Loading analyses…</div>
         )}
 
         {!loading && analyses.length === 0 && (
-          <div className="text-sm text-muted-foreground">
+          <div className="px-4 pb-4 md:px-0 text-sm text-muted-foreground">
             No analyses yet for this coin.
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-6 px-4 pb-6 md:px-0">
           {analyses.map((a) => (
-            <div key={a.id} className="grid md:grid-cols-2 gap-4 rounded-xl border p-4">
-              <Image
-                src={a.image_url}
-                alt={`${tracker.display_symbol} chart`}
-                width={1200}
-                height={700}
-                className="w-full h-auto rounded-lg"
-              />
-              <div className="whitespace-pre-wrap">{a.analysis_text}</div>
-              <div className="md:col-span-2 text-xs text-muted-foreground">
-                {new Date(a.created_at).toLocaleString()}
+            <div key={a.id} className="rounded-xl border overflow-hidden">
+              <div className="bg-black/5">
+                <Image
+                  src={a.image_url}
+                  alt={`${tracker.display_symbol} chart`}
+                  width={1600}
+                  height={900}
+                  className="w-full h-auto max-h-[70vh] object-contain bg-white"
+                  priority={false}
+                />
+              </div>
+
+              <div className="p-4 md:p-6">
+                <div className="whitespace-pre-wrap leading-relaxed">{a.analysis_text}</div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  {new Date(a.created_at).toLocaleString()}
+                </div>
+
+                <div className="mt-4">
+                  <button
+                    className="text-sm underline"
+                    onClick={async () => {
+                      await onRefetch()
+                      try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+                    }}
+                  >
+                    Refresh analysis list
+                  </button>
+                </div>
               </div>
             </div>
           ))}
