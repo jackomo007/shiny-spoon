@@ -70,33 +70,41 @@ export async function runAnalysisForTracker(trackerId: string) {
   const tracker = await prisma.chart_tracker.findUniqueOrThrow({ where: { id: trackerId } })
   if (!tracker.active) return null
 
-  const png = await captureTradingView(tracker.tv_symbol, tfToTvInterval(tracker.tf as TF))
-  const imageUrl = await uploadPng(png)
-
-  const { text, model, prompt } = await analyzeChartImage(imageUrl)
-
-  await prisma.chart_analysis.create({
-    data: {
-      tracker_id: tracker.id,
-      image_url: imageUrl,
-      analysis_text: text,
-      model_used: model,
-      prompt_used: prompt,
-    },
+  await prisma.chart_tracker.update({
+    where: { id: tracker.id },
+    data: { last_run_at: new Date() },
   })
 
-  await prisma.chart_tracker.update({ where: { id: tracker.id }, data: { last_run_at: new Date() } })
+  try {
+    const png = await captureTradingView(tracker.tv_symbol, tfToTvInterval(tracker.tf as TF))
+    const imageUrl = await uploadPng(png)
 
-  const extras = await prisma.chart_analysis.findMany({
-    where: { tracker_id: tracker.id },
-    orderBy: { created_at: "desc" },
-    skip: LIMIT_PER_TRACKER,
-    select: { id: true },
-  })
-  if (extras.length) {
-    await prisma.chart_analysis.deleteMany({ where: { id: { in: extras.map(e => e.id) } } })
+    const { text, model, prompt } = await analyzeChartImage(imageUrl)
+
+    await prisma.chart_analysis.create({
+      data: {
+        tracker_id: tracker.id,
+        image_url: imageUrl,
+        analysis_text: text,
+        model_used: model,
+        prompt_used: prompt,
+      },
+    })
+    const extras = await prisma.chart_analysis.findMany({
+      where: { tracker_id: tracker.id },
+      orderBy: { created_at: "desc" },
+      skip: LIMIT_PER_TRACKER,
+      select: { id: true },
+    })
+    if (extras.length) {
+      await prisma.chart_analysis.deleteMany({ where: { id: { in: extras.map(e => e.id) } } })
+    }
+  } catch (err) {
+    console.error("[ANALYZE FAIL]", tracker.id, tracker.tv_symbol, tracker.tf, err)
+    throw err
   }
 }
+
 
 export async function findDueTrackers(now = new Date()) {
   const all = await prisma.chart_tracker.findMany({ where: { active: true } })

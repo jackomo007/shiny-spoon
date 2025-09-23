@@ -21,20 +21,22 @@ export async function POST(req: NextRequest) {
   const due = await findDueTrackers()
   const limit = pLimit(2)
 
-  const reports = await Promise.allSettled(
-    due.map(t =>
-      limit(async (): Promise<TrackerReport> => {
-        try {
-          await runAnalysisForTracker(t.id)
-          return { trackerId: t.id, tv_symbol: t.tv_symbol, tf: t.tf, ok: true }
-        } catch (e: unknown) {
-          const message =
-            e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error"
-          return { trackerId: t.id, tv_symbol: t.tv_symbol, tf: t.tf, ok: false, error: message }
-        }
-      })
-    )
+const reports = await Promise.allSettled(
+  due.map(t =>
+    limit(async (): Promise<TrackerReport> => {
+      try {
+        await runAnalysisForTracker(t.id)
+        console.log("[RUN OK]", t.id, t.tv_symbol, t.tf)
+        return { trackerId: t.id, tv_symbol: t.tv_symbol, tf: t.tf, ok: true }
+      } catch (e: unknown) {
+        const message =
+          e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error"
+        console.error("[RUN FAIL]", t.id, t.tv_symbol, t.tf, message)
+        return { trackerId: t.id, tv_symbol: t.tv_symbol, tf: t.tf, ok: false, error: message }
+      }
+    })
   )
+)
 
   console.log('REPORTS', reports)
   console.log('DUE', due)
