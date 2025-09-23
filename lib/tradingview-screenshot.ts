@@ -1,4 +1,4 @@
-import chromium from "@sparticuz/chromium"
+import chromium from "@sparticuz/chromium-min"
 import puppeteer, { type Browser } from "puppeteer-core"
 
 export async function captureTradingView(symbol: string, interval: "60" | "240" | "D") {
