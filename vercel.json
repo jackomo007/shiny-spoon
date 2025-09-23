@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "app/api/tracker/run/route.ts": { "regions": ["fra1", "cdg1", "arn1"] },
+    "app/api/tracker/coins/route.ts": { "regions": ["fra1", "cdg1", "arn1"] }
+  }
+}
