@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/tracker/run/route.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
+    }
+  }
+}
