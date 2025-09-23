@@ -1,6 +1,6 @@
 {
   "functions": {
-    "app/api/tracker/run/route": {
+    "app/**": {
       "includeFiles": "node_modules/@sparticuz/chromium/{bin,lib}/**"
     }
   }
