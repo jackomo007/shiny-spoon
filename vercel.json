@@ -1,7 +1,8 @@
 {
   "functions": {
-    "app/**": {
-      "includeFiles": "node_modules/@sparticuz/chromium/{bin,lib}/**"
+    "app/**/route": {
+      "runtime": "nodejs20.x",
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
     }
   }
 }
