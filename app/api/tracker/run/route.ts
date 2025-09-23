@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     )
   )
 
-  console.log(`Processed ${reports.length} trackers, ${due.length} were due.`)
+  console.log('REPORTS', reports)
+  console.log('DUE', due)
   console.warn(`Processed ${reports.length} trackers, ${due.length} were due.`)
   
 
@@ -45,9 +46,8 @@ export async function POST(req: NextRequest) {
       : { trackerId: "unknown", tv_symbol: "", tf: "", ok: false, error: String(r.reason) }
   )
 
-  console.log(`OK ${flat.filter(r => r.ok).length}, FAIL ${flat.filter(r => !r.ok).length}`)
   console.warn(`OK ${flat.filter(r => r.ok).length}, FAIL ${flat.filter(r => !r.ok).length}`)
-  
+
   return NextResponse.json({
     queued: due.length,
     ok: flat.filter(r => r.ok).length,
