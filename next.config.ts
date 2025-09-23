@@ -7,12 +7,11 @@ const nextConfig: NextConfig = {
   },
 
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**.amazonaws.com",
-      },
-    ],
+    remotePatterns: [{ protocol: "https", hostname: "**.amazonaws.com" }],
+  },
+
+  experimental: {
+    serverComponentsExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   },
 }
 

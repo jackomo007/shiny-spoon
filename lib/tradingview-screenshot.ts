@@ -1,12 +1,7 @@
 import chromium from "@sparticuz/chromium"
 import puppeteer, { type Browser } from "puppeteer-core"
 
-export type TVInterval = "60" | "240" | "D"
-
-export async function captureTradingView(
-  symbol: string,
-  interval: TVInterval
-): Promise<Buffer> {
+export async function captureTradingView(symbol: string, interval: "60" | "240" | "D") {
   let browser: Browser | null = null
   try {
     const execPath = await chromium.executablePath()
@@ -25,14 +20,9 @@ export async function captureTradingView(
 
     const base = process.env.TRADINGVIEW_BASE ?? "https://www.tradingview.com/chart"
     const url = `${base}/?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`
-
     await page.goto(url, { waitUntil: "networkidle2", timeout: 120_000 })
-    await page.waitForSelector("canvas, table.chart-markup-table, div#overlap-manager-root", {
-      timeout: 120_000,
-    })
-
+    await page.waitForSelector("canvas, table.chart-markup-table, div#overlap-manager-root", { timeout: 120_000 })
     await new Promise((r) => setTimeout(r, 1500))
-
     const buffer = (await page.screenshot({ type: "png" })) as Buffer
     return buffer
   } finally {
