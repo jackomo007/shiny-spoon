@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   },
 
   experimental: {
-    serverComponentsExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+    serverComponentsExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
   },
 }
 
