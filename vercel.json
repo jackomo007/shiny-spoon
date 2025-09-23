@@ -1,8 +1,6 @@
 {
-  "version": 2,
   "functions": {
     "api/tracker/run/**": {
-      "runtime": "nodejs20.x",
       "includeFiles": "node_modules/@sparticuz/chromium/{bin,lib}/**"
     }
   }
