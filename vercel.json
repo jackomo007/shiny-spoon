@@ -1,7 +1,9 @@
 {
+  "version": 2,
   "functions": {
-    "app/api/tracker/run/route.ts": {
-      "includeFiles": "node_modules/@sparticuz/chromium/**"
+    "api/tracker/run/**": {
+      "runtime": "nodejs20.x",
+      "includeFiles": "node_modules/@sparticuz/chromium/{bin,lib}/**"
     }
   }
 }
