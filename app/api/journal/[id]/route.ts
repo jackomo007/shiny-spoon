@@ -131,7 +131,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        sell_fee: new Prisma.Decimal(data.sell_fee ?? 0),
+        sell_fee: data.sell_fee != null
+          ? new Prisma.Decimal(data.sell_fee)
+          : existing.sell_fee, 
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: data.exit_price ?? null,
