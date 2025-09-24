@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Image from "next/image"
+import ChartWithOverlay from "@/components/tracker/ChartWithOverlay"
 import Modal from "@/components/ui/Modal"
 
 type Timeframe = "h1" | "h4" | "d1"
@@ -332,13 +332,12 @@ function AnalysesModal({
           {analyses.map((a) => (
             <div key={a.id} className="rounded-xl border overflow-hidden">
               <div className="bg-black/5">
-                <Image
-                  src={a.image_url}
-                  alt={`${tracker.display_symbol} chart`}
-                  width={1600}
-                  height={900}
-                  className="w-full h-auto max-h-[70vh] object-contain bg-white"
-                  priority={false}
+                <ChartWithOverlay
+                  imageUrl={a.image_url}
+                  symbol={tracker.display_symbol}
+                  timeframe={tracker.tf}
+                  panelWidth={280}
+                  title={`${tracker.display_symbol} · ${tracker.tf.toUpperCase()}`}
                 />
               </div>
 

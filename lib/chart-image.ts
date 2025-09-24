@@ -1,4 +1,3 @@
-// lib/chart-image.ts
 import "server-only"
 import type { Candle } from "./klines"
 
@@ -12,15 +11,14 @@ export type ChartRenderOptions = {
   gridColor?: string
   axisColor?: string
   wickColor?: string
-  font?: string            // ex.: "Inter"
+  font?: string
   title?: string
   symbol?: string
   timeframeLabel?: string
-  sidePanelWidth?: number  // 0 desativa painel
-  debugText?: boolean      // desenha "DEBUG" no topo
+  sidePanelWidth?: number
+  debugText?: boolean 
 }
 
-/** 10.4K / 14.1M / 1.23B */
 function fmtCompact(n: number): string {
   const abs = Math.abs(n)
   if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + "B"
@@ -37,7 +35,6 @@ export async function generateCandlePng(
 ): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas")
 
-  // Registra TTFs (uma vez)
   if (!fontsReady) {
     try {
       const root = process.cwd()
@@ -50,22 +47,19 @@ export async function generateCandlePng(
     }
   }
 
-  // Usa uma família única para evitar o bug de múltiplas famílias
   const family =
     (opts.font && GlobalFonts.has(opts.font)) ? opts.font :
     (GlobalFonts.has("Inter") ? "Inter" : "sans-serif")
 
-  // ===== Layout =====
   const width = opts.width ?? 1280
   const height = opts.height ?? 720
   const padding = opts.padding ?? 48
-  const SIDE = Math.max(0, opts.sidePanelWidth ?? 280) // 280 = parecido com TV
+  const SIDE = Math.max(0, opts.sidePanelWidth ?? 280)
   const plotX = padding
   const plotY = padding
   const plotW = width - padding * 2 - SIDE
   const plotH = height - padding * 2
 
-  // ===== Cores =====
   const bull = opts.bullColor ?? "#16a34a"
   const bear = opts.bearColor ?? "#dc2626"
   const wick = opts.wickColor ?? "#374151"
@@ -78,7 +72,6 @@ export async function generateCandlePng(
   ctx.textBaseline = "top"
   ctx.textAlign = "left"
 
-  // fundo
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, width, height)
 
@@ -88,7 +81,6 @@ export async function generateCandlePng(
     ctx.fillText("DEBUG", 10, 10)
   }
 
-  // Sem dados?
   if (candles.length === 0) {
     ctx.fillStyle = "#111827"
     ctx.font = `bold 20px ${family}`
@@ -96,12 +88,10 @@ export async function generateCandlePng(
     return canvas.toBuffer("image/png")
   }
 
-  // ===== Escalas =====
   const minL = Math.min(...candles.map(c => c.low))
   const maxH = Math.max(...candles.map(c => c.high))
   const range = Math.max(1e-9, maxH - minL)
 
-  // grid horizontal
   ctx.strokeStyle = grid
   ctx.lineWidth = 1
   const gridLines = 5
@@ -113,7 +103,6 @@ export async function generateCandlePng(
     ctx.stroke()
   }
 
-  // labels eixo preço
   ctx.fillStyle = axis
   ctx.font = `12px ${family}`
   for (let i = 0; i <= gridLines; i++) {
@@ -122,7 +111,6 @@ export async function generateCandlePng(
     ctx.fillText(val.toFixed(2), Math.max(8, plotX - 42), y + 4)
   }
 
-  // ===== Candles =====
   const n = candles.length
   const colW = plotW / n
   const bodyW = Math.max(2, Math.floor(colW * 0.6))
@@ -137,14 +125,12 @@ export async function generateCandlePng(
     const yOpen = plotY + Math.floor(((maxH - c.open) / range) * plotH)
     const yClose = plotY + Math.floor(((maxH - c.close) / range) * plotH)
 
-    // pavio
     ctx.strokeStyle = wick
     ctx.beginPath()
     ctx.moveTo(xCenter, yHigh)
     ctx.lineTo(xCenter, yLow)
     ctx.stroke()
 
-    // corpo
     const up = c.close >= c.open
     ctx.fillStyle = up ? bull : bear
     const top = Math.min(yOpen, yClose)
@@ -152,7 +138,6 @@ export async function generateCandlePng(
     ctx.fillRect(xCenter - half, top, bodyW, h)
   }
 
-  // ===== Título =====
   const title = opts.title ?? `${opts.symbol ?? ""} · ${opts.timeframeLabel ?? ""}`.trim()
   if (title) {
     ctx.fillStyle = "#111827"
@@ -160,17 +145,14 @@ export async function generateCandlePng(
     ctx.fillText(title, plotX, Math.max(22, plotY - 10))
   }
 
-  // ===== Painel lateral =====
   if (SIDE > 0) {
     const panelX = width - SIDE - padding
     const panelY = padding
     const panelW = SIDE
     const panelH = plotH
 
-    // cartão
     ctx.fillStyle = "#f8fafc"
     ctx.fillRect(panelX, panelY, panelW, panelH)
-    // borda sutil
     ctx.strokeStyle = "#e5e7eb"
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1)
 
@@ -190,25 +172,21 @@ export async function generateCandlePng(
       y += size + 8
     }
 
-    // Cabeçalho
     line(`${opts.symbol ?? "SYMBOL"} / USDT`, true, "#111827", 15)
     line(`Exchange: Binance`)
     line(`Timeframe: ${opts.timeframeLabel ?? "-"}`)
 
     y += 6
-    // Preço + variação no período visível
     const up = diff >= 0
     line(`${last.close.toFixed(2)} USDT`, true, up ? "#16a34a" : "#dc2626", 24)
     line(`${up ? "+" : ""}${diff.toFixed(2)} (${pct.toFixed(2)}%)`, false, up ? "#16a34a" : "#dc2626")
 
     y += 6
-    // High/Low/Volumes
     line(`High: ${last.high.toFixed(2)}`)
     line(`Low : ${last.low.toFixed(2)}`)
     line(`Volume: ${fmtCompact(last.volume)}`)
     line(`Avg Vol (30): ${fmtCompact(avgVol)}`)
 
-    // Market open
     y += 10
     const dotX = panelX + 16
     const dotY = y + 2
