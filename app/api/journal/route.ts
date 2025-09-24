@@ -2,9 +2,12 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
+
+const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
 
 function parseRange(searchParams: URLSearchParams) {
   const end = searchParams.get("end") ? new Date(searchParams.get("end")!) : new Date()
@@ -45,21 +48,33 @@ const BaseSchema = z.object({
   stop_loss_price: z.number().positive().optional().nullable(),
   amount_spent: z.number().positive().optional(),
   amount: z.number().positive().optional(),
+  timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
+  buy_fee: z.number().nonnegative().default(0),
+  sell_fee: z.number().nonnegative().optional(), 
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
   futures: z.object({
-    leverage: z.number().int().min(1),
-    liquidation_price: z.number().positive(),
-  }).optional(),
+  leverage: z.number().int().min(1),
+  liquidation_price: z.number().positive().optional().nullable(),
+    }).optional(),
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
+
   const t = Number(v.trade_type)
+
   if (t === 2 && !v.futures) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
+  }
+
+  if (t === 1 && !["buy", "sell"].includes(v.side)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
+  }
+  if (t === 2 && !["long", "short"].includes(v.side)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Futures trades must be long/short" })
   }
 })
 .transform(v => ({
@@ -128,6 +143,9 @@ export async function GET(req: Request) {
       amount_spent: Number(r.amount_spent),
       date: r.trade_datetime.toISOString(),
       strategy_id: r.strategy_id,
+      buy_fee: Number(r.buy_fee),
+      sell_fee: Number(r.sell_fee),
+      timeframe_code: r.timeframe_code,
       strategy_rule_match: r.strategy_rule_match,
       notes_entry: r.notes_entry ?? null,
       notes_review: r.notes_review ?? null,
@@ -188,6 +206,9 @@ export async function POST(req: Request) {
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
+        timeframe_code: data.timeframe_code,
+        buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
+        sell_fee: new Prisma.Decimal(data.sell_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: data.exit_price ?? null,

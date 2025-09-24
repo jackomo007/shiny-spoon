@@ -23,6 +23,9 @@ type JournalRow = {
   strategy_id: string
   pnl: number | null
   leverage: number | null
+  buy_fee: number
+  sell_fee: number
+  timeframe_code: string
   liquidation_price: number | null
   stop_loss_price: number | null
   strategy_rule_match: number 
@@ -38,6 +41,10 @@ type JournalForm = {
   asset_name: string
   trade_type: TradeType | string
   trade_datetime: string
+
+  timeframe_number?: string   // "1", "4", "15", etc.
+  timeframe_unit?: "S" | "M" | "H" | "D" | "W" | "Y"
+  buy_fee?: string
 
   side?: Side
   status?: Status
@@ -83,6 +90,18 @@ function toISO(dtLocal: string): string {
   return new Date(dtLocal).toISOString()
 }
 
+const fmt4 = (n: number | null | undefined) => {
+  if (n == null) return "—";
+  const s = String(n);
+  const [i, d = ""] = s.split(".");
+  const d4 = d.slice(0, 4);
+  const trimmed = d4.replace(/0+$/, "");
+  return trimmed ? `${i}.${trimmed}` : i; 
+};
+
+const money2 = (n: number) => `$${n.toFixed(2)}`;
+
+
 type BasePayload = {
   strategy_id: string
   asset_name: string
@@ -96,12 +115,16 @@ type BasePayload = {
   strategy_rule_match: number
   notes_entry: string | null
   notes_review: string | null
+  timeframe_code: string
+  buy_fee: number
+  sell_fee: number
 }
+
 
 type CreateSpotPayload = BasePayload & { trade_type: 1 }
 type CreateFuturesPayload = BasePayload & {
   trade_type: 2
-  futures: { leverage: number; liquidation_price: number }
+  futures: { leverage: number; liquidation_price: number | null }
 }
 type CreatePayload = CreateSpotPayload | CreateFuturesPayload
 
@@ -146,6 +169,7 @@ export default function JournalPage() {
   const [assetError, setAssetError] = useState<string | null>(null)
   const validSymbolsRef = useRef<Set<string>>(new Set())
   const assetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [exportOpen, setExportOpen] = useState(false);
 
   const {
     register,
@@ -180,6 +204,13 @@ export default function JournalPage() {
   const [firstRunSaving, setFirstRunSaving] = useState(false)
   const [firstRunError, setFirstRunError] = useState<string | null>(null)
 
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [rowToClose, setRowToClose] = useState<JournalRow | null>(null);
+  const [closeExit, setCloseExit] = useState<string>("");
+  const [closeSellFee, setCloseSellFee] = useState<string>("0");
+  const [closePnl, setClosePnl] = useState<number | null>(null);
+
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
   const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
   function saveRuleIds(entryId: string, ids: string[]) {
@@ -196,17 +227,17 @@ export default function JournalPage() {
 }
 
   useEffect(() => {
-  if (typeof window === "undefined") return
-  if (loading) return
-  if (firstRunOpen) return
+    if (typeof window === "undefined") return
+    if (loading) return
+    if (firstRunOpen) return
 
-  if (journals.length === 0) {
-    setFirstRunName("")
-    setFirstRunOpen(true)
-    return
-  }
+    if (journals.length === 0) {
+      setFirstRunName("")
+      setFirstRunOpen(true)
+      return
+    }
 
-}, [loading, journals, firstRunOpen])
+  }, [loading, journals, firstRunOpen])
 
 
   useEffect(() => {
@@ -218,6 +249,27 @@ export default function JournalPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wTradeType])
+
+  function openCloseModal(r: JournalRow) {
+    setRowToClose(r);
+    setCloseExit(r.exit_price != null ? String(r.exit_price) : "");
+    setCloseSellFee("0");
+    setClosePnl(null);
+    setCloseOpen(true);
+  }
+
+  useEffect(() => {
+    if (!rowToClose) return;
+    const exit = parseFloat(closeExit);
+    if (isNaN(exit)) { setClosePnl(null); return; }
+    const dir = (rowToClose.side === "buy" || rowToClose.side === "long") ? 1 : -1;
+    const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
+    const notional = rowToClose.trade_type === 2
+      ? (rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1))
+      : rowToClose.amount_spent;
+    const gross = dir * notional * change;
+    setClosePnl(Number(gross.toFixed(2)));
+  }, [closeExit, rowToClose]);
 
   const load = useCallback(async () => {
     try {
@@ -274,6 +326,18 @@ export default function JournalPage() {
 
   useEffect(() => { void load() }, [load])
 
+  useEffect(() => {
+  try {
+      const saved = JSON.parse(localStorage.getItem("jrnl.range") || "{}");
+      if (saved.start) setStart(saved.start);
+      if (saved.end) setEnd(saved.end);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem("jrnl.range", JSON.stringify({ start, end })); } catch {}
+  }, [start, end]);
+
   const rows = useMemo(() => {
     let arr = items
     const q = query.trim().toLowerCase()
@@ -292,6 +356,10 @@ export default function JournalPage() {
     validSymbolsRef.current = new Set()
     setAssetQuery("")
     setAssetOptions([])
+    setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
+    setValue("timeframe_number", "1", { shouldValidate: false });
+    setValue("timeframe_unit", "H", { shouldValidate: false });
+    setValue("buy_fee", "0", { shouldValidate: false });
     setShowAssetMenu(false)
     reset({
       strategy_id: "",
@@ -332,6 +400,16 @@ export default function JournalPage() {
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
     })
+    const tf = row.timeframe_code || "";
+    const tfNum = tf.replace(/[A-Z]$/i, "");
+    const tfUnit = tf.slice(-1).toUpperCase() as "S"|"M"|"H"|"D"|"W"|"Y";
+    setValue("timeframe_number", tfNum || "1", { shouldValidate: false });
+    setValue(
+      "timeframe_unit",
+      (["S","M","H","D","W","Y"].includes(tfUnit) ? tfUnit : "H") as JournalForm["timeframe_unit"],
+      { shouldValidate: false }
+    );
+    setValue("buy_fee", String(row.buy_fee ?? 0), { shouldValidate: false });
     setValue("strategy_id", row.strategy_id, { shouldValidate: false, shouldDirty: false })
 
     const rulesForStrategy = normalizeRules(
@@ -405,10 +483,10 @@ export default function JournalPage() {
     }
     if (wizardStep === 2) {
       if (wTradeType === 1) {
-        const ok = await trigger(["side", "status", "amount_spent", "entry_price"])
+        const ok = await trigger(["status", "amount_spent", "entry_price", "buy_fee"])
         if (ok) setWizardStep(3)
       } else {
-        const ok = await trigger(["amount_spent", "entry_price", "leverage", "liquidation_price", "status", "side"])
+      const ok = await trigger(["amount_spent", "entry_price", "leverage", "buy_fee", "status", "side"])
         if (ok) setWizardStep(3)
       }
       return
@@ -424,6 +502,8 @@ export default function JournalPage() {
       ? (coercedSide === "sell" ? "sell" : "buy")
       : (coercedSide === "short" ? "short" : "long")
 
+    const timeframe_code = `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
+
     const base: BasePayload = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
@@ -437,13 +517,19 @@ export default function JournalPage() {
       strategy_rule_match: ruleCount,
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
-    }
-
+      timeframe_code,
+      buy_fee: Number(form.buy_fee ?? 0),
+      sell_fee: 0, 
+    };
     let payload: CreatePayload
     if (tradeType === 2) {
+      const liq = form.liquidation_price?.trim()
+        ? Number(form.liquidation_price)
+        : null;
+
       const futures: CreateFuturesPayload["futures"] = {
         leverage: Number(form.leverage ?? 0),
-        liquidation_price: Number(form.liquidation_price ?? 0),
+        liquidation_price: liq,
       }
       payload = { ...base, trade_type: 2, futures }
     } else {
@@ -501,8 +587,12 @@ export default function JournalPage() {
     }
   }
 
-  const totalTrades = rows.length
-  const winRate = totalTrades ? Math.round((rows.filter((i) => i.status === "win").length * 100) / totalTrades) : 0
+  const totalTrades = rows.length;
+  const finished = rows.filter(r => r.status !== "in_progress");
+  const winRate = finished.length
+    ? Math.round((finished.filter(i => i.status === "win").length * 100) / finished.length)
+    : 0;
+
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0)
 
   const [strategyRules, setStrategyRules] = useState<Rule[]>([])
@@ -550,8 +640,8 @@ export default function JournalPage() {
     }
   }
   void loadRules()
-  return () => { abort = true }
-}, [wStrategyId, open])
+    return () => { abort = true }
+  }, [wStrategyId, open])
 
 
   return (
@@ -572,12 +662,14 @@ export default function JournalPage() {
           >
             📒 Manage Journals
           </a>
-          <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
-          <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
+         <button
+          onClick={() => setExportOpen(true)}
+          className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">
+          📄 Export
+        </button>
           <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
         </div>
     </div>
-
       {movedOutBanner && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{movedOutBanner}</div>
       )}
@@ -660,7 +752,6 @@ export default function JournalPage() {
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20" onMouseLeave={() => setShowMenu(false)}>
                   <MenuItem label="Refresh" onClick={() => { void load(); setShowMenu(false) }} />
                   <MenuItem label="Manage Widgets" onClick={() => setShowMenu(false)} />
-                  <MenuItem label="Settings" onClick={() => setShowMenu(false)} />
                 </div>
               )}
             </div>
@@ -684,7 +775,9 @@ export default function JournalPage() {
                   <Th>Amount Spent</Th>
                   <Th>PnL</Th>
                   <Th>Date</Th>
+                  <Th>Timeframe</Th>
                   <Th>Status</Th>
+                  <Th> </Th>
                   <Th> </Th>
                 </tr>
               </thead>
@@ -695,12 +788,21 @@ export default function JournalPage() {
                       <Td>{r.asset_name}</Td>
                       <Td>{r.trade_type === 2 ? "Futures" : "Spot"}</Td>
                       <Td>{r.side}</Td>
-                      <Td>${r.entry_price.toFixed(2)}</Td>
-                      <Td>{r.exit_price != null ? `$${r.exit_price.toFixed(2)}` : "—"}</Td>
-                      <Td>${r.amount_spent.toFixed(2)}</Td>
-                      <Td>{r.pnl != null ? `$${r.pnl.toFixed(2)}` : "—"}</Td>
+                      <Td>{fmt4(r.entry_price)}</Td>
+                      <Td>{r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
+                      <Td>{money2(r.amount_spent)}</Td>
+                      <Td>{r.pnl != null ? money2(r.pnl) : "—"}</Td>
                       <Td>{new Date(r.date).toLocaleString()}</Td>
+                      <Td>{r.timeframe_code}</Td>
                       <Td>{r.status.replace("_", " ")}</Td>
+                      <Td>
+                        <button
+                          title="Close Trade"
+                          onClick={() => openCloseModal(r)}
+                          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90">
+                          Close Trade
+                        </button>
+                      </Td>
                       <Td>
                         <div className="flex gap-3 justify-end">
                           <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
@@ -855,6 +957,32 @@ export default function JournalPage() {
                   />
                   {errors.trade_datetime && <p className="mt-1 text-xs text-red-600">{String(errors.trade_datetime.message)}</p>}
                 </div>
+
+                <div>
+                  <div className="text-sm mb-1">
+                    Timeframe <span className="text-red-600">*</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      {...register("timeframe_number", {
+                        required: "Timeframe number is required",
+                        validate: (v) => /^\d+$/.test(String(v ?? "")) || "Only digits",
+                      })}
+                      placeholder="e.g. 1"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                    <select
+                      {...register("timeframe_unit", { required: "Unit is required" })}
+                      className="rounded-xl border border-gray-200 px-3 py-2"
+                    >
+                      {["S","M","H","D","W","Y"].map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {errors.timeframe_number && <p className="mt-1 text-xs text-red-600">{String(errors.timeframe_number.message)}</p>}
+                  {errors.timeframe_unit && <p className="mt-1 text-xs text-red-600">{String(errors.timeframe_unit.message)}</p>}
+                </div>
               </>
             )}
 
@@ -863,17 +991,6 @@ export default function JournalPage() {
                 {wTradeType === 1 ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">Side</div>
-                        <select
-                          {...register("side", { required: "Side is required" })}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        >
-                          <option value="buy">Buy</option>
-                          <option value="sell">Sell</option>
-                        </select>
-                        {errors.side && <p className="mt-1 text-xs text-red-600">{String(errors.side.message)}</p>}
-                      </div>
                       <div>
                         <div className="text-sm mb-1">Status</div>
                         <select {...register("status", { required: "Status is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
@@ -884,6 +1001,24 @@ export default function JournalPage() {
                         </select>
                         {errors.status && <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>}
                       </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm mb-1">Buy Fee (required)</div>
+                      <input
+                        {...register("buy_fee", {
+                          required: "Buy fee is required",
+                          validate: (v) => (parseFloat(v ?? "0") >= 0) || "Must be ≥ 0",
+                        })}
+                        defaultValue="0"
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                      {errors.buy_fee && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
+                      )}
+                    </div>
+                  </div>
                     </div>
 
                     <div>
@@ -988,19 +1123,13 @@ export default function JournalPage() {
                         {errors.leverage && <p className="mt-1 text-xs text-red-600">{String(errors.leverage.message)}</p>}
                       </div>
                       <div>
-                        <div className="text-sm mb-1">
-                          Liquidation Price <span className="text-red-600">*</span>
-                        </div>
+                        <div className="text-sm mb-1">Liquidation Price (optional)</div>
                         <input
-                          {...register("liquidation_price", {
-                            required: "Liquidation price is required",
-                            validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
-                          })}
+                          {...register("liquidation_price")}
                           inputMode="decimal"
                           placeholder="e.g. 10000.32"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.liquidation_price && <p className="mt-1 text-xs text-red-600">{String(errors.liquidation_price.message)}</p>}
                       </div>
                     </div>
 
@@ -1069,6 +1198,26 @@ export default function JournalPage() {
       </Modal>
 
       <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export"
+        footer={
+          <div className="flex justify-end">
+            <button
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              onClick={() => setExportOpen(false)}
+            >
+              OK
+            </button>
+          </div>
+        }
+      >
+        <div className="text-sm text-gray-700">
+          This feature is coming soon.
+        </div>
+      </Modal>
+
+      <Modal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="Delete entry?"
@@ -1085,6 +1234,141 @@ export default function JournalPage() {
       >
         <div className="text-sm text-gray-600">This action cannot be undone.</div>
       </Modal>
+      <Modal
+        open={closeOpen}
+        onClose={() => setCloseOpen(false)}
+        title="Close Trade"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button className="rounded bg-gray-100 px-4 py-2 text-sm" onClick={() => setCloseOpen(false)}>
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!rowToClose) return;
+                const exitNum = parseFloat(closeExit);
+                const sellFeeNum = parseFloat(closeSellFee);
+                if (!(exitNum > 0)) { alert("Exit price is required"); return; }
+                if (!(sellFeeNum >= 0)) { alert("Sell fee must be ≥ 0"); return; }
+                try {
+                  setClosing(true);
+                  const computedStatus: Status = (() => {
+                    if (!rowToClose) return "win";
+                    if (exitNum === rowToClose.entry_price) return "break_even";
+                    const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
+                    return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
+                      ? "win"
+                      : "loss";
+                  })();
+
+                  const baseClose: BasePayload = {
+                  strategy_id: rowToClose.strategy_id,
+                  asset_name: rowToClose.asset_name,
+                  trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
+                  side: rowToClose.side,
+                  status: computedStatus,
+                  amount_spent: rowToClose.amount_spent,
+                  entry_price: rowToClose.entry_price,
+                  exit_price: exitNum,
+                  stop_loss_price: rowToClose.stop_loss_price ?? null,
+                  strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
+                  notes_entry: rowToClose.notes_entry ?? null,
+                  notes_review: rowToClose.notes_review ?? null,
+                  timeframe_code: rowToClose.timeframe_code,
+                  buy_fee: rowToClose.buy_fee ?? 0,
+                  sell_fee: sellFeeNum,
+                };
+
+                const payloadClose: CreatePayload =
+                  rowToClose.trade_type === 2
+                    ? {
+                        ...baseClose,
+                        trade_type: 2,
+                        futures: {
+                          leverage: rowToClose.leverage ?? 1,
+                          liquidation_price: rowToClose.liquidation_price ?? null,
+                        },
+                      }
+                    : {
+                        ...baseClose,
+                        trade_type: 1,
+                      };
+
+                const r = await fetch(`/api/journal/${rowToClose.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payloadClose),
+                });
+                  if (!r.ok) throw new Error(await r.text());
+                  setCloseOpen(false);
+                  await load();
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Failed to close");
+                } finally {
+                  setClosing(false);
+                }
+              }}
+              disabled={closing}
+              className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
+              Finalize
+            </button>
+          </div>
+        }
+      >
+        {rowToClose && (
+          <div className="grid gap-3 pr-1">
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <div className="text-xs text-gray-500">Entry</div>
+                <div className="font-mono">{fmt4(rowToClose.entry_price)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Exit</div>
+                <input
+                  value={closeExit}
+                  onChange={(e) => setCloseExit(e.target.value)}
+                  inputMode="decimal"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">PnL (gross)</div>
+                <div className="font-mono">{closePnl != null ? money2(closePnl) : "—"}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500">Status (auto)</div>
+              <div className="font-mono">
+                {(() => {
+                  if (!rowToClose || !closeExit) return "—";
+                  const exitNum = parseFloat(closeExit);
+                  if (!(exitNum > 0)) return "—";
+                  if (exitNum === rowToClose.entry_price) return "break_even";
+                  const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
+                  return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
+                    ? "win"
+                    : "loss";
+                })()}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <div className="text-xs text-gray-500">Sell Fee (required)</div>
+                <input
+                  value={closeSellFee}
+                  onChange={(e) => setCloseSellFee(e.target.value)}
+                  inputMode="decimal"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <Modal
         open={firstRunOpen}
         onClose={() => setFirstRunOpen(false)}

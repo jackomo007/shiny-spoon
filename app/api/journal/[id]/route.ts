@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
+
+const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
 
 const BaseSchema = z.object({
   strategy_id: z.string().min(1),
@@ -17,12 +20,15 @@ const BaseSchema = z.object({
   stop_loss_price: z.number().positive().optional().nullable(),
   amount_spent: z.number().positive().optional(),
   amount: z.number().positive().optional(),
+  timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
+  buy_fee: z.number().nonnegative().default(0),
+  sell_fee: z.number().nonnegative().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
   futures: z.object({
     leverage: z.number().int().min(1),
-    liquidation_price: z.number().positive(),
+    liquidation_price: z.number().positive().optional().nullable(),
   }).optional(),
 })
 .superRefine((v, ctx) => {
@@ -123,6 +129,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
+        timeframe_code: data.timeframe_code,
+        buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
+        sell_fee: new Prisma.Decimal(data.sell_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: data.exit_price ?? null,
@@ -142,11 +151,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       if (existF) {
         await tx.futures_trade.update({
           where: { id: existF.id },
-          data: { leverage: f.leverage, liquidation_price: f.liquidation_price, margin_used: marginUsed },
+          data: { leverage: f.leverage, liquidation_price: f.liquidation_price ?? null, margin_used: marginUsed },
         })
       } else {
         await tx.futures_trade.create({
-          data: { journal_entry_id: id, leverage: f.leverage, liquidation_price: f.liquidation_price, margin_used: marginUsed },
+          data: { journal_entry_id: id, leverage: f.leverage, liquidation_price: f.liquidation_price ?? null, margin_used: marginUsed },
         })
       }
     }
