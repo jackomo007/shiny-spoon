@@ -110,5 +110,39 @@ export async function generateCandlePng(
     ctx.fillText(title, plotX, padding - 6)
   }
 
+  const infoX = width - padding - 200;
+  const infoY = padding + 20;
+  const last = candles[candles.length - 1];
+  const first = candles[0];
+
+  const diff = last.close - first.open;
+  const pct = (diff / first.open) * 100;
+  const vol = last.volume;
+  const avgVol = candles.reduce((s, c) => s + c.volume, 0) / candles.length;
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(`${opts.symbol} / USDT`, infoX, infoY);
+
+  ctx.font = "14px sans-serif";
+  ctx.fillText(`Exchange: Binance`, infoX, infoY + 20);
+  ctx.fillText(`Timeframe: ${opts.timeframeLabel}`, infoX, infoY + 40);
+
+  ctx.fillStyle = diff >= 0 ? "#16a34a" : "#dc2626";
+  ctx.font = "bold 24px sans-serif";
+  ctx.fillText(last.close.toFixed(2), infoX, infoY + 80);
+
+  ctx.font = "14px sans-serif";
+  ctx.fillText(
+    `${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${pct.toFixed(2)}%)`,
+    infoX, infoY + 105
+  );
+
+  ctx.fillStyle = "#111827";
+  ctx.fillText(`High: ${last.high.toFixed(2)}`, infoX, infoY + 135);
+  ctx.fillText(`Low: ${last.low.toFixed(2)}`, infoX, infoY + 155);
+  ctx.fillText(`Vol: ${vol.toFixed(2)}`, infoX, infoY + 175);
+  ctx.fillText(`Avg Vol (30): ${avgVol.toFixed(2)}`, infoX, infoY + 195);
+
   return canvas.toBuffer("image/png")
 }
