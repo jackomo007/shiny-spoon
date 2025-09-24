@@ -15,11 +15,26 @@ type Sub = {
   }
 }
 
+type OverlaySnapshot = {
+  symbol: string
+  exchange: string
+  timeframe: string
+  priceClose: number
+  priceDiff: number
+  pricePct: number
+  high: number
+  low: number
+  volumeLast: number
+  avgVol30: number
+  createdAt: string
+}
+
 type Analysis = {
   id: string
   image_url: string
   analysis_text: string
   created_at: string
+  overlay_snapshot?: OverlaySnapshot | null
 }
 
 export default function ChartTrackerPage() {
@@ -338,6 +353,7 @@ function AnalysesModal({
                   timeframe={tracker.tf}
                   panelWidth={280}
                   title={`${tracker.display_symbol} · ${tracker.tf.toUpperCase()}`}
+                  snapshot={a.overlay_snapshot ?? undefined}
                 />
               </div>
 

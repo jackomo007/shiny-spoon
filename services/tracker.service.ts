@@ -30,7 +30,7 @@ export async function runAnalysisForTracker(trackerId: string) {
     data: { last_run_at: new Date() },
   })
 
-  const symbol = tracker.display_symbol || tracker.tv_symbol.replace(/^.*:/, "")
+  const symbol = (tracker.display_symbol || tracker.tv_symbol.replace(/^.*:/, "")).toUpperCase()
   const binanceInterval = tfToBinance(tracker.tf as TF)
 
   try {
@@ -46,6 +46,28 @@ export async function runAnalysisForTracker(trackerId: string) {
 
     const imageUrl = await uploadPng(png)
 
+    const last = candles[candles.length - 1]
+    const first = candles[0]
+    const diff = last.close - first.open
+    const pct = (diff / first.open) * 100
+    const avgVol =
+      candles.slice(-30).reduce((s, c) => s + c.volume, 0) /
+      Math.max(1, Math.min(30, candles.length))
+
+    const snapshot = {
+      symbol,
+      exchange: "Binance",
+      timeframe: binanceInterval,
+      priceClose: last.close,
+      priceDiff: diff,
+      pricePct: pct,
+      high: last.high,
+      low: last.low,
+      volumeLast: last.volume,
+      avgVol30: avgVol,
+      createdAt: new Date().toISOString(),
+    }
+
     const { text, model, prompt } = await analyzeChartImage(imageUrl)
 
     await prisma.chart_analysis.create({
@@ -55,6 +77,7 @@ export async function runAnalysisForTracker(trackerId: string) {
         analysis_text: text,
         model_used: model,
         prompt_used: prompt,
+        overlay_snapshot: snapshot,
       },
     })
 
@@ -116,7 +139,7 @@ export async function listAccountTrackers(accountId: string) {
   })
 }
 
-export async function listAnalyses(trackerId: string, take = LIMIT_PER_TRACKER) {
+export async function listAnalyses(trackerId: string, take = 10) {
   return prisma.chart_analysis.findMany({
     where: { tracker_id: trackerId },
     orderBy: { created_at: "desc" },

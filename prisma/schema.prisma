@@ -244,6 +244,8 @@ model chart_analysis {
   model_used    String? @db.VarChar(50)
   prompt_used   String? @db.Text
 
+  overlay_snapshot Json?
+
   created_at DateTime @default(now()) @db.DateTime(0)
 
   tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_analysis_tracker")

@@ -3,12 +3,28 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
+type OverlaySnapshot = {
+  symbol: string
+  exchange: string
+  timeframe: string 
+  priceClose: number
+  priceDiff: number
+  pricePct: number
+  high: number
+  low: number
+  volumeLast: number
+  avgVol30: number
+  createdAt: string
+}
+
 type Props = {
   imageUrl: string;
-  symbol: string;
+  symbol: string; 
   timeframe: "h1" | "h4" | "d1";
   panelWidth?: number;
   title?: string;
+
+  snapshot?: OverlaySnapshot;
 };
 
 type Ticker24h = {
@@ -28,9 +44,10 @@ export default function ChartWithOverlay({
   timeframe,
   panelWidth = 280,
   title,
+  snapshot,
 }: Props) {
   const [ticker, setTicker] = useState<Ticker24h | null>(null);
-  const [avgVol, setAvgVol] = useState<number | null>(null);
+  const [avgVolState, setAvgVolState] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const binanceInterval = useMemo(() => {
@@ -39,9 +56,15 @@ export default function ChartWithOverlay({
     return "1d";
   }, [timeframe]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const hasSnapshot = !!snapshot;
 
+  useEffect(() => {
+    if (hasSnapshot) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     async function load() {
       try {
         const tRes = await fetch(
@@ -61,7 +84,7 @@ export default function ChartWithOverlay({
 
         if (!cancelled) {
           setTicker(tJson);
-          setAvgVol(volAvg);
+          setAvgVolState(volAvg);
           setLoading(false);
         }
       } catch {
@@ -70,22 +93,25 @@ export default function ChartWithOverlay({
     }
 
     load();
-
     const id = setInterval(load, 20000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [symbol, binanceInterval]);
+  }, [hasSnapshot, symbol, binanceInterval]);
 
-  const last = ticker ? Number(ticker.lastPrice) : null;
-  const diff = ticker ? Number(ticker.priceChange) : null;
-  const pct = ticker ? Number(ticker.priceChangePercent) : null;
-  const high = ticker ? Number(ticker.highPrice) : null;
-  const low = ticker ? Number(ticker.lowPrice) : null;
-  const vol = ticker ? Number(ticker.volume) : null;
+  const last = hasSnapshot ? snapshot!.priceClose : (ticker ? Number(ticker.lastPrice) : null);
+  const diff = hasSnapshot ? snapshot!.priceDiff   : (ticker ? Number(ticker.priceChange) : null);
+  const pct  = hasSnapshot ? snapshot!.pricePct    : (ticker ? Number(ticker.priceChangePercent) : null);
+  const high = hasSnapshot ? snapshot!.high        : (ticker ? Number(ticker.highPrice) : null);
+  const low  = hasSnapshot ? snapshot!.low         : (ticker ? Number(ticker.lowPrice) : null);
+  const vol  = hasSnapshot ? snapshot!.volumeLast  : (ticker ? Number(ticker.volume) : null);
+  const avgVol = hasSnapshot ? snapshot!.avgVol30  : avgVolState;
 
-  const up = pct !== null ? pct >= 0 : true;
+  const up = pct !== null && pct !== undefined ? pct >= 0 : true;
+
+  const exchangeName = hasSnapshot ? snapshot!.exchange : "Binance";
+  const tfLabel = hasSnapshot ? snapshot!.timeframe.toUpperCase() : timeframe.toUpperCase();
 
   function fmt(n?: number | null) {
     if (n === null || n === undefined || Number.isNaN(n)) return "-";
@@ -132,41 +158,40 @@ export default function ChartWithOverlay({
         <div className="text-[15px] font-bold text-gray-900">
           {symbol.replace(/USDT$/i, "")}/USDT
         </div>
-        <div className="text-sm text-gray-600">Exchange: Binance</div>
-        <div className="text-sm text-gray-600 mb-2">
-          Timeframe: {timeframe.toUpperCase()}
-        </div>
+        <div className="text-sm text-gray-600">Exchange: {exchangeName}</div>
+        <div className="text-sm text-gray-600 mb-2">Timeframe: {tfLabel}</div>
 
-        <div
-          className={`text-2xl font-bold ${up ? "text-green-600" : "text-red-600"}`}
-        >
+        <div className={`text-2xl font-bold ${up ? "text-green-600" : "text-red-600"}`}>
           {fmt(last)} USDT
         </div>
         <div className={`${up ? "text-green-600" : "text-red-600"} mb-2`}>
-          {diff === null ? "-" : `${diff >= 0 ? "+" : ""}${fmt(diff)}`} (
-          {pct === null ? "-" : `${pct.toFixed(2)}%`})
+          {diff === null || diff === undefined ? "-" : `${diff >= 0 ? "+" : ""}${fmt(diff)}`} (
+          {pct === null || pct === undefined ? "-" : `${pct.toFixed(2)}%`})
         </div>
 
         <div className="text-sm text-gray-700">
           <div>High: {fmt(high)}</div>
           <div>Low: {fmt(low)}</div>
-          <div>Volume (24h): {fmtCompact(vol)}</div>
-          <div>Avg Vol (30 {timeframe}): {fmtCompact(avgVol)}</div>
+          <div>Volume: {fmtCompact(vol)}</div>
+          <div>Avg Vol (30): {fmtCompact(avgVol)}</div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
-          <span
-            className="inline-block rounded-full"
-            style={{
-              width: 8,
-              height: 8,
-              background: "#22c55e",
-              boxShadow: "0 0 0 2px #d1fae5",
-            }}
-            aria-hidden
-          />
-          Market open
-        </div>
+        {hasSnapshot && (
+          <div className="mt-3 text-xs text-gray-500">
+            Capturado em: {new Date(snapshot!.createdAt).toLocaleString()}
+          </div>
+        )}
+
+        {!hasSnapshot && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+            <span
+              className="inline-block rounded-full"
+              style={{ width: 8, height: 8, background: "#22c55e", boxShadow: "0 0 0 2px #d1fae5" }}
+              aria-hidden
+            />
+            Market open
+          </div>
+        )}
       </aside>
     </div>
   );
