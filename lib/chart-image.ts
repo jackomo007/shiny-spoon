@@ -1,3 +1,4 @@
+// lib/chart-image.ts
 import "server-only"
 import type { Candle } from "./klines"
 
@@ -11,14 +12,15 @@ export type ChartRenderOptions = {
   gridColor?: string
   axisColor?: string
   wickColor?: string
-  font?: string           // nome da família registrada (ex.: "Inter")
+  font?: string            // ex.: "Inter"
   title?: string
   symbol?: string
   timeframeLabel?: string
-  sidePanelWidth?: number // 0 desativa
+  sidePanelWidth?: number  // 0 desativa painel
+  debugText?: boolean      // desenha "DEBUG" no topo
 }
 
-/** 10.4K / 14.1M / 2.35B */
+/** 10.4K / 14.1M / 1.23B */
 function fmtCompact(n: number): string {
   const abs = Math.abs(n)
   if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + "B"
@@ -27,8 +29,7 @@ function fmtCompact(n: number): string {
   return n.toFixed(2)
 }
 
-// Evita registrar fonte múltiplas vezes no mesmo processo
-let fontsRegistered = false
+let fontsReady = false
 
 export async function generateCandlePng(
   candles: Candle[],
@@ -36,35 +37,35 @@ export async function generateCandlePng(
 ): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas")
 
-  // === Registrar fontes (uma vez) ===
-  if (!fontsRegistered) {
+  // Registra TTFs (uma vez)
+  if (!fontsReady) {
     try {
       const root = process.cwd()
-      const regular = `${root}/assets/fonts/Inter-Regular.ttf`
-      const bold = `${root}/assets/fonts/Inter-Bold.ttf`
-
-      // Registrar com o nome "Inter"
-      GlobalFonts.registerFromPath(regular, "Inter")
-      // Registrar um nome separado para bold ajuda a forçar "bold"
-      GlobalFonts.registerFromPath(bold, "Inter Bold")
-    } catch {
-      // Se não encontrar os arquivos, seguimos com sans-serif do runtime
+      GlobalFonts.registerFromPath(`${root}/public/fonts/Inter-Regular.ttf`, "Inter")
+      GlobalFonts.registerFromPath(`${root}/public/fonts/Inter-Bold.ttf`, "Inter Bold")
+    } catch (e) {
+      console.warn("Font register failed:", e)
     } finally {
-      fontsRegistered = true
+      fontsReady = true
     }
   }
+
+  // Usa uma família única para evitar o bug de múltiplas famílias
+  const family =
+    (opts.font && GlobalFonts.has(opts.font)) ? opts.font :
+    (GlobalFonts.has("Inter") ? "Inter" : "sans-serif")
 
   // ===== Layout =====
   const width = opts.width ?? 1280
   const height = opts.height ?? 720
   const padding = opts.padding ?? 48
-  const SIDE = Math.max(0, opts.sidePanelWidth ?? 280)
+  const SIDE = Math.max(0, opts.sidePanelWidth ?? 280) // 280 = parecido com TV
   const plotX = padding
   const plotY = padding
   const plotW = width - padding * 2 - SIDE
   const plotH = height - padding * 2
 
-  // ===== Paleta =====
+  // ===== Cores =====
   const bull = opts.bullColor ?? "#16a34a"
   const bear = opts.bearColor ?? "#dc2626"
   const wick = opts.wickColor ?? "#374151"
@@ -72,23 +73,25 @@ export async function generateCandlePng(
   const grid = opts.gridColor ?? "#eef2f7"
   const axis = opts.axisColor ?? "#6b7280"
 
-  // Nome da família para ctx.font: usa "Inter" se registrada; senão "sans-serif"
-  const fontFamily = (GlobalFonts.has("Inter") ? "Inter" : "sans-serif")
-
   const canvas = createCanvas(width, height)
   const ctx = canvas.getContext("2d")
   ctx.textBaseline = "top"
   ctx.textAlign = "left"
-  ctx.globalAlpha = 1
 
   // fundo
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, width, height)
 
+  if (opts.debugText) {
+    ctx.fillStyle = "#111827"
+    ctx.font = `bold 18px ${family}`
+    ctx.fillText("DEBUG", 10, 10)
+  }
+
   // Sem dados?
   if (candles.length === 0) {
     ctx.fillStyle = "#111827"
-    ctx.font = `bold 20px ${fontFamily}`
+    ctx.font = `bold 20px ${family}`
     ctx.fillText("No data", padding, padding + 20)
     return canvas.toBuffer("image/png")
   }
@@ -98,7 +101,7 @@ export async function generateCandlePng(
   const maxH = Math.max(...candles.map(c => c.high))
   const range = Math.max(1e-9, maxH - minL)
 
-  // grid
+  // grid horizontal
   ctx.strokeStyle = grid
   ctx.lineWidth = 1
   const gridLines = 5
@@ -110,9 +113,9 @@ export async function generateCandlePng(
     ctx.stroke()
   }
 
-  // labels do eixo de preço
+  // labels eixo preço
   ctx.fillStyle = axis
-  ctx.font = `12px ${fontFamily}`
+  ctx.font = `12px ${family}`
   for (let i = 0; i <= gridLines; i++) {
     const val = maxH - (range * i) / gridLines
     const y = plotY + (plotH * i) / gridLines
@@ -149,11 +152,11 @@ export async function generateCandlePng(
     ctx.fillRect(xCenter - half, top, bodyW, h)
   }
 
-  // ===== Título superior (esquerda) =====
+  // ===== Título =====
   const title = opts.title ?? `${opts.symbol ?? ""} · ${opts.timeframeLabel ?? ""}`.trim()
   if (title) {
     ctx.fillStyle = "#111827"
-    ctx.font = `bold 16px ${fontFamily}`
+    ctx.font = `bold 16px ${family}`
     ctx.fillText(title, plotX, Math.max(22, plotY - 10))
   }
 
@@ -164,9 +167,10 @@ export async function generateCandlePng(
     const panelW = SIDE
     const panelH = plotH
 
+    // cartão
     ctx.fillStyle = "#f8fafc"
     ctx.fillRect(panelX, panelY, panelW, panelH)
-
+    // borda sutil
     ctx.strokeStyle = "#e5e7eb"
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1)
 
@@ -175,31 +179,36 @@ export async function generateCandlePng(
     const diff = last.close - first.open
     const pct = (diff / first.open) * 100
     const avgVol =
-      candles.slice(-30).reduce((s, c) => s + c.volume, 0) / Math.max(1, Math.min(30, candles.length))
+      candles.slice(-30).reduce((s, c) => s + c.volume, 0) /
+      Math.max(1, Math.min(30, candles.length))
 
     let y = panelY + 20
     const line = (txt: string, bold = false, color = "#111827", size = 14) => {
       ctx.fillStyle = color
-      ctx.font = `${bold ? "bold " : ""}${size}px ${fontFamily}`
+      ctx.font = `${bold ? "bold " : ""}${size}px ${family}`
       ctx.fillText(txt, panelX + 16, y)
       y += size + 8
     }
 
+    // Cabeçalho
     line(`${opts.symbol ?? "SYMBOL"} / USDT`, true, "#111827", 15)
     line(`Exchange: Binance`)
     line(`Timeframe: ${opts.timeframeLabel ?? "-"}`)
-    y += 6
-
-    line(last.close.toFixed(2) + " USDT", true, diff >= 0 ? "#16a34a" : "#dc2626", 24)
-    line(`${diff >= 0 ? "+" : ""}${diff.toFixed(2)}  (${pct.toFixed(2)}%)`, false, diff >= 0 ? "#16a34a" : "#dc2626")
 
     y += 6
+    // Preço + variação no período visível
+    const up = diff >= 0
+    line(`${last.close.toFixed(2)} USDT`, true, up ? "#16a34a" : "#dc2626", 24)
+    line(`${up ? "+" : ""}${diff.toFixed(2)} (${pct.toFixed(2)}%)`, false, up ? "#16a34a" : "#dc2626")
+
+    y += 6
+    // High/Low/Volumes
     line(`High: ${last.high.toFixed(2)}`)
     line(`Low : ${last.low.toFixed(2)}`)
     line(`Volume: ${fmtCompact(last.volume)}`)
     line(`Avg Vol (30): ${fmtCompact(avgVol)}`)
 
-    // pontinho “Market open”
+    // Market open
     y += 10
     const dotX = panelX + 16
     const dotY = y + 2
@@ -208,7 +217,7 @@ export async function generateCandlePng(
     ctx.arc(dotX, dotY, 4, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = "#374151"
-    ctx.font = `12px ${fontFamily}`
+    ctx.font = `12px ${family}`
     ctx.fillText("Market open", dotX + 10, y - 4)
   }
 
