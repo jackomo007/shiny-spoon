@@ -1,3 +1,4 @@
+// lib/chart-image.ts
 import "server-only"
 import type { Candle } from "./klines"
 
@@ -16,7 +17,13 @@ export type ChartRenderOptions = {
   symbol?: string
   timeframeLabel?: string
   sidePanelWidth?: number
-  debugText?: boolean 
+  /** 
+   * none = sem painel
+   * bg   = desenha só o retângulo do painel (fundo/borda), sem textos
+   * full = painel completo com textos
+   */
+  sidePanelMode?: "none" | "bg" | "full"
+  debugText?: boolean
 }
 
 function fmtCompact(n: number): string {
@@ -54,7 +61,12 @@ export async function generateCandlePng(
   const width = opts.width ?? 1280
   const height = opts.height ?? 720
   const padding = opts.padding ?? 48
-  const SIDE = Math.max(0, opts.sidePanelWidth ?? 280)
+
+  // >>> NOVO: modo do painel
+  const panelMode = opts.sidePanelMode ?? "full"
+  const rawSide = Math.max(0, opts.sidePanelWidth ?? 280)
+  const SIDE = panelMode === "none" ? 0 : rawSide
+
   const plotX = padding
   const plotY = padding
   const plotW = width - padding * 2 - SIDE
@@ -92,6 +104,7 @@ export async function generateCandlePng(
   const maxH = Math.max(...candles.map(c => c.high))
   const range = Math.max(1e-9, maxH - minL)
 
+  // grid horizontal
   ctx.strokeStyle = grid
   ctx.lineWidth = 1
   const gridLines = 5
@@ -103,6 +116,7 @@ export async function generateCandlePng(
     ctx.stroke()
   }
 
+  // labels do eixo Y
   ctx.fillStyle = axis
   ctx.font = `12px ${family}`
   for (let i = 0; i <= gridLines; i++) {
@@ -111,15 +125,14 @@ export async function generateCandlePng(
     ctx.fillText(val.toFixed(2), Math.max(8, plotX - 42), y + 4)
   }
 
+  // candles
   const n = candles.length
   const colW = plotW / n
   const bodyW = Math.max(2, Math.floor(colW * 0.6))
   const half = Math.floor(bodyW / 2)
-
   for (let i = 0; i < n; i++) {
     const c = candles[i]
     const xCenter = Math.floor(plotX + i * colW + colW / 2)
-
     const yHigh = plotY + Math.floor(((maxH - c.high) / range) * plotH)
     const yLow = plotY + Math.floor(((maxH - c.low) / range) * plotH)
     const yOpen = plotY + Math.floor(((maxH - c.open) / range) * plotH)
@@ -145,58 +158,63 @@ export async function generateCandlePng(
     ctx.fillText(title, plotX, Math.max(22, plotY - 10))
   }
 
+  // Painel lateral
   if (SIDE > 0) {
     const panelX = width - SIDE - padding
     const panelY = padding
     const panelW = SIDE
     const panelH = plotH
 
+    // fundo + borda SEMPRE que SIDE > 0
     ctx.fillStyle = "#f8fafc"
     ctx.fillRect(panelX, panelY, panelW, panelH)
     ctx.strokeStyle = "#e5e7eb"
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1)
 
-    const last = candles[candles.length - 1]
-    const first = candles[0]
-    const diff = last.close - first.open
-    const pct = (diff / first.open) * 100
-    const avgVol =
-      candles.slice(-30).reduce((s, c) => s + c.volume, 0) /
-      Math.max(1, Math.min(30, candles.length))
+    // Só desenha textos/estatísticas se o modo for "full"
+    if (opts.sidePanelMode !== "bg") {
+      const last = candles[candles.length - 1]
+      const first = candles[0]
+      const diff = last.close - first.open
+      const pct = (diff / first.open) * 100
+      const avgVol =
+        candles.slice(-30).reduce((s, c) => s + c.volume, 0) /
+        Math.max(1, Math.min(30, candles.length))
 
-    let y = panelY + 20
-    const line = (txt: string, bold = false, color = "#111827", size = 14) => {
-      ctx.fillStyle = color
-      ctx.font = `${bold ? "bold " : ""}${size}px ${family}`
-      ctx.fillText(txt, panelX + 16, y)
-      y += size + 8
+      let y = panelY + 20
+      const line = (txt: string, bold = false, color = "#111827", size = 14) => {
+        ctx.fillStyle = color
+        ctx.font = `${bold ? "bold " : ""}${size}px ${family}`
+        ctx.fillText(txt, panelX + 16, y)
+        y += size + 8
+      }
+
+      line(`${opts.symbol ?? "SYMBOL"} / USDT`, true, "#111827", 15)
+      line(`Exchange: Binance`)
+      line(`Timeframe: ${opts.timeframeLabel ?? "-"}`)
+
+      y += 6
+      const up = diff >= 0
+      line(`${last.close.toFixed(2)} USDT`, true, up ? "#16a34a" : "#dc2626", 24)
+      line(`${up ? "+" : ""}${diff.toFixed(2)} (${pct.toFixed(2)}%)`, false, up ? "#16a34a" : "#dc2626")
+
+      y += 6
+      line(`High: ${last.high.toFixed(2)}`)
+      line(`Low : ${last.low.toFixed(2)}`)
+      line(`Volume: ${fmtCompact(last.volume)}`)
+      line(`Avg Vol (30): ${fmtCompact(avgVol)}`)
+
+      y += 10
+      const dotX = panelX + 16
+      const dotY = y + 2
+      ctx.fillStyle = "#22c55e"
+      ctx.beginPath()
+      ctx.arc(dotX, dotY, 4, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = "#374151"
+      ctx.font = `12px ${family}`
+      ctx.fillText("Market open", dotX + 10, y - 4)
     }
-
-    line(`${opts.symbol ?? "SYMBOL"} / USDT`, true, "#111827", 15)
-    line(`Exchange: Binance`)
-    line(`Timeframe: ${opts.timeframeLabel ?? "-"}`)
-
-    y += 6
-    const up = diff >= 0
-    line(`${last.close.toFixed(2)} USDT`, true, up ? "#16a34a" : "#dc2626", 24)
-    line(`${up ? "+" : ""}${diff.toFixed(2)} (${pct.toFixed(2)}%)`, false, up ? "#16a34a" : "#dc2626")
-
-    y += 6
-    line(`High: ${last.high.toFixed(2)}`)
-    line(`Low : ${last.low.toFixed(2)}`)
-    line(`Volume: ${fmtCompact(last.volume)}`)
-    line(`Avg Vol (30): ${fmtCompact(avgVol)}`)
-
-    y += 10
-    const dotX = panelX + 16
-    const dotY = y + 2
-    ctx.fillStyle = "#22c55e"
-    ctx.beginPath()
-    ctx.arc(dotX, dotY, 4, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = "#374151"
-    ctx.font = `12px ${family}`
-    ctx.fillText("Market open", dotX + 10, y - 4)
   }
 
   return canvas.toBuffer("image/png")

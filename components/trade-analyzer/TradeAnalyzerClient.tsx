@@ -1,13 +1,55 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import Card from "@/components/ui/Card"
+import ChartWithOverlay from "@/components/tracker/ChartWithOverlay"
 
 type StrategyOpt = { id: string; name: string | null }
 type TradeType = "spot" | "futures"
 type Side = "buy" | "sell" | "long" | "short"
 type TF = "h1" | "h4" | "d1"
+
+type OverlaySnapshot = {
+  symbol: string
+  exchange: string
+  timeframe: string
+  priceClose: number
+  priceDiff: number
+  pricePct: number
+  high: number
+  low: number
+  volumeLast: number
+  avgVol30: number
+  createdAt: string
+}
+
+type ApiSuccess = {
+  id: string
+  imageUrl: string
+  analysis: string
+  createdAt: string
+  snapshot?: OverlaySnapshot | null
+}
+
+type ApiError = {
+  error: string | unknown
+}
+
+function isApiSuccess(x: unknown): x is ApiSuccess {
+  if (typeof x !== "object" || x === null) return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.id === "string" &&
+    typeof o.imageUrl === "string" &&
+    typeof o.analysis === "string" &&
+    typeof o.createdAt === "string"
+  )
+}
+
+function isApiError(x: unknown): x is ApiError {
+  if (typeof x !== "object" || x === null) return false
+  return "error" in x
+}
 
 export default function TradeAnalyzerClient({ strategies }: { strategies: StrategyOpt[] }) {
   const [strategyId, setStrategyId] = useState<string>("")
@@ -23,6 +65,7 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState<string>("")
   const [imageUrl, setImageUrl] = useState<string>("")
+  const [snapshot, setSnapshot] = useState<OverlaySnapshot | null>(null)
 
   function ensureSide(t: TradeType) {
     if (t === "spot" && (side === "long" || side === "short")) setSide("buy")
@@ -33,8 +76,10 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
     setLoading(true)
     setAnalysis("")
     setImageUrl("")
+    setSnapshot(null)
+
     try {
-        const payload = {
+      const payload = {
         strategy_id: strategyId || undefined,
         asset: asset.trim().toUpperCase(),
         trade_type: tradeType,
@@ -44,34 +89,42 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
         target_price: target === "" ? null : Number(target),
         stop_price: stop === "" ? null : Number(stop),
         timeframe: tf,
-        }
+      }
 
-        const r = await fetch("/api/trade-analyzer", {
+      const res = await fetch("/api/trade-analyzer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        })
+      })
 
-        const ct = r.headers.get("content-type") || ""
-        const raw = await r.text()
-        const js = ct.includes("application/json") && raw ? JSON.parse(raw) : null
+      const contentType = res.headers.get("content-type") || ""
+      const text = await res.text()
+      const json: unknown =
+        contentType.includes("application/json") && text ? JSON.parse(text) : null
 
-        if (!r.ok) {
-        const msg = js?.error
-            ? typeof js.error === "string" ? js.error : JSON.stringify(js.error)
-            : `HTTP ${r.status} ${raw || "(no body)"}`
+      if (!res.ok) {
+        const msg = isApiError(json)
+          ? typeof json.error === "string"
+            ? json.error
+            : JSON.stringify(json.error)
+          : `HTTP ${res.status}${text ? ` - ${text}` : ""}`
         throw new Error(msg)
-        }
+      }
 
-        if (!js) throw new Error("Empty response from server")
-        setAnalysis(js.analysis as string)
-        setImageUrl(js.imageUrl as string)
-    } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed")
+      if (!isApiSuccess(json)) {
+        throw new Error("Invalid response shape from server")
+      }
+
+      setAnalysis(json.analysis)
+      setImageUrl(json.imageUrl)
+      setSnapshot(json.snapshot ?? null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed"
+      alert(msg)
     } finally {
-        setLoading(false)
+      setLoading(false)
     }
-    }
+  }
 
   return (
     <div className="grid gap-6">
@@ -210,17 +263,20 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
       {(imageUrl || analysis) && (
         <Card>
           <div className="text-lg font-semibold mb-3">Result</div>
+
           {imageUrl && (
             <div className="rounded-xl border mb-4 overflow-hidden">
-              <Image
-                src={imageUrl}
-                alt="Trade analysis chart"
-                width={1280}
-                height={720}
-                className="w-full h-auto"
+              <ChartWithOverlay
+                imageUrl={imageUrl}
+                symbol={asset.toUpperCase()}
+                timeframe={tf}
+                panelWidth={280}
+                title={`${asset.toUpperCase()} · ${tf.toUpperCase()} (Pre-Trade)`}
+                snapshot={snapshot ?? undefined}
               />
             </div>
           )}
+
           <pre className="whitespace-pre-wrap text-sm leading-relaxed">{analysis}</pre>
         </Card>
       )}

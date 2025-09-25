@@ -63,10 +63,31 @@ export async function POST(req: Request) {
       symbol: data.asset.toUpperCase(),
       timeframeLabel: data.timeframe,
       title: `${data.asset.toUpperCase()} · ${data.timeframe.toUpperCase()} (Pre-Trade)`,
-      sidePanelWidth: 280,
+      sidePanelWidth: 0,
     })
-
     const imageUrl = await uploadPng(png, "trade-analyzer")
+
+    const last = candles[candles.length - 1]
+    const first = candles[0]
+    const diff = last.close - first.open
+    const pct = (diff / first.open) * 100
+    const avgVol =
+      candles.slice(-30).reduce((s, c) => s + c.volume, 0) /
+      Math.max(1, Math.min(30, candles.length))
+
+    const snapshot = {
+      symbol: data.asset.toUpperCase(),
+      exchange: "Binance",
+      timeframe: binanceInterval,
+      priceClose: last.close,
+      priceDiff: diff,
+      pricePct: pct,
+      high: last.high,
+      low: last.low,
+      volumeLast: last.volume,
+      avgVol30: avgVol,
+      createdAt: new Date().toISOString(),
+    }
 
     const prompt = buildTradeAnalyzerPrompt({
       strategyName: strategy?.name ?? null,
@@ -81,34 +102,34 @@ export async function POST(req: Request) {
       timeframe: data.timeframe,
     })
 
-    const { text, model, prompt: usedPrompt } = await analyzeTradeWithChart({ imageUrl, prompt })
+    const { text, model, prompt: usedPrompt } = await analyzeTradeWithChart({
+      imageUrl,
+      prompt,
+    })
 
-    const MAX_TEXT = 65_000;
-    const MAX_URL  = 2048;
-
-    const safeText = (s: string) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
-    const safeUrl  = (s: string) => (s.length > MAX_URL  ? s.slice(0, MAX_URL)  : s);
+    const MAX_TEXT = 65_000
+    const MAX_URL = 2048
+    const safeText = (s: string) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s)
+    const safeUrl = (s: string) => (s.length > MAX_URL ? s.slice(0, MAX_URL) : s)
 
     const saved = await prisma.trade_pre_analysis.create({
-    data: {
+      data: {
         account_id: accountId,
         strategy_id: strategy?.id ?? null,
         asset_symbol: data.asset.toUpperCase(),
         trade_type: data.trade_type === "spot" ? 1 : 2,
         side: JournalEntrySide[data.side],
         timeframe: TimeframeEnum[data.timeframe],
-
         amount_spent: data.amount_spent,
         entry_price: data.entry_price,
         target_price: data.target_price ?? null,
         stop_price: data.stop_price ?? null,
-
         chart_image: safeUrl(imageUrl),
         analysis_text: safeText(text),
         model_used: model,
         prompt_used: safeText(usedPrompt),
-    },
-    select: { id: true, analysis_text: true, chart_image: true, created_at: true },
+      },
+      select: { id: true, analysis_text: true, chart_image: true, created_at: true },
     })
 
     return NextResponse.json({
@@ -116,6 +137,7 @@ export async function POST(req: Request) {
       imageUrl,
       analysis: text,
       createdAt: saved.created_at,
+      snapshot,
     })
   } catch (err: unknown) {
     console.error("[trade-analyzer] POST failed:", err)
