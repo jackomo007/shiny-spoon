@@ -42,7 +42,7 @@ type JournalForm = {
   trade_type: TradeType | string
   trade_datetime: string
 
-  timeframe_number?: string   // "1", "4", "15", etc.
+  timeframe_number?: string
   timeframe_unit?: "S" | "M" | "H" | "D" | "W" | "Y"
   buy_fee?: string
 
@@ -117,7 +117,7 @@ type BasePayload = {
   notes_review: string | null
   timeframe_code: string
   buy_fee: number
-  sell_fee: number
+  sell_fee?: number
 }
 
 
@@ -251,6 +251,7 @@ export default function JournalPage() {
   }, [wTradeType])
 
   function openCloseModal(r: JournalRow) {
+    if (r.status !== "in_progress") return;
     setRowToClose(r);
     setCloseExit(r.exit_price != null ? String(r.exit_price) : "");
     setCloseSellFee("0");
@@ -261,15 +262,18 @@ export default function JournalPage() {
   useEffect(() => {
     if (!rowToClose) return;
     const exit = parseFloat(closeExit);
-    if (isNaN(exit)) { setClosePnl(null); return; }
+    const sellFeeNum = parseFloat(closeSellFee);
+    if (isNaN(exit) || isNaN(sellFeeNum)) { setClosePnl(null); return; }
     const dir = (rowToClose.side === "buy" || rowToClose.side === "long") ? 1 : -1;
     const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
     const notional = rowToClose.trade_type === 2
       ? (rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1))
       : rowToClose.amount_spent;
     const gross = dir * notional * change;
-    setClosePnl(Number(gross.toFixed(2)));
-  }, [closeExit, rowToClose]);
+    const buyFee = Number(rowToClose.buy_fee ?? 0);
+    const net = gross - (buyFee + sellFeeNum);
+    setClosePnl(Number(net.toFixed(2)));
+  }, [closeExit, closeSellFee, rowToClose]);
 
   const load = useCallback(async () => {
     try {
@@ -324,6 +328,30 @@ export default function JournalPage() {
     }
   }, [start, end])
 
+  const wTfNum = watch("timeframe_number");
+  const wTfUnit = watch("timeframe_unit");
+  const wExit = watch("exit_price");
+  const wEntry = watch("entry_price");
+  const wSide = watch("side");
+  const hasExit = !!(wExit && String(wExit).trim());
+
+  const derivedStatus = useMemo<Status | null>(() => {
+    const ex = parseFloat(String(wExit ?? ""));
+    const en = parseFloat(String(wEntry ?? ""));
+    if (!(ex > 0) || !(en > 0)) return null;
+    const longLike = wSide === "buy" || wSide === "long";
+    if (ex === en) return "break_even";
+    return longLike ? (ex > en ? "win" : "loss") : (ex < en ? "win" : "loss");
+  }, [wExit, wEntry, wSide]);
+
+  useEffect(() => {
+    try {
+      if (wTfNum && /^\d+$/.test(String(wTfNum)) && ["S","M","H","D","W","Y"].includes(String(wTfUnit))) {
+        localStorage.setItem("jrnl.lastTf", JSON.stringify({ num: String(wTfNum), unit: String(wTfUnit) }));
+      }
+    } catch {}
+  }, [wTfNum, wTfUnit]);
+
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
@@ -357,8 +385,17 @@ export default function JournalPage() {
     setAssetQuery("")
     setAssetOptions([])
     setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
-    setValue("timeframe_number", "1", { shouldValidate: false });
-    setValue("timeframe_unit", "H", { shouldValidate: false });
+    let lastTfNum = "4";
+    let lastTfUnit: JournalForm["timeframe_unit"] = "H";
+    try {
+      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}");
+      if (saved && /^\d+$/.test(saved.num) && ["S","M","H","D","W","Y"].includes(saved.unit)) {
+        lastTfNum = saved.num;
+        lastTfUnit = saved.unit;
+      }
+    } catch {}
+    setValue("timeframe_number", lastTfNum, { shouldValidate: false });
+    setValue("timeframe_unit", lastTfUnit, { shouldValidate: false });
     setValue("buy_fee", "0", { shouldValidate: false });
     setShowAssetMenu(false)
     reset({
@@ -494,17 +531,18 @@ export default function JournalPage() {
   }
 
   async function submitFinal(form: JournalForm) {
-    const tradeType = Number(form.trade_type) as TradeType
-    const ruleCount = (form.matched_rule_ids ?? []).length
+    const tradeType = Number(form.trade_type) as TradeType;
+    const ruleCount = (form.matched_rule_ids ?? []).length;
 
-    let coercedSide: Side = (form.side ?? "buy") as Side
-    coercedSide = tradeType === 1
-      ? (coercedSide === "sell" ? "sell" : "buy")
-      : (coercedSide === "short" ? "short" : "long")
+    let coercedSide: Side = (form.side ?? "buy") as Side;
+    coercedSide =
+      tradeType === 1
+        ? (coercedSide === "sell" ? "sell" : "buy")
+        : (coercedSide === "short" ? "short" : "long");
 
     const timeframe_code = `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
 
-    const base: BasePayload = {
+    const base: Omit<BasePayload, "sell_fee"> & { sell_fee?: number } = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
@@ -519,9 +557,14 @@ export default function JournalPage() {
       notes_review: form.notes_review?.trim() || null,
       timeframe_code,
       buy_fee: Number(form.buy_fee ?? 0),
-      sell_fee: 0, 
     };
-    let payload: CreatePayload
+
+    if (base.status === "in_progress") {
+      base.exit_price = null;
+      base.sell_fee = 0;
+    }
+
+    let payload: CreatePayload;
     if (tradeType === 2) {
       const liq = form.liquidation_price?.trim()
         ? Number(form.liquidation_price)
@@ -530,29 +573,32 @@ export default function JournalPage() {
       const futures: CreateFuturesPayload["futures"] = {
         leverage: Number(form.leverage ?? 0),
         liquidation_price: liq,
-      }
-      payload = { ...base, trade_type: 2, futures }
+      };
+
+      payload = { ...base, trade_type: 2, futures };
     } else {
-      payload = { ...base, trade_type: 1 }
+      payload = { ...base, trade_type: 1 };
     }
 
-    const url = mode === "create" ? "/api/journal" : `/api/journal/${editingId}`
-    const method = mode === "create" ? "POST" : "PUT"
+    const url = mode === "create" ? "/api/journal" : `/api/journal/${editingId}`;
+    const method = mode === "create" ? "POST" : "PUT";
 
     const r = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    })
-    if (!r.ok) throw new Error(await r.text())
+    });
+    if (!r.ok) throw new Error(await r.text());
 
-    const savedDate = new Date(base.trade_datetime)
-    const startDate = new Date(start); startDate.setHours(0, 0, 0, 0)
-    const endDate = new Date(end); endDate.setHours(23, 59, 59, 999)
-    await load()
-    const stillThere = items.some(i => i.id === editingId)
+    const savedDate = new Date(base.trade_datetime);
+    const startDate = new Date(start); startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(end); endDate.setHours(23, 59, 59, 999);
+
+    await load();
+
+    const stillThere = items.some(i => i.id === editingId);
     if (!stillThere && (savedDate < startDate || savedDate > endDate)) {
-      setMovedOutBanner("Heads-up: the edited trade is outside the current date range filter.")
+      setMovedOutBanner("Heads-up: the edited trade is outside the current date range filter.");
     }
   }
 
@@ -765,22 +811,21 @@ export default function JournalPage() {
             <div className="py-10 text-center text-sm text-red-600">{error}</div>
           ) : (
             <Table>
-              <thead>
-                <tr>
-                  <Th>Asset</Th>
-                  <Th>Type</Th>
-                  <Th>Side</Th>
-                  <Th>Entry</Th>
-                  <Th>Exit</Th>
-                  <Th>Amount Spent</Th>
-                  <Th>PnL</Th>
-                  <Th>Date</Th>
-                  <Th>Timeframe</Th>
-                  <Th>Status</Th>
-                  <Th> </Th>
-                  <Th> </Th>
-                </tr>
-              </thead>
+             <thead>
+              <tr>
+                <Th>Asset</Th>
+                <Th>Type</Th>
+                <Th>Side</Th>
+                <Th>Entry</Th>
+                <Th>Exit</Th>
+                <Th>Amount Spent</Th>
+                <Th>PnL</Th>
+                <Th>Date</Th>
+                <Th>Timeframe</Th>
+                <Th>Status / Action</Th>
+                <Th> </Th>
+              </tr>
+            </thead>
               <tbody>
                 {rows.length > 0 ? (
                   rows.map((r) => (
@@ -794,14 +839,17 @@ export default function JournalPage() {
                       <Td>{r.pnl != null ? money2(r.pnl) : "—"}</Td>
                       <Td>{new Date(r.date).toLocaleString()}</Td>
                       <Td>{r.timeframe_code}</Td>
-                      <Td>{r.status.replace("_", " ")}</Td>
                       <Td>
-                        <button
-                          title="Close Trade"
-                          onClick={() => openCloseModal(r)}
-                          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:opacity-90">
-                          Close Trade
-                        </button>
+                        {r.status === "in_progress" ? (
+                          <button
+                            title="Quick Close"
+                            onClick={() => openCloseModal(r)}
+                            className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90">
+                            Quick Close
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
+                        )}
                       </Td>
                       <Td>
                         <div className="flex gap-3 justify-end">
@@ -991,34 +1039,58 @@ export default function JournalPage() {
                 {wTradeType === 1 ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">Status</div>
-                        <select {...register("status", { required: "Status is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
-                          <option value="in_progress">In Progress</option>
-                          <option value="win">Win</option>
-                          <option value="loss">Loss</option>
-                          <option value="break_even">Break-Even</option>
-                        </select>
-                        {errors.status && <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>}
-                      </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm mb-1">Buy Fee (required)</div>
-                      <input
-                        {...register("buy_fee", {
-                          required: "Buy fee is required",
-                          validate: (v) => (parseFloat(v ?? "0") >= 0) || "Must be ≥ 0",
-                        })}
-                        defaultValue="0"
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.buy_fee && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
+                     <div>
+                      <div className="text-sm mb-1">Status</div>
+                      <select
+                        {...register("status", { required: "Status is required" })}
+                        disabled={hasExit}
+                        onChange={(e) => {
+                          const val = e.target.value as Status;
+                          setValue("status", val, { shouldDirty: true, shouldValidate: true });
+                          if (val === "in_progress") {
+                            setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
+                          }
+                        }}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 disabled:bg-gray-50 disabled:text-gray-500"
+                      >
+                        <option value="in_progress">In Progress</option>
+                        <option value="win">Win</option>
+                        <option value="loss">Loss</option>
+                        <option value="break_even">Break-Even</option>
+                      </select>
+
+                      {errors.status && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
+                      )}
+
+                      {hasExit && derivedStatus && (
+                        <p className="mt-1 text-xs text-gray-500">
+                            Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b> on save.
+                        </p>
                       )}
                     </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm mb-1">
+                            Buy Fee <span className="text-red-600">*</span>
+                          </div>
+                          <input
+                            {...register("buy_fee", {
+                              required: "Buy fee is required",
+                              validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                            })}
+                            defaultValue="0"
+                            inputMode="decimal"
+                            placeholder="0"
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          />
+                          {errors.buy_fee && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {String(errors.buy_fee.message)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div>
@@ -1028,13 +1100,18 @@ export default function JournalPage() {
                       <input
                         {...register("amount_spent", {
                           required: "Amount spent is required",
-                          validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
+                          validate: (v) =>
+                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
                         })}
                         inputMode="decimal"
                         placeholder="e.g. 500.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
+                      {errors.amount_spent && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.amount_spent.message)}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1044,23 +1121,38 @@ export default function JournalPage() {
                       <input
                         {...register("entry_price", {
                           required: "Entry price is required",
-                          validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
+                          validate: (v) =>
+                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
                         })}
                         inputMode="decimal"
                         placeholder="e.g. 27654.32"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                      {errors.entry_price && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.entry_price.message)}
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <div className="text-sm mb-1">Target Exit Price</div>
-                      <input {...register("exit_price")} inputMode="decimal" placeholder="e.g. 28000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                      <input
+                        {...register("exit_price")}
+                        inputMode="decimal"
+                        placeholder="e.g. 28000.00"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
                     </div>
 
-                     <div>
+                    <div>
                       <div className="text-sm mb-1">Stop Loss Price</div>
-                      <input {...register("stop_loss_price")} inputMode="decimal" placeholder="e.g. 25000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                      <input
+                        {...register("stop_loss_price")}
+                        inputMode="decimal"
+                        placeholder="e.g. 25000.00"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
                     </div>
                   </>
                 ) : (
@@ -1072,13 +1164,18 @@ export default function JournalPage() {
                       <input
                         {...register("amount_spent", {
                           required: "Amount spent is required",
-                          validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
+                          validate: (v) =>
+                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
                         })}
                         inputMode="decimal"
                         placeholder="e.g. 1000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
+                      {errors.amount_spent && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.amount_spent.message)}
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1089,22 +1186,60 @@ export default function JournalPage() {
                         <input
                           {...register("entry_price", {
                             required: "Entry price is required",
-                            validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
+                            validate: (v) =>
+                              parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
                           })}
                           inputMode="decimal"
                           placeholder="e.g. 27654.32"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                        {errors.entry_price && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.entry_price.message)}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <div className="text-sm mb-1">Exit Price</div>
-                        <input {...register("exit_price")} inputMode="decimal" placeholder="e.g. 28000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                        <input
+                          {...register("exit_price")}
+                          inputMode="decimal"
+                          placeholder="e.g. 28000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
                       </div>
                       <div>
                         <div className="text-sm mb-1">Stop Loss Price</div>
-                        <input {...register("stop_loss_price")} inputMode="decimal" placeholder="e.g. 25000.00" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                        <input
+                          {...register("stop_loss_price")}
+                          inputMode="decimal"
+                          placeholder="e.g. 25000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">
+                          Buy Fee <span className="text-red-600">*</span>
+                        </div>
+                        <input
+                          {...register("buy_fee", {
+                            required: "Buy fee is required",
+                            validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                          })}
+                          defaultValue="0"
+                          inputMode="decimal"
+                          placeholder="0"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                        {errors.buy_fee && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.buy_fee.message)}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1115,12 +1250,17 @@ export default function JournalPage() {
                         <input
                           {...register("leverage", {
                             required: "Leverage is required",
-                            validate: (v) => (parseFloat(v ?? "0") > 0 ? true : "Must be > 0"),
+                            validate: (v) =>
+                              parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
                           })}
                           placeholder="e.g. 10"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.leverage && <p className="mt-1 text-xs text-red-600">{String(errors.leverage.message)}</p>}
+                        {errors.leverage && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.leverage.message)}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <div className="text-sm mb-1">Liquidation Price (optional)</div>
@@ -1135,15 +1275,34 @@ export default function JournalPage() {
 
                     <div>
                       <div className="text-sm mb-1">Status</div>
-                      <select {...register("status", { required: "Status is required" })} className="w-full rounded-xl border border-gray-200 px-3 py-2">
+                      <select
+                        {...register("status", { required: "Status is required" })}
+                        disabled={hasExit}
+                        onChange={(e) => {
+                          const val = e.target.value as Status;
+                          setValue("status", val, { shouldDirty: true, shouldValidate: true });
+                          if (val === "in_progress") {
+                            setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
+                          }
+                        }}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 disabled:bg-gray-50 disabled:text-gray-500"
+                      >
                         <option value="in_progress">In Progress</option>
                         <option value="win">Win</option>
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-                      {errors.status && <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>}
-                    </div>
 
+                      {errors.status && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
+                      )}
+
+                      {hasExit && derivedStatus && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b> on save.
+                        </p>
+                      )}
+                    </div>
                     <div>
                       <div className="text-sm mb-1">Side</div>
                       <select
@@ -1153,13 +1312,16 @@ export default function JournalPage() {
                         <option value="long">Long</option>
                         <option value="short">Short</option>
                       </select>
-                      {errors.side && <p className="mt-1 text-xs text-red-600">{String(errors.side.message)}</p>}
+                      {errors.side && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.side.message)}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
               </>
             )}
-
             {wizardStep === 3 && (
               <>
                  <div>
@@ -1237,7 +1399,7 @@ export default function JournalPage() {
       <Modal
         open={closeOpen}
         onClose={() => setCloseOpen(false)}
-        title="Close Trade"
+        title="Quick Close"
         footer={
           <div className="flex justify-end gap-3">
             <button className="rounded bg-gray-100 px-4 py-2 text-sm" onClick={() => setCloseOpen(false)}>
@@ -1310,7 +1472,7 @@ export default function JournalPage() {
               }}
               disabled={closing}
               className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
-              Finalize
+              Quick Close
             </button>
           </div>
         }
@@ -1333,30 +1495,14 @@ export default function JournalPage() {
                 />
               </div>
               <div>
-                <div className="text-xs text-gray-500">PnL (gross)</div>
+                <div className="text-xs text-gray-500">PnL (net)</div>
                 <div className="font-mono">{closePnl != null ? money2(closePnl) : "—"}</div>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500">Status (auto)</div>
-              <div className="font-mono">
-                {(() => {
-                  if (!rowToClose || !closeExit) return "—";
-                  const exitNum = parseFloat(closeExit);
-                  if (!(exitNum > 0)) return "—";
-                  if (exitNum === rowToClose.entry_price) return "break_even";
-                  const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
-                  return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
-                    ? "win"
-                    : "loss";
-                })()}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <div className="text-xs text-gray-500">Sell Fee (required)</div>
+                <div className="text-xs text-gray-500">Sell Fee <span className="text-red-600">*</span></div>
                 <input
                   value={closeSellFee}
                   onChange={(e) => setCloseSellFee(e.target.value)}

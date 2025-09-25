@@ -7,6 +7,8 @@ import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
 
+type Status = "in_progress" | "win" | "loss" | "break_even"
+
 const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
 
 function parseRange(searchParams: URLSearchParams) {
@@ -26,6 +28,8 @@ function calcPnl(input: {
   amountSpent: number
   leverage?: number | null
   tradeType: 1 | 2
+  buyFee?: number
+  sellFee?: number
 }): number | null {
   if (input.exit == null) return null
   const dir = (input.side === "buy" || input.side === "long") ? 1 : -1
@@ -33,7 +37,10 @@ function calcPnl(input: {
   const notional = input.tradeType === 2
     ? input.amountSpent * Math.max(1, input.leverage ?? 1)
     : input.amountSpent
-  return Number((dir * notional * change).toFixed(2))
+  const gross = dir * notional * change
+  const fees = Number(input.buyFee ?? 0) + Number(input.sellFee ?? 0)
+  const net = gross - fees
+  return Number(net.toFixed(2))
 }
 
 const BaseSchema = z.object({
@@ -50,26 +57,23 @@ const BaseSchema = z.object({
   amount: z.number().positive().optional(),
   timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
   buy_fee: z.number().nonnegative().default(0),
-  sell_fee: z.number().nonnegative().optional(), 
+  sell_fee: z.number().nonnegative().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
   futures: z.object({
-  leverage: z.number().int().min(1),
-  liquidation_price: z.number().positive().optional().nullable(),
-    }).optional(),
+    leverage: z.number().int().min(1),
+    liquidation_price: z.number().positive().optional().nullable(),
+  }).optional(),
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
-
   const t = Number(v.trade_type)
-
   if (t === 2 && !v.futures) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
   }
-
   if (t === 1 && !["buy", "sell"].includes(v.side)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
   }
@@ -131,6 +135,8 @@ export async function GET(req: Request) {
       amountSpent: Number(r.amount_spent),
       leverage,
       tradeType: r.trade_type as 1 | 2,
+      buyFee: Number(r.buy_fee),
+      sellFee: Number(r.sell_fee),
     })
     return {
       id: r.id,
@@ -184,6 +190,23 @@ export async function POST(req: Request) {
   })
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
+  let statusToPersist: Status = data.status as Status
+  let exitToPersist = data.exit_price ?? null
+  let sellFeeToPersist = data.sell_fee ?? 0
+
+  if (statusToPersist === "in_progress") {
+    exitToPersist = null
+    sellFeeToPersist = 0
+  } else if (exitToPersist != null) {
+    const longLike = data.side === "buy" || data.side === "long"
+    statusToPersist =
+      exitToPersist === data.entry_price
+        ? "break_even"
+        : (longLike
+            ? (exitToPersist > data.entry_price ? "win" : "loss")
+            : (exitToPersist < data.entry_price ? "win" : "loss"))
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     const amountQty = qtyFrom({
       amountSpent: data.amount_spent,
@@ -200,7 +223,7 @@ export async function POST(req: Request) {
         asset_name: data.asset_name,
         trade_datetime: new Date(data.trade_datetime),
         side: data.side,
-        status: data.status,
+        status: statusToPersist,
         amount_spent: data.amount_spent,
         amount: amountQty,
         strategy_id: data.strategy_id,
@@ -208,10 +231,10 @@ export async function POST(req: Request) {
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        sell_fee: new Prisma.Decimal(data.sell_fee ?? 0),
+        sell_fee: new Prisma.Decimal(sellFeeToPersist),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
-        exit_price: data.exit_price ?? null,
+        exit_price: exitToPersist,
         stop_loss_price: data.stop_loss_price ?? null,
       },
       select: { id: true },
@@ -223,7 +246,12 @@ export async function POST(req: Request) {
       const f = data.futures!
       const marginUsed = data.amount_spent
       await tx.futures_trade.create({
-        data: { journal_entry_id: je.id, leverage: f.leverage, liquidation_price: f.liquidation_price, margin_used: marginUsed },
+        data: {
+          journal_entry_id: je.id,
+          leverage: f.leverage,
+          liquidation_price: f.liquidation_price,
+          margin_used: marginUsed,
+        },
       })
     }
 

@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 
+type Status = "in_progress" | "win" | "loss" | "break_even"
+
 const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
 
 const BaseSchema = z.object({
@@ -35,13 +37,10 @@ const BaseSchema = z.object({
   if (v.amount_spent == null && v.amount == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
-
   const t = Number(v.trade_type)
-
   if (t === 2 && !v.futures) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
   }
-
   if (t === 1 && !["buy", "sell"].includes(v.side)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
   }
@@ -115,6 +114,28 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     leverage: data.futures?.leverage,
   })
 
+  let statusToPersist: Status = data.status as Status
+  let exitToPersist = data.exit_price ?? null
+  let sellFeeToPersist: Prisma.Decimal | null = null
+
+  if (statusToPersist === "in_progress") {
+    exitToPersist = null
+    sellFeeToPersist = new Prisma.Decimal(0)
+  } else if (exitToPersist != null) {
+    const longLike = data.side === "buy" || data.side === "long"
+    statusToPersist =
+      exitToPersist === data.entry_price
+        ? "break_even"
+        : (longLike
+            ? (exitToPersist > data.entry_price ? "win" : "loss")
+            : (exitToPersist < data.entry_price ? "win" : "loss"))
+  }
+
+  if (sellFeeToPersist === null) {
+    sellFeeToPersist =
+      data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : existing.sell_fee
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
       where: { id },
@@ -123,20 +144,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         asset_name: data.asset_name,
         trade_datetime: new Date(data.trade_datetime),
         side: data.side,
-        status: data.status,
         amount_spent: data.amount_spent,
         amount: amountQty,
+        status: statusToPersist,
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        sell_fee: data.sell_fee != null
-          ? new Prisma.Decimal(data.sell_fee)
-          : existing.sell_fee, 
+        sell_fee: sellFeeToPersist,
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
-        exit_price: data.exit_price ?? null,
+        exit_price: exitToPersist,
         stop_loss_price: data.stop_loss_price ?? null,
       },
     })
@@ -153,11 +172,20 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       if (existF) {
         await tx.futures_trade.update({
           where: { id: existF.id },
-          data: { leverage: f.leverage, liquidation_price: f.liquidation_price ?? null, margin_used: marginUsed },
+          data: {
+            leverage: f.leverage,
+            liquidation_price: f.liquidation_price ?? null,
+            margin_used: marginUsed,
+          },
         })
       } else {
         await tx.futures_trade.create({
-          data: { journal_entry_id: id, leverage: f.leverage, liquidation_price: f.liquidation_price ?? null, margin_used: marginUsed },
+          data: {
+            journal_entry_id: id,
+            leverage: f.leverage,
+            liquidation_price: f.liquidation_price ?? null,
+            margin_used: marginUsed,
+          },
         })
       }
     }

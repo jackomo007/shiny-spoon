@@ -1,4 +1,3 @@
-// lib/chart-image.ts
 import "server-only"
 import type { Candle } from "./klines"
 
@@ -17,11 +16,6 @@ export type ChartRenderOptions = {
   symbol?: string
   timeframeLabel?: string
   sidePanelWidth?: number
-  /** 
-   * none = sem painel
-   * bg   = desenha só o retângulo do painel (fundo/borda), sem textos
-   * full = painel completo com textos
-   */
   sidePanelMode?: "none" | "bg" | "full"
   debugText?: boolean
 }
@@ -62,7 +56,6 @@ export async function generateCandlePng(
   const height = opts.height ?? 720
   const padding = opts.padding ?? 48
 
-  // >>> NOVO: modo do painel
   const panelMode = opts.sidePanelMode ?? "full"
   const rawSide = Math.max(0, opts.sidePanelWidth ?? 280)
   const SIDE = panelMode === "none" ? 0 : rawSide
@@ -104,7 +97,6 @@ export async function generateCandlePng(
   const maxH = Math.max(...candles.map(c => c.high))
   const range = Math.max(1e-9, maxH - minL)
 
-  // grid horizontal
   ctx.strokeStyle = grid
   ctx.lineWidth = 1
   const gridLines = 5
@@ -116,7 +108,6 @@ export async function generateCandlePng(
     ctx.stroke()
   }
 
-  // labels do eixo Y
   ctx.fillStyle = axis
   ctx.font = `12px ${family}`
   for (let i = 0; i <= gridLines; i++) {
@@ -125,7 +116,6 @@ export async function generateCandlePng(
     ctx.fillText(val.toFixed(2), Math.max(8, plotX - 42), y + 4)
   }
 
-  // candles
   const n = candles.length
   const colW = plotW / n
   const bodyW = Math.max(2, Math.floor(colW * 0.6))
@@ -158,20 +148,17 @@ export async function generateCandlePng(
     ctx.fillText(title, plotX, Math.max(22, plotY - 10))
   }
 
-  // Painel lateral
   if (SIDE > 0) {
     const panelX = width - SIDE - padding
     const panelY = padding
     const panelW = SIDE
     const panelH = plotH
 
-    // fundo + borda SEMPRE que SIDE > 0
     ctx.fillStyle = "#f8fafc"
     ctx.fillRect(panelX, panelY, panelW, panelH)
     ctx.strokeStyle = "#e5e7eb"
     ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1)
 
-    // Só desenha textos/estatísticas se o modo for "full"
     if (opts.sidePanelMode !== "bg") {
       const last = candles[candles.length - 1]
       const first = candles[0]
