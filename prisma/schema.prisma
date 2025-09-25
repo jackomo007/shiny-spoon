@@ -33,6 +33,8 @@ model account {
 
   user user @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
 
+  pre_trade_analyses trade_pre_analysis[]
+
   strategies      strategy[]
   journals        journal[]
   journal_entries journal_entry[]
@@ -52,6 +54,8 @@ model strategy {
   account    account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
 
   strategy_rules strategy_rule[]
+
+  pre_trade_analyses trade_pre_analysis[]
 
   @@index([account_id], map: "fk_strategy_account")
 }
@@ -114,7 +118,7 @@ model journal_entry {
   timeframe_code String  @default("1D") @db.VarChar(8)
   buy_fee        Decimal @default(0.00000000) @db.Decimal(18, 8)
   sell_fee       Decimal @default(0.00000000) @db.Decimal(18, 8)
-  
+
   amount_spent Decimal @db.Decimal(18, 8)
   amount       Decimal @db.Decimal(18, 8)
 
@@ -146,7 +150,7 @@ model futures_trade {
   journal_entry_id  String        @db.Char(36)
   leverage          Int
   margin_used       Decimal       @db.Decimal(18, 8)
-  liquidation_price Decimal? @db.Decimal(18, 8)
+  liquidation_price Decimal?      @db.Decimal(18, 8)
   journal_entry     journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "futures_trade_ibfk_1")
 
   @@index([journal_entry_id], map: "journal_entry_id")
@@ -255,4 +259,31 @@ model chart_analysis {
   tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_analysis_tracker")
 
   @@index([tracker_id, created_at], map: "idx_analysis_tracker_created")
+}
+
+model trade_pre_analysis {
+  id           String  @id @default(uuid()) @db.Char(36)
+  account_id   String  @db.Char(36)
+  strategy_id  String? @db.Char(36)
+  asset_symbol String  @db.VarChar(50)
+
+  trade_type   Int
+  side         journal_entry_side
+  amount_spent Decimal            @db.Decimal(18, 8)
+  entry_price  Decimal            @db.Decimal(18, 8)
+  target_price Decimal?           @db.Decimal(18, 8)
+  stop_price   Decimal?           @db.Decimal(18, 8)
+  timeframe    timeframe
+
+  chart_image   String  @db.VarChar(2048)
+  analysis_text String  @db.LongText
+  model_used    String? @db.VarChar(100)
+  prompt_used   String? @db.LongText
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  account  account   @relation(fields: [account_id], references: [id], onDelete: Cascade)
+  strategy strategy? @relation(fields: [strategy_id], references: [id], onDelete: SetNull)
+
+  @@index([account_id, created_at], map: "idx_pre_analysis_acc_created")
 }
