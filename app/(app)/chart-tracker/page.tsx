@@ -1,125 +1,128 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import ChartWithOverlay from "@/components/tracker/ChartWithOverlay"
-import Modal from "@/components/ui/Modal"
+import { useEffect, useState } from "react";
+import ChartWithOverlay from "@/components/tracker/ChartWithOverlay";
+import Modal from "@/components/ui/Modal";
+import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
 
-type Timeframe = "h1" | "h4" | "d1"
+type Timeframe = "h1" | "h4" | "d1";
 
 type Sub = {
   tracker: {
-    id: string
-    tv_symbol: string
-    display_symbol: string
-    tf: Timeframe
-  }
-}
+    id: string;
+    tv_symbol: string;
+    display_symbol: string;
+    tf: Timeframe;
+  };
+};
 
 type OverlaySnapshot = {
-  symbol: string
-  exchange: string
-  timeframe: string
-  priceClose: number
-  priceDiff: number
-  pricePct: number
-  high: number
-  low: number
-  volumeLast: number
-  avgVol30: number
-  createdAt: string
-}
+  symbol: string;
+  exchange: string;
+  timeframe: string;
+  priceClose: number;
+  priceDiff: number;
+  pricePct: number;
+  high: number;
+  low: number;
+  volumeLast: number;
+  avgVol30: number;
+  createdAt: string;
+};
 
 type Analysis = {
-  id: string
-  image_url: string
-  analysis_text: string
-  created_at: string
-  overlay_snapshot?: OverlaySnapshot | null
-}
+  id: string;
+  image_url: string;
+  analysis_text: string;
+  created_at: string;
+  overlay_snapshot?: OverlaySnapshot | null;
+};
 
 export default function ChartTrackerPage() {
-  const [subs, setSubs] = useState<Sub[]>([])
-  const [openFor, setOpenFor] = useState<Sub["tracker"] | null>(null)
-  const [analyses, setAnalyses] = useState<Analysis[]>([])
-  const [loadingAnalyses, setLoadingAnalyses] = useState(false)
-  const [showAdd, setShowAdd] = useState(false)
+  const [subs, setSubs] = useState<Sub[]>([]);
+  const [openFor, setOpenFor] = useState<Sub["tracker"] | null>(null);
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function refreshSubs() {
-    const r = await fetch("/api/tracker/coins", { cache: "no-store" })
-    if (r.ok) setSubs(await r.json())
+    const r = await fetch("/api/tracker/coins", { cache: "no-store" });
+    if (r.ok) setSubs(await r.json());
   }
 
   async function refetchAnalyses(trackerId: string) {
-    setLoadingAnalyses(true)
+    setLoadingAnalyses(true);
     try {
       const r = await fetch(
         `/api/tracker/analyses?trackerId=${encodeURIComponent(trackerId)}`,
         { cache: "no-store" }
-      )
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const data: Analysis[] = await r.json()
-      setAnalyses(data)
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data: Analysis[] = await r.json();
+      setAnalyses(data);
     } catch (err) {
-      console.error("[ChartTracker] fetch analyses failed:", err)
-      setAnalyses([])
+      console.error("[ChartTracker] fetch analyses failed:", err);
+      setAnalyses([]);
     } finally {
-      setLoadingAnalyses(false)
+      setLoadingAnalyses(false);
     }
   }
 
-  useEffect(() => { void refreshSubs() }, [])
+  useEffect(() => {
+    void refreshSubs();
+  }, []);
 
   useEffect(() => {
-    if (!openFor?.id) return
-    const ctrl = new AbortController()
-    ;(async () => {
+    if (!openFor?.id) return;
+    const ctrl = new AbortController();
+    (async () => {
       try {
-        setLoadingAnalyses(true)
+        setLoadingAnalyses(true);
         const r = await fetch(
           `/api/tracker/analyses?trackerId=${encodeURIComponent(openFor.id)}`,
           { signal: ctrl.signal, cache: "no-store" }
-        )
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const data: Analysis[] = await r.json()
-        setAnalyses(data)
+        );
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data: Analysis[] = await r.json();
+        setAnalyses(data);
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          console.error("[ChartTracker] fetch analyses failed:", err)
-          setAnalyses([])
+          console.error("[ChartTracker] fetch analyses failed:", err);
+          setAnalyses([]);
         }
       } finally {
-        setLoadingAnalyses(false)
+        setLoadingAnalyses(false);
       }
-    })()
-    return () => ctrl.abort()
-  }, [openFor?.id])
+    })();
+    return () => ctrl.abort();
+  }, [openFor?.id]);
 
   function askRemoveCoin(id: string) {
-    setPendingDeleteId(id)
-    setConfirmOpen(true)
+    setPendingDeleteId(id);
+    setConfirmOpen(true);
   }
 
   async function confirmRemoveCoin() {
-    if (!pendingDeleteId) return
+    if (!pendingDeleteId) return;
     try {
-      setDeleting(true)
-      await fetch(`/api/tracker/coins/${pendingDeleteId}`, { method: "DELETE" })
-      if (openFor?.id === pendingDeleteId) setOpenFor(null)
-      await refreshSubs()
-      setConfirmOpen(false)
-      setPendingDeleteId(null)
+      setDeleting(true);
+      await fetch(`/api/tracker/coins/${pendingDeleteId}`, { method: "DELETE" });
+      if (openFor?.id === pendingDeleteId) setOpenFor(null);
+      await refreshSubs();
+      setConfirmOpen(false);
+      setPendingDeleteId(null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to remove coin")
+      alert(e instanceof Error ? e.message : "Failed to remove coin");
     } finally {
-      setDeleting(false)
+      setDeleting(false);
     }
   }
 
-  const hasCoins = subs.length > 0
+  const hasCoins = subs.length > 0;
 
   return (
     <div className="space-y-4">
@@ -141,7 +144,8 @@ export default function ChartTrackerPage() {
           </div>
           <h3 className="text-lg font-semibold">Track your first coin</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Add a coin and timeframe. We’ll analyze the chart automatically and keep the latest 10 analyses.
+            Add a coin and timeframe. We’ll analyze the chart automatically and
+            keep the latest 10 analyses.
           </p>
           <button
             className="mt-4 rounded-lg bg-black text-white px-4 py-2"
@@ -192,8 +196,8 @@ export default function ChartTrackerPage() {
       {showAdd && (
         <AddCoinModal
           onClose={() => {
-            setShowAdd(false)
-            void refreshSubs()
+            setShowAdd(false);
+            void refreshSubs();
           }}
         />
       )}
@@ -235,14 +239,25 @@ export default function ChartTrackerPage() {
         </div>
       </Modal>
     </div>
-  )
+  );
 }
 
 function AddCoinModal({ onClose }: { onClose: () => void }) {
-  const [tvSymbol, setTvSymbol] = useState("BINANCE:BTCUSDT")
-  const [displaySymbol, setDisplaySymbol] = useState("BTCUSDT")
-  const [tf, setTf] = useState<Timeframe>("h1")
-  const [saving, setSaving] = useState(false)
+  const [tvSymbol, setTvSymbol] = useState("BINANCE:");
+  const [displaySymbol, setDisplaySymbol] = useState(""); // start empty (placeholder only)
+  const [tf, setTf] = useState<Timeframe>("h1");
+  const [saving, setSaving] = useState(false);
+
+  function handlePickVerified(sym: string) {
+    const s = sym.trim().toUpperCase();
+    setDisplaySymbol(s);
+    setTvSymbol(`BINANCE:${s}`);
+  }
+
+  const canSave =
+    displaySymbol.trim().length >= 2 &&
+    tvSymbol.trim().length >= 3 &&
+    !saving;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -250,6 +265,13 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
         <h3 className="text-lg font-semibold">Add Coin</h3>
 
         <div className="space-y-2">
+          <label className="text-sm">Asset</label>
+          <AssetAutocomplete
+            value={displaySymbol}
+            onChange={handlePickVerified}
+            placeholder="BTCUSDT"
+          />
+
           <label className="text-sm">TradingView Symbol</label>
           <input
             className="w-full border rounded p-2"
@@ -258,11 +280,11 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
             placeholder="BINANCE:BTCUSDT"
           />
 
-        <label className="text-sm">Display Symbol</label>
+          <label className="text-sm">Display Symbol</label>
           <input
             className="w-full border rounded p-2"
             value={displaySymbol}
-            onChange={(e) => setDisplaySymbol(e.target.value)}
+            onChange={(e) => setDisplaySymbol(e.target.value.toUpperCase())}
             placeholder="BTCUSDT"
           />
 
@@ -281,23 +303,41 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex justify-end gap-2">
-          <button type="button" className="px-3 py-2 rounded-lg border" onClick={onClose}>
+          <button
+            type="button"
+            className="px-3 py-2 rounded-lg border"
+            onClick={onClose}
+          >
             Cancel
           </button>
 
           <button
             type="button"
-            className="px-3 py-2 rounded-lg border bg-black text-white"
-            disabled={saving}
+            className="px-3 py-2 rounded-lg border bg-black text-white disabled:opacity-50"
+            disabled={!canSave}
             onClick={async () => {
-              setSaving(true)
-              await fetch("/api/tracker/coins", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tvSymbol, displaySymbol, tf }),
-              })
-              setSaving(false)
-              onClose()
+              try {
+                setSaving(true);
+                const body = {
+                  tvSymbol: tvSymbol.trim(),
+                  displaySymbol: displaySymbol.trim().toUpperCase(),
+                  tf,
+                };
+                const r = await fetch("/api/tracker/coins", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                if (!r.ok) {
+                  const t = await r.text();
+                  throw new Error(`HTTP ${r.status}${t ? ` - ${t}` : ""}`);
+                }
+                onClose();
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Failed to save");
+              } finally {
+                setSaving(false);
+              }
             }}
           >
             {saving ? "Saving..." : "Save"}
@@ -305,7 +345,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AnalysesModal({
@@ -315,11 +355,11 @@ function AnalysesModal({
   onClose,
   onRefetch,
 }: {
-  tracker: { id: string; display_symbol: string; tf: Timeframe }
-  analyses: Analysis[]
-  loading: boolean
-  onClose: () => void
-  onRefetch: () => void
+  tracker: { id: string; display_symbol: string; tf: Timeframe };
+  analyses: Analysis[];
+  loading: boolean;
+  onClose: () => void;
+  onRefetch: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 p-4 overflow-y-auto z-50">
@@ -328,13 +368,19 @@ function AnalysesModal({
           <h3 className="text-lg font-semibold">
             {tracker.display_symbol} · {tracker.tf}
           </h3>
-          <button type="button" className="px-3 py-1 rounded border" onClick={onClose}>
+          <button
+            type="button"
+            className="px-3 py-1 rounded border"
+            onClick={onClose}
+          >
             Close
           </button>
         </div>
 
         {loading && (
-          <div className="px-4 pb-4 md:px-0 text-sm text-muted-foreground">Loading analyses…</div>
+          <div className="px-4 pb-4 md:px-0 text-sm text-muted-foreground">
+            Loading analyses…
+          </div>
         )}
 
         {!loading && analyses.length === 0 && (
@@ -358,7 +404,9 @@ function AnalysesModal({
               </div>
 
               <div className="p-4 md:p-6">
-                <div className="whitespace-pre-wrap leading-relaxed">{a.analysis_text}</div>
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {a.analysis_text}
+                </div>
                 <div className="mt-3 text-xs text-muted-foreground">
                   {new Date(a.created_at).toLocaleString()}
                 </div>
@@ -367,8 +415,10 @@ function AnalysesModal({
                   <button
                     className="text-sm underline"
                     onClick={async () => {
-                      await onRefetch()
-                      try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+                      await onRefetch();
+                      try {
+                        (document.activeElement as HTMLElement | null)?.blur();
+                      } catch {}
                     }}
                   >
                     Refresh analysis list
@@ -380,5 +430,5 @@ function AnalysesModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
