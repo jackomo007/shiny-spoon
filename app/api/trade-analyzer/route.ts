@@ -8,13 +8,18 @@ import { generateCandlePng } from "@/lib/chart-image"
 import { uploadPng } from "@/lib/s3"
 import { analyzeTradeWithChart } from "@/lib/ai-analyzer"
 import { buildTradeAnalyzerPrompt } from "@/lib/prompts/trade-analyzer"
-import {
-  journal_entry_side as JournalEntrySide,
-  timeframe as TimeframeEnum,
-} from "@prisma/client"
+import { journal_entry_side as JournalEntrySide } from "@prisma/client"
+import type { BinanceInterval } from "@/lib/klines"
 
-function tfToBinance(tf: "h1" | "h4" | "d1") {
-  return tf === "h1" ? "1h" : tf === "h4" ? "4h" : "1d"
+function parseTfToBinance(tfCode: string): BinanceInterval {
+  const s = tfCode.trim().toLowerCase()
+  const map: Record<string, BinanceInterval> = {
+    "1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m",
+    "1h":"1h","2h":"2h","4h":"4h","6h":"6h","8h":"8h","12h":"12h",
+    "1d":"1d","3d":"3d","1w":"1w","1mo":"1M","1mth":"1M","1month":"1M"
+  }
+  if (map[s]) return map[s]
+  throw new Error(`Timeframe inválido: ${tfCode}`)
 }
 
 export async function POST(req: Request) {
@@ -29,14 +34,18 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
     }
-
     const data = parsed.data
     const accountId = session.accountId
+
+    const assetSymbol = data.asset.toUpperCase()
+    const assetRow = await prisma.verified_asset.findFirst({ where: { symbol: assetSymbol } })
+    if (!assetRow) {
+      return NextResponse.json({ error: "Asset não verificado. Selecione um da lista." }, { status: 400 })
+    }
 
     let strategy:
       | { id: string; name: string | null; rules: Array<{ title: string; description: string | null }> }
       | null = null
-
     if (data.strategy_id) {
       const st = await prisma.strategy.findFirst({
         where: { id: data.strategy_id, account_id: accountId },
@@ -46,23 +55,20 @@ export async function POST(req: Request) {
         strategy = {
           id: st.id,
           name: st.name,
-          rules: st.strategy_rules.map((sr) => ({
-            title: sr.rule.title,
-            description: sr.rule.description,
-          })),
+          rules: st.strategy_rules.map(sr => ({ title: sr.rule.title, description: sr.rule.description })),
         }
       }
     }
 
-    const binanceInterval = tfToBinance(data.timeframe)
-    const candles = await fetchKlines(data.asset.toUpperCase(), binanceInterval, 150)
+    const binanceInterval = parseTfToBinance(data.timeframe_code)
+    const candles = await fetchKlines(assetSymbol, binanceInterval, 150)
 
     const png = await generateCandlePng(candles, {
       width: 1280,
       height: 720,
-      symbol: data.asset.toUpperCase(),
-      timeframeLabel: data.timeframe,
-      title: `${data.asset.toUpperCase()} · ${data.timeframe.toUpperCase()} (Pre-Trade)`,
+      symbol: assetSymbol,
+      timeframeLabel: data.timeframe_code,
+      title: `${assetSymbol} · ${data.timeframe_code.toUpperCase()} (Pre-Trade)`,
       sidePanelWidth: 0,
     })
     const imageUrl = await uploadPng(png, "trade-analyzer")
@@ -76,7 +82,7 @@ export async function POST(req: Request) {
       Math.max(1, Math.min(30, candles.length))
 
     const snapshot = {
-      symbol: data.asset.toUpperCase(),
+      symbol: assetSymbol,
       exchange: "Binance",
       timeframe: binanceInterval,
       priceClose: last.close,
@@ -92,23 +98,19 @@ export async function POST(req: Request) {
     const prompt = buildTradeAnalyzerPrompt({
       strategyName: strategy?.name ?? null,
       strategyRules: strategy?.rules ?? [],
-      asset: data.asset.toUpperCase(),
+      asset: assetSymbol,
       tradeType: data.trade_type,
       side: data.side,
       amountSpent: data.amount_spent,
       entry: data.entry_price,
       target: data.target_price ?? null,
       stop: data.stop_price ?? null,
-      timeframe: data.timeframe,
+      timeframe: data.timeframe_code,
     })
 
-    const { text, model, prompt: usedPrompt } = await analyzeTradeWithChart({
-      imageUrl,
-      prompt,
-    })
+    const { text, model, prompt: usedPrompt } = await analyzeTradeWithChart({ imageUrl, prompt })
 
-    const MAX_TEXT = 65_000
-    const MAX_URL = 2048
+    const MAX_TEXT = 65000, MAX_URL = 2048
     const safeText = (s: string) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s)
     const safeUrl = (s: string) => (s.length > MAX_URL ? s.slice(0, MAX_URL) : s)
 
@@ -116,10 +118,10 @@ export async function POST(req: Request) {
       data: {
         account_id: accountId,
         strategy_id: strategy?.id ?? null,
-        asset_symbol: data.asset.toUpperCase(),
+        asset_symbol: assetSymbol,
         trade_type: data.trade_type === "spot" ? 1 : 2,
         side: JournalEntrySide[data.side],
-        timeframe: TimeframeEnum[data.timeframe],
+        timeframe_code: data.timeframe_code.toUpperCase(),
         amount_spent: data.amount_spent,
         entry_price: data.entry_price,
         target_price: data.target_price ?? null,
@@ -139,7 +141,7 @@ export async function POST(req: Request) {
       createdAt: saved.created_at,
       snapshot,
     })
-  } catch (err: unknown) {
+  } catch (err) {
     console.error("[trade-analyzer] POST failed:", err)
     const message = err instanceof Error ? err.message : "Internal error"
     return NextResponse.json({ error: message }, { status: 500 })

@@ -8,7 +8,10 @@ export type Candle = {
   closeTime: number;
 };
 
-export type BinanceInterval = "1h" | "4h" | "1d";
+export type BinanceInterval =
+  | "1m" | "3m" | "5m" | "15m" | "30m"
+  | "1h" | "2h" | "4h" | "6h" | "8h" | "12h"
+  | "1d" | "3d" | "1w" | "1M";
 
 const HOSTS = [
   process.env.BINANCE_API_URL ?? "https://api.binance.com",
@@ -18,12 +21,23 @@ const HOSTS = [
   "https://data-api.binance.vision",
 ];
 
+/**
+ * Fetch historical candlestick (kline) data from Binance.
+ *
+ * @param symbol - Trading pair symbol (e.g., "BTCUSDT")
+ * @param interval - Time interval for each candle (e.g., "1h", "1d", "1M")
+ * @param limit - Number of candles to fetch (default: 150)
+ * @returns Array of Candle objects
+ * @throws Error if all Binance endpoints fail
+ */
 export async function fetchKlines(
   symbol: string,
   interval: BinanceInterval,
   limit = 150
 ): Promise<Candle[]> {
-  const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`;
+  const path = `/api/v3/klines?symbol=${encodeURIComponent(
+    symbol
+  )}&interval=${interval}&limit=${limit}`;
   let lastErr: unknown = null;
 
   for (const host of HOSTS) {
@@ -32,11 +46,11 @@ export async function fetchKlines(
       const res = await fetch(url, { cache: "no-store" });
 
       if (res.status === 451) {
-        lastErr = new Error(`HTTP 451 (blocked) em ${host}`);
+        lastErr = new Error(`HTTP 451 (region blocked) from ${host}`);
         continue;
       }
       if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status} em ${host}`);
+        lastErr = new Error(`HTTP ${res.status} from ${host}`);
         continue;
       }
 
@@ -63,6 +77,6 @@ export async function fetchKlines(
   }
 
   throw new Error(
-    `Falha ao obter klines para ${symbol} ${interval}. Último erro: ${String(lastErr)}`
+    `Failed to fetch klines for ${symbol} ${interval}. Last error: ${String(lastErr)}`
   );
 }

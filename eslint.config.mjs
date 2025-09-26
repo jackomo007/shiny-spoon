@@ -1,3 +1,4 @@
+// eslint.config.mjs
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { FlatCompat } from "@eslint/eslintrc";
@@ -9,8 +10,9 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-const eslintConfig = [
+const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
+
   {
     ignores: [
       "node_modules/**",
@@ -20,6 +22,15 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+
+  {
+    files: ["scripts/**/*.{js,ts,mjs,cjs}", "**/*.mjs", "**/*.cjs"],
+    rules: {
+      "no-console": "off",
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
+    },
+  },
 ];
 
-export default eslintConfig;
+export default config;

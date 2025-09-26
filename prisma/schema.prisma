@@ -262,28 +262,37 @@ model chart_analysis {
 }
 
 model trade_pre_analysis {
-  id           String  @id @default(uuid()) @db.Char(36)
-  account_id   String  @db.Char(36)
-  strategy_id  String? @db.Char(36)
-  asset_symbol String  @db.VarChar(50)
+  id             String  @id @default(uuid()) @db.Char(36)
+  account_id     String  @db.Char(36)
+  strategy_id    String? @db.Char(36)
+  asset_symbol   String  @db.VarChar(50)
 
-  trade_type   Int
-  side         journal_entry_side
-  amount_spent Decimal            @db.Decimal(18, 8)
-  entry_price  Decimal            @db.Decimal(18, 8)
-  target_price Decimal?           @db.Decimal(18, 8)
-  stop_price   Decimal?           @db.Decimal(18, 8)
-  timeframe    timeframe
+  trade_type     Int
+  side           journal_entry_side
+  amount_spent   Decimal            @db.Decimal(18, 8)
+  entry_price    Decimal            @db.Decimal(18, 8)
+  target_price   Decimal?           @db.Decimal(18, 8)
+  stop_price     Decimal?           @db.Decimal(18, 8)
 
-  chart_image   String  @db.VarChar(2048)
-  analysis_text String  @db.LongText
-  model_used    String? @db.VarChar(100)
-  prompt_used   String? @db.LongText
+  timeframe_code String  @db.VarChar(8) @default("1H")
 
-  created_at DateTime @default(now()) @db.DateTime(0)
+  chart_image    String  @db.VarChar(2048)
+  analysis_text  String  @db.LongText
+  model_used     String? @db.VarChar(100)
+  prompt_used    String? @db.LongText
+
+  created_at     DateTime @default(now()) @db.DateTime(0)
 
   account  account   @relation(fields: [account_id], references: [id], onDelete: Cascade)
   strategy strategy? @relation(fields: [strategy_id], references: [id], onDelete: SetNull)
 
   @@index([account_id, created_at], map: "idx_pre_analysis_acc_created")
+}
+
+model verified_asset {
+  id         String   @id @default(uuid()) @db.Char(36)
+  symbol     String   @unique @db.VarChar(50)
+  name       String?  @db.VarChar(100)
+  exchange   String   @default("Binance") @db.VarChar(50)
+  created_at DateTime @default(now()) @db.DateTime(0)
 }
