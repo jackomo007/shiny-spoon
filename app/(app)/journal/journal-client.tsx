@@ -185,6 +185,9 @@ export default function JournalPage() {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
+      timeframe_number: "4",
+      timeframe_unit: "H",
+      buy_fee: "0", 
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
@@ -378,26 +381,15 @@ export default function JournalPage() {
   }, [items, query, sort])
 
   function openCreate() {
-    setMode("create")
-    setEditingId(null)
-    setWizardStep(1)
-    validSymbolsRef.current = new Set()
-    setAssetQuery("")
-    setAssetOptions([])
-    setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
-    let lastTfNum = "4";
-    let lastTfUnit: JournalForm["timeframe_unit"] = "H";
-    try {
-      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}");
-      if (saved && /^\d+$/.test(saved.num) && ["S","M","H","D","W","Y"].includes(saved.unit)) {
-        lastTfNum = saved.num;
-        lastTfUnit = saved.unit;
-      }
-    } catch {}
-    setValue("timeframe_number", lastTfNum, { shouldValidate: false });
-    setValue("timeframe_unit", lastTfUnit, { shouldValidate: false });
-    setValue("buy_fee", "0", { shouldValidate: false });
-    setShowAssetMenu(false)
+    setMode("create");
+    setEditingId(null);
+    setWizardStep(1);
+
+    validSymbolsRef.current = new Set();
+    setAssetQuery("");
+    setAssetOptions([]);
+    setShowAssetMenu(false);
+
     reset({
       strategy_id: "",
       asset_name: "",
@@ -406,8 +398,29 @@ export default function JournalPage() {
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
-    })
-    setOpen(true)
+    });
+
+    setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
+
+    let lastTfNum = "4";
+    let lastTfUnit: JournalForm["timeframe_unit"] = "H";
+    try {
+      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}");
+      if (
+        saved &&
+        /^\d+$/.test(saved.num) &&
+        ["S","M","H","D","W","Y"].includes(saved.unit)
+      ) {
+        lastTfNum = saved.num;
+        lastTfUnit = saved.unit;
+      }
+    } catch {}
+
+    setValue("timeframe_number", lastTfNum, { shouldValidate: false, shouldDirty: false });
+    setValue("timeframe_unit", lastTfUnit,   { shouldValidate: false, shouldDirty: false });
+    setValue("buy_fee", "0", { shouldValidate: false, shouldDirty: false });
+
+    setOpen(true);
   }
 
   function openEdit(row: JournalRow) {
@@ -804,66 +817,65 @@ export default function JournalPage() {
           </div>
         </div>
 
-        <div className="px-6 pb-2">
+        <div className="px-6 pb-2 overflow-x-auto">
           {loading ? (
             <div className="py-10 text-center text-sm text-gray-500">Loading…</div>
           ) : error ? (
             <div className="py-10 text-center text-sm text-red-600">{error}</div>
           ) : (
-            <Table>
-             <thead>
-              <tr>
-                <Th>Asset</Th>
-                <Th>Type</Th>
-                <Th>Side</Th>
-                <Th>Entry</Th>
-                <Th>Exit</Th>
-                <Th>Amount Spent</Th>
-                <Th>PnL</Th>
-                <Th>Date</Th>
-                <Th>Timeframe</Th>
-                <Th>Status / Action</Th>
-                <Th> </Th>
-              </tr>
-            </thead>
+            <Table className="min-w-[900px] md:min-w-full">
+              <thead>
+                <tr>
+                  <Th className="whitespace-nowrap w-28 md:w-36">Asset</Th>
+                  <Th className="whitespace-nowrap w-20 md:w-24">Type</Th>
+                  <Th className="whitespace-nowrap w-20 md:w-24">Side</Th>
+                  <Th className="whitespace-nowrap text-right w-28">Entry</Th>
+                  <Th className="whitespace-nowrap text-right w-28">Exit</Th>
+                  <Th className="whitespace-nowrap text-right w-36">Amount Spent</Th>
+                  <Th className="whitespace-nowrap text-right w-28">PnL</Th>
+                  <Th className="whitespace-nowrap hidden md:table-cell w-56">Date</Th>
+                  <Th className="whitespace-nowrap w-16 text-center">TF</Th>
+                  <Th className="whitespace-nowrap w-40">Status / Action</Th>
+                  <Th className="w-12"></Th>
+                </tr>
+              </thead>
               <tbody>
-                {rows.length > 0 ? (
-                  rows.map((r) => (
-                    <Tr key={r.id}>
-                      <Td>{r.asset_name}</Td>
-                      <Td>{r.trade_type === 2 ? "Futures" : "Spot"}</Td>
-                      <Td>{r.side}</Td>
-                      <Td>{fmt4(r.entry_price)}</Td>
-                      <Td>{r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
-                      <Td>{money2(r.amount_spent)}</Td>
-                      <Td>{r.pnl != null ? money2(r.pnl) : "—"}</Td>
-                      <Td>{new Date(r.date).toLocaleString()}</Td>
-                      <Td>{r.timeframe_code}</Td>
-                      <Td>
-                        {r.status === "in_progress" ? (
-                          <button
-                            title="Quick Close"
-                            onClick={() => openCloseModal(r)}
-                            className="px-2 py-1 rounded bg-black text-white text-xs hover:opacity-90">
-                            Quick Close
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
-                        )}
-                      </Td>
-                      <Td>
-                        <div className="flex gap-3 justify-end">
-                          <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
-                          <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={10} className="py-12 text-center text-sm text-gray-500">No rows</td>
-                  </tr>
-                )}
+                {rows.map(r => (
+                  <Tr key={r.id}>
+                    <Td className="whitespace-nowrap w-28 md:w-36">{r.asset_name}</Td>
+                    <Td className="whitespace-nowrap w-20 md:w-24">{r.trade_type === 2 ? "Futures" : "Spot"}</Td>
+                    <Td className="whitespace-nowrap w-20 md:w-24">{r.side}</Td>
+
+                    <Td className="text-right font-mono w-28">{fmt4(r.entry_price)}</Td>
+                    <Td className="text-right font-mono w-28">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
+
+                    <Td className="text-right font-mono w-36">{money2(r.amount_spent)}</Td>
+                    <Td className="text-right font-mono w-28">{r.pnl != null ? money2(r.pnl) : "—"}</Td>
+
+                    <Td className="hidden md:table-cell">{new Date(r.date).toLocaleString()}</Td>
+                    <Td className="text-center w-16">{r.timeframe_code}</Td>
+
+                    <Td className="w-40">
+                      {r.status === "in_progress" ? (
+                        <button
+                          title="Close Trade"
+                          onClick={() => openCloseModal(r)}
+                          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700">
+                          Close Trade
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
+                      )}
+                    </Td>
+
+                    <Td className="w-12">
+                      <div className="flex gap-3 justify-end">
+                        <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
+                        <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
               </tbody>
             </Table>
           )}
@@ -1038,12 +1050,11 @@ export default function JournalPage() {
               <>
                 {wTradeType === 1 ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                       <div className="text-sm mb-1">Status</div>
                       <select
                         {...register("status", { required: "Status is required" })}
-                        disabled={hasExit}
                         onChange={(e) => {
                           const val = e.target.value as Status;
                           setValue("status", val, { shouldDirty: true, shouldValidate: true });
@@ -1051,48 +1062,73 @@ export default function JournalPage() {
                             setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
                           }
                         }}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 disabled:bg-gray-50 disabled:text-gray-500"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       >
                         <option value="in_progress">In Progress</option>
                         <option value="win">Win</option>
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-
-                      {errors.status && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
-                      )}
-
                       {hasExit && derivedStatus && (
                         <p className="mt-1 text-xs text-gray-500">
-                            Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b> on save.
+                          Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b>.
                         </p>
                       )}
                     </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-sm mb-1">
-                            Buy Fee <span className="text-red-600">*</span>
-                          </div>
-                          <input
-                            {...register("buy_fee", {
-                              required: "Buy fee is required",
-                              validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
-                            })}
-                            defaultValue="0"
-                            inputMode="decimal"
-                            placeholder="0"
-                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          />
-                          {errors.buy_fee && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {String(errors.buy_fee.message)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
 
+                    <div>
+                      <div className="text-sm mb-1">
+                        Buy Fee <span className="text-red-600">*</span>
+                      </div>
+                      <input
+                        {...register("buy_fee", {
+                          required: "Buy fee is required",
+                          validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                        })}
+                        defaultValue="0"
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                      {errors.buy_fee && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm mb-1">
+                      Amount Spent <span className="text-red-600">*</span>
+                    </div>
+                    <input
+                      {...register("amount_spent", {
+                        required: "Amount spent is required",
+                        validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
+                      })}
+                      inputMode="decimal"
+                      placeholder="e.g. 500.00"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                    {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm mb-1">
+                        Entry Price <span className="text-red-600">*</span>
+                      </div>
+                      <input
+                        {...register("entry_price", {
+                          required: "Entry price is required",
+                          validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
+                        })}
+                        inputMode="decimal"
+                        placeholder="e.g. 27654.32"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                    </div>
+                  </div>
                     <div>
                       <div className="text-sm mb-1">
                         Amount Spent <span className="text-red-600">*</span>
@@ -1235,9 +1271,7 @@ export default function JournalPage() {
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
                         {errors.buy_fee && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.buy_fee.message)}
-                          </p>
+                          <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
                         )}
                       </div>
                     </div>
@@ -1277,7 +1311,6 @@ export default function JournalPage() {
                       <div className="text-sm mb-1">Status</div>
                       <select
                         {...register("status", { required: "Status is required" })}
-                        disabled={hasExit}
                         onChange={(e) => {
                           const val = e.target.value as Status;
                           setValue("status", val, { shouldDirty: true, shouldValidate: true });
@@ -1285,14 +1318,13 @@ export default function JournalPage() {
                             setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
                           }
                         }}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 disabled:bg-gray-50 disabled:text-gray-500"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       >
                         <option value="in_progress">In Progress</option>
                         <option value="win">Win</option>
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-
                       {errors.status && (
                         <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
                       )}
@@ -1472,7 +1504,7 @@ export default function JournalPage() {
               }}
               disabled={closing}
               className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
-              Quick Close
+               Close Trade
             </button>
           </div>
         }

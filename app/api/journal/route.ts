@@ -190,21 +190,13 @@ export async function POST(req: Request) {
   })
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
-  let statusToPersist: Status = data.status as Status
+  const statusToPersist: Status = data.status as Status
   let exitToPersist = data.exit_price ?? null
   let sellFeeToPersist = data.sell_fee ?? 0
 
   if (statusToPersist === "in_progress") {
     exitToPersist = null
     sellFeeToPersist = 0
-  } else if (exitToPersist != null) {
-    const longLike = data.side === "buy" || data.side === "long"
-    statusToPersist =
-      exitToPersist === data.entry_price
-        ? "break_even"
-        : (longLike
-            ? (exitToPersist > data.entry_price ? "win" : "loss")
-            : (exitToPersist < data.entry_price ? "win" : "loss"))
   }
 
   const created = await prisma.$transaction(async (tx) => {

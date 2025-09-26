@@ -114,21 +114,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     leverage: data.futures?.leverage,
   })
 
-  let statusToPersist: Status = data.status as Status
+  const statusToPersist: Status = data.status as Status
   let exitToPersist = data.exit_price ?? null
   let sellFeeToPersist: Prisma.Decimal | null = null
 
   if (statusToPersist === "in_progress") {
     exitToPersist = null
     sellFeeToPersist = new Prisma.Decimal(0)
-  } else if (exitToPersist != null) {
-    const longLike = data.side === "buy" || data.side === "long"
-    statusToPersist =
-      exitToPersist === data.entry_price
-        ? "break_even"
-        : (longLike
-            ? (exitToPersist > data.entry_price ? "win" : "loss")
-            : (exitToPersist < data.entry_price ? "win" : "loss"))
   }
 
   if (sellFeeToPersist === null) {
