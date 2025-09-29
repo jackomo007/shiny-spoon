@@ -1,35 +1,55 @@
-import AnnouncementBar from '@/components/sections/AnnouncementBar'
-import GoalCard from '@/components/sections/GoalCard'
-import CourseProgressCard from '@/components/sections/CourseProgressCard'
-import OpenTradesCard from '@/components/sections/OpenTradesCard'
-import EarningsChart, { Point } from '@/components/charts/EarningsChart'
-import Card from '@/components/ui/Card'
+"use client"
+
+import { useEffect, useState } from "react"
+import AnnouncementBar from "@/components/sections/AnnouncementBar"
+import EarningsChart, { Point } from "@/components/charts/EarningsChart"
+import Card from "@/components/ui/Card"
+import RecentTradesCard from "@/components/sections/RecentTradesCard"
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
 export default function DashboardPage() {
-  const earnings: Point[] = [
-    { name: 'Jan', value: 5 }, { name: 'Feb', value: 4 }, { name: 'Mar', value: 8 },
-    { name: 'Apr', value: 28 }, { name: 'May', value: 18 }, { name: 'Jun', value: 22 },
-    { name: 'Jul', value: 8 },
-  ]
+  const [earnings, setEarnings] = useState<Point[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const trades = [
-    { name: 'ADA/USDT', orderDate: '06/01/2025 05:00:00', side: 'Long' as const, price: '$0.65', spent: '$2500' },
-  ]
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/metrics/earnings", { cache: "no-store" })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data: { items: { month: string; earnings: number }[] } = await res.json()
+
+        const pts: Point[] = data.items.map(({ month, earnings }) => {
+          const m = Number(month.slice(5, 7)) - 1
+          return { name: MONTHS[m] ?? month, value: earnings }
+        })
+
+        if (!cancelled) setEarnings(pts)
+      } catch {
+        if (!cancelled) setEarnings([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="grid gap-6">
       <AnnouncementBar />
-      <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-        <Card>
-          <div className="text-lg font-semibold mb-4">Earnings</div>
-          <EarningsChart data={earnings} />
-        </Card>
-        <GoalCard />
-      </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <CourseProgressCard />
-        <OpenTradesCard trades={trades} />
+      <Card>
+        <div className="text-lg font-semibold mb-4">Earnings</div>
+        {loading ? (
+          <div className="h-[220px] w-full rounded-xl bg-gray-100 animate-pulse" />
+        ) : (
+          <EarningsChart data={earnings} />
+        )}
+      </Card>
+
+      <div className="grid gap-6">
+        <RecentTradesCard />
       </div>
 
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">

@@ -12,16 +12,10 @@ export default async function ProfilePage() {
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
 
-  const [acc, strategiesCount, tradesCount, recentTrades] = await Promise.all([
+  const [acc, strategiesCount, tradesCount] = await Promise.all([
     prisma.account.findUnique({ where: { id: accountId } }),
     prisma.strategy.count({ where: { account_id: accountId } }),
     prisma.journal_entry.count({ where: { account_id: accountId } }),
-    prisma.journal_entry.findMany({
-      where: { account_id: accountId },
-      orderBy: { trade_datetime: "desc" },
-      select: { id: true, asset_name: true, status: true, trade_type: true, trade_datetime: true },
-      take: 5,
-    }),
   ])
 
   return (
@@ -45,29 +39,6 @@ export default async function ProfilePage() {
         </Card>
       </div>
 
-      {/* <Card>
-        <AccountTypeManager />
-      </Card> */}
-
-      <Card className="p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-3">
-          <div className="text-base font-semibold text-gray-800">Recent trades</div>
-        </div>
-        <div className="px-6 pb-6">
-          {recentTrades.length === 0 ? (
-            <div className="text-sm text-gray-500">No recent trades</div>
-          ) : (
-            <ul className="grid gap-2">
-              {recentTrades.map(r => (
-                <li key={r.id} className="text-sm flex items-center justify-between border rounded-xl px-3 py-2">
-                  <span>{r.asset_name} — {r.trade_type === 2 ? "Futures" : "Spot"} — {r.status.replace("_", " ")}</span>
-                  <span className="text-gray-500">{new Date(r.trade_datetime).toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Card>
     </div>
   )
 }
