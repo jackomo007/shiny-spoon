@@ -1,19 +1,45 @@
 import "server-only"
+import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import AdminPromptsClient from "./prompts-client"
 
-export default async function AdminPage() {
+export default async function AdminHomePage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.isAdmin) return null
 
+  const cards = [
+    {
+      href: "/admin/prompts",
+      title: "Prompts",
+      desc: "Edit the prompts used by the AI (including Trade Analyzer).",
+      emoji: "✍️",
+    },
+    {
+      href: "/admin/users",
+      title: "Users",
+      desc: "See all users, journals, strategies, and delete accounts.",
+      emoji: "👥",
+    },
+  ]
+
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <h1 className="text-2xl font-bold mb-4">Admin Console</h1>
-      <p className="text-sm text-gray-600 mb-6">
-        Version 1 — Editing prompts used by AI.
-      </p>
-      <AdminPromptsClient />
+    <div className="mx-auto max-w-6xl p-6">
+      <h1 className="text-2xl font-bold mb-2">Admin Console</h1>
+      <p className="text-sm text-gray-600 mb-6">Choose a section to manage.</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {cards.map((c) => (
+          <Link
+            key={c.href}
+            href={c.href}
+            className="rounded-2xl border p-5 hover:shadow-md bg-white transition"
+          >
+            <div className="text-3xl mb-2">{c.emoji}</div>
+            <div className="font-semibold">{c.title}</div>
+            <div className="text-sm text-gray-600">{c.desc}</div>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

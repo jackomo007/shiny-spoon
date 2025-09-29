@@ -28,13 +28,41 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await tx.chart_subscription.deleteMany({ where: { account_id: { in: accIds } } })
     await tx.journal_entry.deleteMany({ where: { account_id: { in: accIds } } })
     await tx.journal.deleteMany({ where: { account_id: { in: accIds } } })
-    await tx.strategy_rule.deleteMany({
-      where: { strategy: { account_id: { in: accIds } } }
-    })
+    await tx.strategy_rule.deleteMany({ where: { strategy: { account_id: { in: accIds } } } })
     await tx.strategy.deleteMany({ where: { account_id: { in: accIds } } })
     await tx.account.deleteMany({ where: { user_id: uid } })
     await tx.user.delete({ where: { id: uid } })
   })
 
   return NextResponse.json({ ok: true })
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.isAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { id } = await params
+  const uid = Number(id)
+
+  const parsed = z.object({ is_admin: z.boolean() }).safeParse(await req.json().catch(() => ({})))
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  if (String(session.user.id) === String(uid) && parsed.data.is_admin === false) {
+    const countAdmins = await prisma.user.count({ where: { is_admin: true } })
+    if (countAdmins <= 1) {
+      return NextResponse.json({ error: "Cannot remove the last admin." }, { status: 400 })
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: uid },
+    data: { is_admin: parsed.data.is_admin },
+    select: { id: true, email: true, username: true, is_admin: true, created_at: true },
+  })
+
+  return NextResponse.json({ item: updated })
 }
