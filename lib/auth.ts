@@ -43,18 +43,46 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      type AppJWT = typeof token & { userId?: number; accountId?: string | null }
+      type AppJWT = typeof token & {
+        userId?: number
+        accountId?: string | null
+        isAdmin?: boolean
+      }
       const t: AppJWT = token as AppJWT
 
       if (user?.id) t.userId = Number(user.id)
       if (!t.accountId && t.userId) {
         t.accountId = await getOrCreateDefaultAccount(t.userId)
       }
+
+      if (typeof t.isAdmin === "undefined") {
+        const uid = typeof t.userId === "number" ? t.userId : undefined
+        if (typeof uid === "number" && Number.isFinite(uid)) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: uid },
+            select: { is_admin: true },
+          })
+          t.isAdmin = !!dbUser?.is_admin
+        } else {
+          t.isAdmin = false
+        }
+      }
+
       return t
     },
     async session({ session, token }) {
-      if (token?.userId) session.user.id = token.userId.toString()
-      session.accountId = (token as { accountId?: string | null }).accountId ?? null
+      if (session.user && typeof (token as { userId?: number }).userId === "number") {
+        session.user.id = (token as { userId: number }).userId.toString()
+      }
+
+      const tAcc = (token as { accountId?: string | null }).accountId
+      session.accountId = typeof tAcc === "string" ? tAcc : undefined
+
+      if (session.user) {
+        const maybeIsAdmin = (token as { isAdmin?: boolean }).isAdmin
+        session.user.isAdmin = !!maybeIsAdmin
+      }
+
       return session
     },
   },

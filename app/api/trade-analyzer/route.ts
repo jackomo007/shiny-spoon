@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString(),
     }
 
-    const prompt = buildTradeAnalyzerPrompt({
+    const prompt = await buildTradeAnalyzerPrompt({
       strategyName: strategy?.name ?? null,
       strategyRules: strategy?.rules ?? [],
       asset: assetSymbol,

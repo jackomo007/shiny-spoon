@@ -4,6 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useState } from "react"
 import { signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import AccountSwitcher from "@/components/account/AccountSwitcher"
 
 type Props = {
@@ -26,6 +27,8 @@ export default function DashboardShell({
 }: Props) {
   const [openProfile, setOpenProfile] = useState(false)
   const [accOpen, setAccOpen] = useState(false)
+  const { data } = useSession()
+  const isAdmin = !!data?.user?.isAdmin
 
   return (
     <div className="min-h-dvh bg-gray-50">
@@ -38,6 +41,7 @@ export default function DashboardShell({
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
+              {isAdmin && <Link href="/admin">Admin</Link>}
             </nav>
           </div>
 
@@ -120,13 +124,25 @@ export default function DashboardShell({
                 </Link>
               </li>
             ))}
+
+            {isAdmin && (
+              <li>
+                <Link
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
+                  href="/admin"
+                >
+                  <span className="w-6 text-center">🛡️</span>
+                  <span>Admin</span>
+                </Link>
+              </li>
+            )}
           </ul>
         </aside>
 
         <main>{children}</main>
       </div>
 
-     {accOpen && (
+      {accOpen && (
         <div
           className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[1px]"
           onClick={() => setAccOpen(false)}

@@ -3,13 +3,14 @@ import "next-auth/jwt"
 
 declare module "next-auth" {
   interface Session {
-    user: {
+    user?: {
       id: string
       name?: string | null
       email?: string | null
       image?: string | null
+      isAdmin?: boolean
     }
-    accountId?: string | null
+    accountId?: string
   }
 
   interface User {
@@ -24,6 +25,7 @@ declare module "next-auth/jwt" {
     uid?: string
     userId?: number
     accountId?: string | null
+    isAdmin?: boolean
   }
 }
 

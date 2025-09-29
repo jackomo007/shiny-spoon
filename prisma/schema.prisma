@@ -21,7 +21,11 @@ model user {
   password_hash String    @db.Text
   created_at    DateTime? @default(now()) @db.DateTime(0)
 
+  is_admin Boolean @default(false)
+
   accounts account[]
+
+  updated_prompts app_prompt[]
 }
 
 model account {
@@ -262,26 +266,26 @@ model chart_analysis {
 }
 
 model trade_pre_analysis {
-  id             String  @id @default(uuid()) @db.Char(36)
-  account_id     String  @db.Char(36)
-  strategy_id    String? @db.Char(36)
-  asset_symbol   String  @db.VarChar(50)
+  id           String  @id @default(uuid()) @db.Char(36)
+  account_id   String  @db.Char(36)
+  strategy_id  String? @db.Char(36)
+  asset_symbol String  @db.VarChar(50)
 
-  trade_type     Int
-  side           journal_entry_side
-  amount_spent   Decimal            @db.Decimal(18, 8)
-  entry_price    Decimal            @db.Decimal(18, 8)
-  target_price   Decimal?           @db.Decimal(18, 8)
-  stop_price     Decimal?           @db.Decimal(18, 8)
+  trade_type   Int
+  side         journal_entry_side
+  amount_spent Decimal            @db.Decimal(18, 8)
+  entry_price  Decimal            @db.Decimal(18, 8)
+  target_price Decimal?           @db.Decimal(18, 8)
+  stop_price   Decimal?           @db.Decimal(18, 8)
 
-  timeframe_code String  @db.VarChar(8) @default("1H")
+  timeframe_code String @default("1H") @db.VarChar(8)
 
-  chart_image    String  @db.VarChar(2048)
-  analysis_text  String  @db.LongText
-  model_used     String? @db.VarChar(100)
-  prompt_used    String? @db.LongText
+  chart_image   String  @db.VarChar(2048)
+  analysis_text String  @db.LongText
+  model_used    String? @db.VarChar(100)
+  prompt_used   String? @db.LongText
 
-  created_at     DateTime @default(now()) @db.DateTime(0)
+  created_at DateTime @default(now()) @db.DateTime(0)
 
   account  account   @relation(fields: [account_id], references: [id], onDelete: Cascade)
   strategy strategy? @relation(fields: [strategy_id], references: [id], onDelete: SetNull)
@@ -294,5 +298,19 @@ model verified_asset {
   symbol     String   @unique @db.VarChar(50)
   name       String?  @db.VarChar(100)
   exchange   String   @default("Binance") @db.VarChar(50)
+  created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+model app_prompt {
+  id          String  @id @default(uuid()) @db.Char(36)
+  key         String  @unique @db.VarChar(100)
+  title       String  @db.VarChar(191)
+  description String? @db.VarChar(255)
+  content     String  @db.LongText
+
+  updated_by Int?
+  updater    user? @relation(fields: [updated_by], references: [id], onDelete: SetNull)
+
+  updated_at DateTime @updatedAt @db.DateTime(0)
   created_at DateTime @default(now()) @db.DateTime(0)
 }
