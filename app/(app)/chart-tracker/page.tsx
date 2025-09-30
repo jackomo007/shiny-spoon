@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import ChartWithOverlay from "@/components/tracker/ChartWithOverlay";
 import Modal from "@/components/ui/Modal";
-import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
 
 type Timeframe = "h1" | "h4" | "d1";
 
@@ -243,21 +242,22 @@ export default function ChartTrackerPage() {
 }
 
 function AddCoinModal({ onClose }: { onClose: () => void }) {
-  const [tvSymbol, setTvSymbol] = useState("BINANCE:");
-  const [displaySymbol, setDisplaySymbol] = useState(""); // start empty (placeholder only)
+  const [tvSymbol, setTvSymbol] = useState("BINANCE:BTCUSDT");
   const [tf, setTf] = useState<Timeframe>("h1");
   const [saving, setSaving] = useState(false);
 
-  function handlePickVerified(sym: string) {
-    const s = sym.trim().toUpperCase();
-    setDisplaySymbol(s);
-    setTvSymbol(`BINANCE:${s}`);
+  function deriveDisplaySymbol(input: string) {
+    const s = (input || "").trim().toUpperCase();
+    const [, right] = s.split(":");
+    return (right || s).replace(/\s+/g, "");
   }
 
-  const canSave =
-    displaySymbol.trim().length >= 2 &&
-    tvSymbol.trim().length >= 3 &&
-    !saving;
+  const canSave = (() => {
+    const s = tvSymbol.trim().toUpperCase();
+    if (!s.includes(":")) return false;
+    const [, pair] = s.split(":");
+    return (pair || "").length >= 2 && !saving;
+  })();
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -265,27 +265,12 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
         <h3 className="text-lg font-semibold">Add Coin</h3>
 
         <div className="space-y-2">
-          <label className="text-sm">Asset</label>
-          <AssetAutocomplete
-            value={displaySymbol}
-            onChange={handlePickVerified}
-            placeholder="BTCUSDT"
-          />
-
           <label className="text-sm">TradingView Symbol</label>
           <input
             className="w-full border rounded p-2"
             value={tvSymbol}
-            onChange={(e) => setTvSymbol(e.target.value)}
+            onChange={(e) => setTvSymbol(e.target.value.toUpperCase())}
             placeholder="BINANCE:BTCUSDT"
-          />
-
-          <label className="text-sm">Display Symbol</label>
-          <input
-            className="w-full border rounded p-2"
-            value={displaySymbol}
-            onChange={(e) => setDisplaySymbol(e.target.value.toUpperCase())}
-            placeholder="BTCUSDT"
           />
 
           <label className="text-sm">Timeframe</label>
@@ -318,11 +303,15 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
             onClick={async () => {
               try {
                 setSaving(true);
+
+                const displaySymbol = deriveDisplaySymbol(tvSymbol);
+
                 const body = {
-                  tvSymbol: tvSymbol.trim(),
-                  displaySymbol: displaySymbol.trim().toUpperCase(),
+                  tvSymbol: tvSymbol.trim().toUpperCase(),
+                  displaySymbol,
                   tf,
                 };
+
                 const r = await fetch("/api/tracker/coins", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
