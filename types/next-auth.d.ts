@@ -26,6 +26,8 @@ declare module "next-auth/jwt" {
     userId?: number
     accountId?: string | null
     isAdmin?: boolean
+    displayName?: string | null
+    avatarUrl?: string | null
   }
 }
 

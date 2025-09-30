@@ -6,7 +6,12 @@ const nextConfig: NextConfig = {
   },
 
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "**.amazonaws.com" }],
+    ...(module.exports?.images || {}),
+    remotePatterns: [
+      ...(module.exports?.images?.remotePatterns || []),
+      { protocol: 'https', hostname: 'onpoint-tradingapp.s3.amazonaws.com' },
+      { protocol: 'https', hostname: '*.amazonaws.com' },
+    ],
   },
 
   experimental: {

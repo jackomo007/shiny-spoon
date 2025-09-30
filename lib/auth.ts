@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 
-async function getOrCreateDefaultAccount(userId: number) {
+async function getOrCreateDefaultAccount(userId: number): Promise<string> {
   const acc =
     (await prisma.account.findFirst({ where: { user_id: userId, type: "crypto" } })) ||
     (await prisma.account.findFirst({ where: { user_id: userId } }))
@@ -31,7 +31,12 @@ export const authOptions: NextAuthOptions = {
         if (!user) return null
         const ok = await bcrypt.compare(creds.password, user.password_hash)
         if (!ok) return null
-        return { id: String(user.id), email: user.email, username: user.username, name: user.username }
+        return {
+          id: String(user.id),
+          email: user.email,
+          username: user.username,
+          name: user.username,
+        }
       },
     }),
   ],
@@ -42,49 +47,88 @@ export const authOptions: NextAuthOptions = {
     },
   },
   callbacks: {
-    async jwt({ token, user }) {
-      type AppJWT = typeof token & {
-        userId?: number
-        accountId?: string | null
-        isAdmin?: boolean
+  async jwt({ token, user, trigger, session }) {
+    type AppJWT = typeof token & {
+      userId?: number
+      accountId?: string | null
+      isAdmin?: boolean
+      displayName?: string | null
+      avatarUrl?: string | null
+    }
+    const t: AppJWT = token as AppJWT
+
+    if (user?.id) t.userId = Number(user.id)
+    if (!t.accountId && t.userId) {
+      t.accountId = await getOrCreateDefaultAccount(t.userId)
+    }
+
+    if (typeof t.isAdmin === "undefined") {
+      const uid = typeof t.userId === "number" ? t.userId : undefined
+      if (typeof uid === "number" && Number.isFinite(uid)) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: uid },
+          select: { is_admin: true },
+        })
+        t.isAdmin = !!dbUser?.is_admin
+      } else {
+        t.isAdmin = false
       }
-      const t: AppJWT = token as AppJWT
+    }
 
-      if (user?.id) t.userId = Number(user.id)
-      if (!t.accountId && t.userId) {
-        t.accountId = await getOrCreateDefaultAccount(t.userId)
+    if (typeof t.displayName === "undefined" || typeof t.avatarUrl === "undefined") {
+      if (typeof t.userId === "number") {
+        const row = await prisma.user.findUnique({
+          where: { id: t.userId },
+          select: { display_name: true, avatar_url: true },
+        })
+        t.displayName = row?.display_name ?? null
+        t.avatarUrl = row?.avatar_url ?? null
+      } else {
+        t.displayName = null
+        t.avatarUrl = null
       }
+    }
 
-      if (typeof t.isAdmin === "undefined") {
-        const uid = typeof t.userId === "number" ? t.userId : undefined
-        if (typeof uid === "number" && Number.isFinite(uid)) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: uid },
-            select: { is_admin: true },
-          })
-          t.isAdmin = !!dbUser?.is_admin
-        } else {
-          t.isAdmin = false
-        }
+    if (trigger === "update" && session) {
+      if (typeof session.name === "string") {
+        t.displayName = session.name
       }
-
-      return t
-    },
-    async session({ session, token }) {
-      if (session.user && typeof (token as { userId?: number }).userId === "number") {
-        session.user.id = (token as { userId: number }).userId.toString()
+      const sImg = (session as { image?: string | null }).image
+      if (typeof sImg !== "undefined") {
+        t.avatarUrl = sImg ?? null
       }
+    }
 
-      const tAcc = (token as { accountId?: string | null }).accountId
-      session.accountId = typeof tAcc === "string" ? tAcc : undefined
-
-      if (session.user) {
-        const maybeIsAdmin = (token as { isAdmin?: boolean }).isAdmin
-        session.user.isAdmin = !!maybeIsAdmin
-      }
-
-      return session
-    },
+    return t
   },
+
+  async session({ session, token }) {
+    type AppJWT = typeof token & {
+      userId?: number
+      accountId?: string | null
+      isAdmin?: boolean
+      displayName?: string | null
+      avatarUrl?: string | null
+    }
+    const t: AppJWT = token as AppJWT
+
+    if (session.user && typeof t.userId === "number") {
+      session.user.id = t.userId.toString()
+    }
+    session.accountId = typeof t.accountId === "string" ? t.accountId : undefined
+
+    if (session.user) {
+      session.user.isAdmin = !!t.isAdmin
+      if (typeof t.displayName !== "undefined") {
+        session.user.name = t.displayName
+      }
+      if (typeof t.avatarUrl !== "undefined") {
+        session.user.image = t.avatarUrl ?? null
+      }
+    }
+
+    return session
+  },
+},
   pages: { signIn: "/login" },
 }

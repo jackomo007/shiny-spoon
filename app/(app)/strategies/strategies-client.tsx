@@ -246,7 +246,6 @@ export default function StrategiesClient() {
     <div className="grid gap-6">
       <div className="flex items-center justify-end gap-3">
         <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">📄 Export</button>
-        <button className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">⚙️ Settings</button>
         <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
       </div>
 
@@ -369,7 +368,6 @@ export default function StrategiesClient() {
                 >
                   <MenuItem label="Refresh" onClick={() => { void load(); setShowMenu(false) }} />
                   <MenuItem label="Manage Widgets" onClick={() => setShowMenu(false)} />
-                  <MenuItem label="Settings" onClick={() => setShowMenu(false)} />
                 </div>
               )}
             </div>

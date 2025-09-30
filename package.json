@@ -13,7 +13,8 @@
     "seed:assets": "node scripts/seed-verified-assets.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.891.0",
+    "@aws-sdk/client-s3": "^3.899.0",
+    "@aws-sdk/s3-request-presigner": "^3.899.0",
     "@napi-rs/canvas": "^0.1.80",
     "@prisma/client": "^6.14.0",
     "axios": "^1.11.0",

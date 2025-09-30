@@ -26,7 +26,7 @@ export default function DashboardShell({ children }: Props) {
     (data?.user?.email ? data.user.email.split("@")[0] : undefined) ??
     "Trader"
 
-  const avatar = initials(displayName)
+  const avatarText = initials(displayName)
   const isAdmin = !!data?.user?.isAdmin
 
   const [openProfile, setOpenProfile] = useState(false)
@@ -68,8 +68,12 @@ export default function DashboardShell({ children }: Props) {
                 onClick={() => setOpenProfile((v) => !v)}
                 className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20"
               >
-                <span className="h-8 w-8 rounded-full bg-white/20 grid place-items-center">
-                  {avatar}
+                <span className="h-8 w-8 rounded-full bg-white/20 grid place-items-center overflow-hidden relative">
+                  {data?.user?.image ? (
+                    <Image src={data.user.image} alt="avatar" fill className="object-cover" sizes="32px" />
+                  ) : (
+                    avatarText
+                  )}
                 </span>
                 <span className="hidden sm:inline">{displayName}</span>
               </button>
@@ -83,19 +87,6 @@ export default function DashboardShell({ children }: Props) {
                     Hi, {displayName.split(" ")[0]}!
                   </div>
                   <MenuItem href="/profile" label="My profile" emoji="🙋‍♂️" />
-                  <MenuItem href="#" label="Settings" emoji="⚙️" />
-                  <MenuItem href="#" label="Billing" emoji="💳" />
-                  <MenuItem href="#" label="Activity" emoji="📊" />
-
-                  <button
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100"
-                    onClick={() => {
-                      setOpenProfile(false)
-                      setAccOpen(true)
-                    }}
-                  >
-                    <span className="text-lg">🔄</span> Switch account
-                  </button>
 
                   <button
                     className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100"
@@ -113,8 +104,12 @@ export default function DashboardShell({ children }: Props) {
       <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 px-4 md:px-6 py-6">
         <aside className="hidden md:block">
           <div className="rounded-2xl bg-primary text-white p-6">
-            <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-xl mb-3">
-              {avatar}
+            <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-xl mb-3 overflow-hidden relative">
+              {data?.user?.image ? (
+                <Image src={data.user.image} alt="avatar" fill className="object-cover" sizes="64px" />
+              ) : (
+                avatarText
+              )}
             </div>
             <div className="font-semibold">{displayName}</div>
             <span className="inline-block mt-3 text-xs bg-white/15 rounded-full px-2 py-1">

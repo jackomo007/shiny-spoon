@@ -21,12 +21,15 @@ model user {
   password_hash String    @db.Text
   created_at    DateTime? @default(now()) @db.DateTime(0)
 
+  display_name  String?   @db.VarChar(100)
+  avatar_url    String?   @db.VarChar(2048)
+
   is_admin Boolean @default(false)
 
   accounts account[]
-
   updated_prompts app_prompt[]
 }
+
 
 model account {
   id         String       @id @default(uuid()) @db.Char(36)
