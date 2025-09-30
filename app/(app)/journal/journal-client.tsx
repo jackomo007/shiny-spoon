@@ -1130,48 +1130,6 @@ export default function JournalPage() {
                     </div>
                   </div>
                     <div>
-                      <div className="text-sm mb-1">
-                        Amount Spent <span className="text-red-600">*</span>
-                      </div>
-                      <input
-                        {...register("amount_spent", {
-                          required: "Amount spent is required",
-                          validate: (v) =>
-                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
-                        })}
-                        inputMode="decimal"
-                        placeholder="e.g. 500.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.amount_spent && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {String(errors.amount_spent.message)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="text-sm mb-1">
-                        Entry Price <span className="text-red-600">*</span>
-                      </div>
-                      <input
-                        {...register("entry_price", {
-                          required: "Entry price is required",
-                          validate: (v) =>
-                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
-                        })}
-                        inputMode="decimal"
-                        placeholder="e.g. 27654.32"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.entry_price && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {String(errors.entry_price.message)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
                       <div className="text-sm mb-1">Target Exit Price</div>
                       <input
                         {...register("exit_price")}
