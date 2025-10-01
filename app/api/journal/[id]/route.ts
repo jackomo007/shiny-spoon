@@ -115,18 +115,16 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   })
 
   const statusToPersist: Status = data.status as Status
-  let exitToPersist = data.exit_price ?? null
-  let sellFeeToPersist: Prisma.Decimal | null = null
 
-  if (statusToPersist === "in_progress") {
-    exitToPersist = null
-    sellFeeToPersist = new Prisma.Decimal(0)
-  }
+  const exitToPersist =
+    data.exit_price === undefined
+      ? (existing.exit_price as number | null)
+      : (data.exit_price ?? null)
 
-  if (sellFeeToPersist === null) {
-    sellFeeToPersist =
-      data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : existing.sell_fee
-  }
+  const sellFeeToPersist: Prisma.Decimal | undefined =
+    statusToPersist === "in_progress"
+      ? new Prisma.Decimal(0)
+      : (data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined)
 
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
@@ -144,7 +142,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        sell_fee: sellFeeToPersist,
+        ...(sellFeeToPersist !== undefined ? { sell_fee: sellFeeToPersist } : {}),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: exitToPersist,
@@ -185,6 +183,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return NextResponse.json({ ok: true })
 }
+
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
