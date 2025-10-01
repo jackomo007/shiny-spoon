@@ -324,6 +324,8 @@ export default function JournalPage() {
         list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? ""
       setActiveJournalName(name)
 
+      return j.items;
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal")
     } finally {
@@ -573,7 +575,6 @@ export default function JournalPage() {
     };
 
     if (base.status === "in_progress") {
-      base.exit_price = null;
       base.sell_fee = 0;
     }
 
@@ -1058,9 +1059,6 @@ export default function JournalPage() {
                         onChange={(e) => {
                           const val = e.target.value as Status;
                           setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                          if (val === "in_progress") {
-                            setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
-                          }
                         }}
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       >
@@ -1130,7 +1128,7 @@ export default function JournalPage() {
                     </div>
                   </div>
                     <div>
-                      <div className="text-sm mb-1">Target Exit Price</div>
+                      <div className="text-sm mb-1">Exit Price</div>
                       <input
                         {...register("exit_price")}
                         inputMode="decimal"
@@ -1272,9 +1270,6 @@ export default function JournalPage() {
                         onChange={(e) => {
                           const val = e.target.value as Status;
                           setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                          if (val === "in_progress") {
-                            setValue("exit_price", "", { shouldDirty: true, shouldValidate: true });
-                          }
                         }}
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       >
