@@ -151,7 +151,7 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
 
       <Card>
         <div className="grid md:grid-cols-3 gap-4">
-          <div>
+          {/* <div>
             <label className="text-sm text-gray-600">Strategy Used</label>
             <select
               className="w-full rounded-xl border p-2"
@@ -165,7 +165,7 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
 
           <div>
             <label className="text-sm text-gray-600">Asset</label>
