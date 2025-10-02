@@ -20,6 +20,12 @@ export default async function AdminHomePage() {
       desc: "See all users, journals, strategies, and delete accounts.",
       emoji: "👥",
     },
+    {
+      href: "/admin/costs",
+      title: "Costs",
+      desc: "OpenAI spend by prompt type (daily/weekly/monthly).",
+      emoji: "💳",
+    },
   ]
 
   return (

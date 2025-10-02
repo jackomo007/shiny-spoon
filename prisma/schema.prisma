@@ -21,15 +21,14 @@ model user {
   password_hash String    @db.Text
   created_at    DateTime? @default(now()) @db.DateTime(0)
 
-  display_name  String?   @db.VarChar(100)
-  avatar_url    String?   @db.VarChar(2048)
+  display_name String? @db.VarChar(100)
+  avatar_url   String? @db.VarChar(2048)
 
   is_admin Boolean @default(false)
 
-  accounts account[]
+  accounts        account[]
   updated_prompts app_prompt[]
 }
-
 
 model account {
   id         String       @id @default(uuid()) @db.Char(36)
@@ -316,4 +315,29 @@ model app_prompt {
 
   updated_at DateTime @updatedAt @db.DateTime(0)
   created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+enum ai_usage_kind {
+  chart
+  trade
+}
+
+model ai_usage {
+  id            String        @id @default(uuid()) @db.Char(36)
+  kind          ai_usage_kind
+  model_used    String        @db.VarChar(100)
+  input_tokens  Int           @default(0)
+  output_tokens Int           @default(0)
+  cost_usd      Decimal       @default(0.00) @db.Decimal(12, 6)
+
+  account_id      Int?
+  tracker_id      String? @db.Char(36)
+  pre_analysis_id String? @db.Char(36)
+
+  meta       Json?
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([kind], map: "idx_ai_usage_kind")
+  @@index([created_at], map: "idx_ai_usage_created_at")
+  @@index([account_id], map: "idx_ai_usage_account")
 }
