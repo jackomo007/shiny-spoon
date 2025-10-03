@@ -191,13 +191,10 @@ export async function POST(req: Request) {
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
   const statusToPersist: Status = data.status as Status
-  let exitToPersist = data.exit_price ?? null
-  let sellFeeToPersist = data.sell_fee ?? 0
 
-  if (statusToPersist === "in_progress") {
-    exitToPersist = null
-    sellFeeToPersist = 0
-  }
+  const exitToPersist = data.exit_price ?? null
+
+  const sellFeeToPersist = data.sell_fee ?? 0
 
   const created = await prisma.$transaction(async (tx) => {
     const amountQty = qtyFrom({

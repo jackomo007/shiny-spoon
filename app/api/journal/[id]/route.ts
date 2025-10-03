@@ -122,9 +122,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       : (data.exit_price ?? null)
 
   const sellFeeToPersist: Prisma.Decimal | undefined =
-    statusToPersist === "in_progress"
-      ? new Prisma.Decimal(0)
-      : (data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined)
+    (data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined)
 
   await prisma.$transaction(async (tx) => {
     await tx.journal_entry.update({
