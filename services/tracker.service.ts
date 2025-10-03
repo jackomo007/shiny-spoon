@@ -87,7 +87,7 @@ export async function runAnalysisForTracker(trackerId: string) {
       inputTokens: usage.input,
       outputTokens: usage.output,
       trackerId: tracker.id,
-      accountId: null, 
+      accountId: null,
       meta: { tvSymbol: tracker.tv_symbol, tf: tracker.tf },
     });
 
@@ -98,14 +98,43 @@ export async function runAnalysisForTracker(trackerId: string) {
       select: { id: true },
     });
     if (extras.length) {
-      await prisma.chart_analysis.deleteMany({
-        where: { id: { in: extras.map((e) => e.id) } },
-      });
+      await prisma.chart_analysis.deleteMany({ where: { id: { in: extras.map(e => e.id) } } });
     }
   } catch (err) {
     console.error("[ANALYZE FAIL]", tracker.id, tracker.tv_symbol, tracker.tf, err);
     throw err;
   }
+}
+
+export async function addCoinToAccountMany(opts: {
+  accountId: string;
+  tvSymbol: string;
+  displaySymbol: string;
+  tfs: TF[];
+}) {
+  const trackers: { id: string; tf: TF }[] = [];
+
+  for (const tf of opts.tfs) {
+    const tracker = await prisma.chart_tracker.upsert({
+      where: { tv_symbol_tf: { tv_symbol: opts.tvSymbol, tf: tf as timeframe } },
+      create: {
+        tv_symbol: opts.tvSymbol,
+        display_symbol: opts.displaySymbol,
+        tf: tf as timeframe,
+      },
+      update: { active: true },
+    });
+
+    await prisma.chart_subscription.upsert({
+      where: { account_id_tracker_id: { account_id: opts.accountId, tracker_id: tracker.id } },
+      create: { account_id: opts.accountId, tracker_id: tracker.id },
+      update: {},
+    });
+
+    trackers.push({ id: tracker.id, tf });
+  }
+
+  return { trackers };
 }
 
 export async function addCoinToAccount(opts: {
@@ -161,7 +190,7 @@ export async function listAnalyses(trackerId: string, take = 10) {
 
 export async function findDueTrackers(now = new Date()) {
   const all = await prisma.chart_tracker.findMany({ where: { active: true } });
-  return all.filter((t) => {
+  return all.filter(t => {
     const last = t.last_run_at?.getTime() ?? 0;
     return now.getTime() - last >= tfToMs(t.tf as TF);
   });

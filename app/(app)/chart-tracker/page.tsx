@@ -143,8 +143,8 @@ export default function ChartTrackerPage() {
           </div>
           <h3 className="text-lg font-semibold">Track your first coin</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Add a coin and timeframe. We’ll analyze the chart automatically and
-            keep the latest 10 analyses.
+            Add a coin. We’ll analyze the chart automatically (1H and 4H)
+            and keep the latest 10 analyses.
           </p>
           <button
             className="mt-4 rounded-lg bg-black text-white px-4 py-2"
@@ -243,7 +243,6 @@ export default function ChartTrackerPage() {
 
 function AddCoinModal({ onClose }: { onClose: () => void }) {
   const [tvSymbol, setTvSymbol] = useState("BINANCE:BTCUSDT");
-  const [tf, setTf] = useState<Timeframe>("h1");
   const [saving, setSaving] = useState(false);
 
   function deriveDisplaySymbol(input: string) {
@@ -273,18 +272,9 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
             placeholder="BINANCE:BTCUSDT"
           />
 
-          <label className="text-sm">Timeframe</label>
-          <select
-            className="w-full border rounded p-2"
-            value={tf}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              setTf(e.target.value as Timeframe)
-            }
-          >
-            <option value="h1">1h</option>
-            <option value="h4">4h</option>
-            <option value="d1">1d</option>
-          </select>
+          <p className="text-xs text-gray-600">
+            We’ll automatically track <b>1H</b> and <b>4H</b> timeframes for this coin.
+          </p>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -309,7 +299,6 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
                 const body = {
                   tvSymbol: tvSymbol.trim().toUpperCase(),
                   displaySymbol,
-                  tf,
                 };
 
                 const r = await fetch("/api/tracker/coins", {
@@ -321,6 +310,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
                   const t = await r.text();
                   throw new Error(`HTTP ${r.status}${t ? ` - ${t}` : ""}`);
                 }
+
                 onClose();
               } catch (e) {
                 alert(e instanceof Error ? e.message : "Failed to save");
