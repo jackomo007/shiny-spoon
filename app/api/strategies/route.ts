@@ -47,7 +47,6 @@ function calcRR(row: {
   return reward / risk
 }
 
-
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -107,19 +106,19 @@ export async function GET(req: Request) {
     const wins = ts.filter(t => t.status === "win").length
     const winRate = tradesUsed ? Math.round((wins / tradesUsed) * 100) : 0
 
-  const pnls = ts.map(t =>
-    calcPnL({
-      side: t.side as "buy" | "sell" | "long" | "short",
-      trade_type: t.trade_type as 1 | 2,
-      entry_price: Number(t.entry_price),
-      exit_price: t.exit_price != null ? Number(t.exit_price) : null,
-      amount_spent: Number(t.amount_spent),
-      leverage:
-        t.futures_trade && t.futures_trade.length
-          ? Number(t.futures_trade[0].leverage)
-          : null,
-    })
-  )
+    const pnls = ts.map(t =>
+      calcPnL({
+        side: t.side as "buy" | "sell" | "long" | "short",
+        trade_type: t.trade_type as 1 | 2,
+        entry_price: Number(t.entry_price),
+        exit_price: t.exit_price != null ? Number(t.exit_price) : null,
+        amount_spent: Number(t.amount_spent),
+        leverage:
+          t.futures_trade && t.futures_trade.length
+            ? Number(t.futures_trade[0].leverage)
+            : null,
+      })
+    )
 
     const pnl = pnls.reduce((acc, n) => acc + n, 0)
 
@@ -177,9 +176,12 @@ export async function POST(req: Request) {
   const accountId = await getActiveAccountId(userId)
   if (!accountId) return NextResponse.json({ error: "Account not found" }, { status: 404 })
 
-  const { name, rules } = parsed.data
+  const { name, rules, notes } = parsed.data
+
   const created = await prisma.$transaction(async (tx) => {
-    const st = await tx.strategy.create({ data: { name, account_id: accountId } })
+    const st = await tx.strategy.create({
+      data: { name, account_id: accountId, notes: (notes ?? "") || null },
+    })
     for (const r of rules) {
       const rule = await tx.rule.upsert({
         where: { title: r.title.trim() },
@@ -190,5 +192,6 @@ export async function POST(req: Request) {
     }
     return st
   })
+
   return NextResponse.json({ id: created.id })
 }

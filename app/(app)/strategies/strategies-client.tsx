@@ -22,6 +22,7 @@ type StrategyDetail = {
   id: string
   name: string | null
   date_created: string | Date | null
+  notes: string | null   
   rules: { id: string; title: string; description: string | null }[]
 }
 
@@ -53,9 +54,10 @@ export default function StrategiesClient() {
 
   const [summary, setSummary] = useState<{ topPerformingId: string | null; mostUsedId: string | null }>({ topPerformingId: null, mostUsedId: null })
 
-  const { register, getValues, formState: { isSubmitting, errors }, reset } = useForm<{ name: string }>({
-    defaultValues: { name: "" }
-  })
+  const { register, getValues, formState: { isSubmitting, errors }, reset } =
+    useForm<{ name: string; notes: string }>({
+      defaultValues: { name: "", notes: "" },
+    })
 
   const load = useCallback(async () => {
     try {
@@ -111,7 +113,7 @@ export default function StrategiesClient() {
 
   function openCreate() {
     setMode("create"); setEditingId(null)
-    reset({ name: "" })
+    reset({ name: "", notes: "" }) 
     setRules([])
     setSelectedRuleId(null)
     setStep("list")
@@ -121,7 +123,7 @@ export default function StrategiesClient() {
   
   async function openEdit(row: Row) {
     setMode("edit"); setEditingId(row.id)
-    reset({ name: row.name ?? "" })
+    reset({ name: row.name ?? "", notes: "" })
     setSelectedRuleId(null)
     setStep("list")
     setOpen(true)
@@ -141,6 +143,8 @@ export default function StrategiesClient() {
           description: rr.description ?? null,
         }))
       )
+
+      reset({ name: data.name ?? "", notes: data.notes ?? "" })
     } catch (e) {
       console.error(e)
     }
@@ -190,6 +194,7 @@ export default function StrategiesClient() {
     const values = getValues()
     const payload = {
       name: values.name.trim(),
+      notes: (values.notes ?? "").trim() || null,
       rules: rules.map(r => ({
         title: r.title.trim(),
         description: (r.description ?? "").trim() || null,
@@ -419,123 +424,167 @@ export default function StrategiesClient() {
         </div>
       </Card>
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={mode === "create" ? "Add Strategy" : "Edit Strategy"}
-        footer={
-          step === "list" ? (
-            <div className="flex items-center justify-between">
+    <Modal
+      open={open}
+      onClose={() => setOpen(false)}
+      title={mode === "create" ? "Add Strategy" : "Edit Strategy"}
+      footer={
+        step === "list" ? (
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              onClick={addRule}
+            >
+              Add New Rule
+            </button>
+            <div className="flex items-center gap-3">
+              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
               <button
-                type="button"
-                className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-                onClick={addRule}
+                onClick={onSubmitNameAndRules}
+                disabled={isSubmitting}
+                className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
               >
-                Add New Rule
+                {mode === "create" ? "Add Strategy" : "Save Changes"}
               </button>
-              <div className="flex items-center gap-3">
-                <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setStep("list")}>Back</button>
+            <div className="flex items-center gap-3">
+              {selectedRuleId && (
                 <button
-                  onClick={onSubmitNameAndRules}
-                  disabled={isSubmitting}
-                  className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+                  className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90"
+                  onClick={() => { if (selectedRuleId) deleteRule(selectedRuleId); setStep("list") }}
                 >
-                  {mode === "create" ? "Add Strategy" : "Save Changes"}
+                  Delete
                 </button>
-              </div>
+              )}
+              <button className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90" onClick={saveRule}>
+                {selectedRuleId ? "Save" : "Add"}
+              </button>
             </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setStep("list")}>Back</button>
-              <div className="flex items-center gap-3">
-                {selectedRuleId && (
-                  <button
-                    className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90"
-                    onClick={() => { if (selectedRuleId) deleteRule(selectedRuleId); setStep("list") }}
-                  >
-                    Delete
-                  </button>
-                )}
-                <button className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90" onClick={saveRule}>
-                  {selectedRuleId ? "Save" : "Add"}
-                </button>
+          </div>
+        )
+      }
+    >
+      <div className="max-h-[70vh] overflow-y-auto pr-1">
+        {step === "list" ? (
+          <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
+            <div>
+              <div className="text-sm mb-1">
+                Strategy Name <span className="text-red-600">*</span>
               </div>
+              <input
+                {...register("name", { required: true })}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              {"name" in errors && (
+                <div className="mt-1 text-xs text-red-600">Strategy Name is required</div>
+              )}
             </div>
-          )
-        }
-      >
-        <div className="max-h-[70vh] overflow-y-auto pr-1">
-          {step === "list" ? (
-            <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
-              <div>
-                <div className="text-sm mb-1">Strategy Name <span className="text-red-600">*</span></div>
-                <input
-                  {...register("name", { required: true })}
-                  placeholder=""
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                {"name" in errors && <div className="mt-1 text-xs text-red-600">Strategy Name is required</div>}
-              </div>
 
-              <div className="mt-2">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-medium">Rules</div>
-                  <button type="button" className="rounded-xl bg-gray-100 px-3 py-1.5 text-sm hover:bg-gray-200" onClick={addRule}>＋ Add rule</button>
-                </div>
-                <div className="border rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-3 py-2">Rule Name</th>
-                        <th className="text-left px-3 py-2">Description</th>
-                        <th className="text-right px-3 py-2">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rules.length ? rules.map(r => (
+            <div className="mt-2">
+              <div className="text-sm mb-1">Notes</div>
+              <textarea
+                {...register("notes")}
+                rows={4}
+                placeholder="Anything you want to remember about this strategy…"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Optional. You can edit these notes anytime.
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Rules</div>
+                <button
+                  type="button"
+                  className="rounded-xl bg-gray-100 px-3 py-1.5 text-sm hover:bg-gray-200"
+                  onClick={addRule}
+                >
+                  ＋ Add rule
+                </button>
+              </div>
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2">Rule Name</th>
+                      <th className="text-left px-3 py-2">Description</th>
+                      <th className="text-right px-3 py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rules.length ? (
+                      rules.map((r) => (
                         <tr key={r.id} className="border-t">
                           <td className="px-3 py-2">{r.title}</td>
-                          <td className="px-3 py-2 text-gray-600">{r.description || "—"}</td>
+                          <td className="px-3 py-2 text-gray-600">
+                            {r.description || "—"}
+                          </td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2 justify-end">
-                              <button type="button" className="text-gray-700 hover:underline" onClick={() => editRule(r.id)}>Edit</button>
-                              <button type="button" className="text-orange-700 hover:underline" onClick={() => deleteRule(r.id)}>Delete</button>
+                              <button
+                                type="button"
+                                className="text-gray-700 hover:underline"
+                                onClick={() => editRule(r.id)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="text-orange-700 hover:underline"
+                                onClick={() => deleteRule(r.id)}
+                              >
+                                Delete
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      )) : (
-                        <tr><td colSpan={3} className="px-3 py-8 text-center text-gray-500">No rules yet</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </form>
-          ) : (
-            <div className="grid gap-4">
-              <div>
-                <div className="text-sm mb-1">Rule Name <span className="text-red-600">*</span></div>
-                <input
-                  value={editTitle}
-                  onChange={e => setEditTitle(e.target.value)}
-                  placeholder="e.g. Break of structure on H1"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <div>
-                <div className="text-sm mb-1">Description</div>
-                <textarea
-                  value={editDesc}
-                  onChange={e => setEditDesc(e.target.value)}
-                  rows={3}
-                  placeholder="Optional description..."
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
-                />
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-8 text-center text-gray-500">
+                          No rules yet
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          )}
-        </div>
-      </Modal>
+          </form>
+        ) : (
+          <div className="grid gap-4">
+            <div>
+              <div className="text-sm mb-1">
+                Rule Name <span className="text-red-600">*</span>
+              </div>
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="e.g. Break of structure on H1"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <div className="text-sm mb-1">Description</div>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+                placeholder="Optional description..."
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
 
       <Modal
         open={confirmOpen}

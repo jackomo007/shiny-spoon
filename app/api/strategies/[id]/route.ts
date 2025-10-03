@@ -15,6 +15,7 @@ const UpsertSchema = z.object({
       })
     )
     .default([]),
+  notes: z.string().max(10000).optional().nullable(),
 });
 
 export async function GET(
@@ -27,7 +28,6 @@ export async function GET(
   }
 
   const { id } = await ctx.params;
-
   const userId = Number(session.user.id);
   const accountId = await getActiveAccountId(userId);
   if (!accountId) {
@@ -47,6 +47,7 @@ export async function GET(
     id: st.id,
     name: st.name,
     date_created: st.date_created,
+    notes: st.notes ?? null,
     rules: st.strategy_rules.map((sr) => ({
       id: sr.rule.id,
       title: sr.rule.title,
@@ -65,7 +66,6 @@ export async function PUT(
   }
 
   const { id } = await ctx.params;
-
   const userId = Number(session.user.id);
   const accountId = await getActiveAccountId(userId);
   if (!accountId) {
@@ -85,10 +85,14 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { name, rules } = parsed.data;
+  const { name, rules, notes } = parsed.data;
 
   await prisma.$transaction(async (tx) => {
-    await tx.strategy.update({ where: { id }, data: { name } });
+    await tx.strategy.update({
+      where: { id },
+      data: { name, notes: (notes ?? "") || null },
+    });
+
     await tx.strategy_rule.deleteMany({ where: { strategy_id: id } });
 
     for (const { title, description } of rules) {
@@ -121,11 +125,6 @@ export async function DELETE(
   }
 
   const { id } = await ctx.params;
-
-  if (!id) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
-
   const userId = Number(session.user.id);
   const accountId = await getActiveAccountId(userId);
   if (!accountId) {

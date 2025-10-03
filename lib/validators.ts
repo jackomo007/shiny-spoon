@@ -8,4 +8,6 @@ export const StrategyUpsert = z.object({
       description: z.string().optional().nullable(),
     })
   ).default([]),
+  notes: z.string().max(10000).optional().nullable(),
 })
+export type StrategyUpsertType = z.infer<typeof StrategyUpsert>
