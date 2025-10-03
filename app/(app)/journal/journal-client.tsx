@@ -287,6 +287,17 @@ export default function JournalPage() {
     }).toString();
   }
 
+  function resetToLast6Months() {
+    const now = new Date();
+    const s = new Date(new Date().setMonth(now.getMonth() - 6));
+    s.setHours(0, 0, 0, 0);
+    const startYMD = s.toISOString().slice(0, 10);
+    const endYMD   = now.toISOString().slice(0, 10);
+    setStart(startYMD);
+    setEnd(endYMD);
+    void load();
+  }
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -610,24 +621,19 @@ export default function JournalPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-      if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(await r.text());
 
-    const savedDate = new Date(base.trade_datetime);
-    const startDate = new Date(`${start}T00:00:00`);
-    const endDate   = new Date(`${end}T23:59:59.999`);
+    const savedYMD = (form.trade_datetime || "").slice(0, 10);
 
-    await load();
-
-    const isOutside =
-      savedDate.getTime() < startDate.getTime() || savedDate.getTime() > endDate.getTime();
-
-    if (isOutside) {
-      setMovedOutBanner(
-        mode === "edit"
-          ? "Heads-up: the edited trade is outside the current date range filter."
-          : "Heads-up: the new trade is outside the current date range filter."
-      );
+    if (savedYMD < start || savedYMD > end) {
+      setStart(savedYMD);
+      setEnd(savedYMD);
+      await load();
+    } else {
+      await load(); 
     }
+
+    setMovedOutBanner(null);
   }
 
   const onSubmit = async (form: JournalForm) => {
@@ -781,11 +787,33 @@ export default function JournalPage() {
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="text-sm text-gray-600">Date range:</div>
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2" />
+
+          <input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2"
+          />
           <span className="text-gray-400">—</span>
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2" />
-          <button className="rounded-xl bg-white px-3 py-2 text-sm border" onClick={() => void load()}>
+          <input
+            type="date"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2"
+          />
+
+          <button
+            className="rounded-xl bg-white px-3 py-2 text-sm border"
+            onClick={() => void load()}
+          >
             Apply
+          </button>
+
+          <button
+            className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
+            onClick={resetToLast6Months}
+          >
+            Reset
           </button>
         </div>
       </Card>

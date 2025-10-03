@@ -68,6 +68,16 @@ export default function StrategiesClient() {
     }).toString();
   }
 
+  function resetToLast6Months() {
+    const now = new Date();
+    const s = new Date(new Date().setMonth(now.getMonth() - 6));
+    const startYMD = s.toISOString().slice(0, 10);
+    const endYMD   = now.toISOString().slice(0, 10);
+    setStart(startYMD);
+    setEnd(endYMD);
+    void load();
+  }
+
   const load = useCallback(async () => {
     try {
       setLoading(true); setError(null);
@@ -298,32 +308,33 @@ export default function StrategiesClient() {
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="text-sm text-gray-600">Date range:</div>
+
           <input
             type="date"
             value={start}
-            onChange={e => setStart(e.target.value)}
+            onChange={(e) => setStart(e.target.value)}
             className="rounded-xl border border-gray-200 px-3 py-2"
           />
           <span className="text-gray-400">—</span>
           <input
             type="date"
             value={end}
-            onChange={e => setEnd(e.target.value)}
+            onChange={(e) => setEnd(e.target.value)}
             className="rounded-xl border border-gray-200 px-3 py-2"
           />
+
+          <button
+            className="rounded-xl bg-white px-3 py-2 text-sm border"
+            onClick={() => void load()}
+          >
+            Apply
+          </button>
+
           <button
             className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
-            onClick={() => {
-              const now = new Date()
-              const s = new Date(new Date().setMonth(now.getMonth() - 6))
-              setStart(s.toISOString().slice(0, 10))
-              setEnd(now.toISOString().slice(0, 10))
-            }}
+            onClick={resetToLast6Months}
           >
-            Last 6 months
-          </button>
-          <button className="rounded-xl bg-white px-3 py-2 text-sm border" onClick={() => void load()}>
-            Apply
+            Reset
           </button>
         </div>
       </Card>
