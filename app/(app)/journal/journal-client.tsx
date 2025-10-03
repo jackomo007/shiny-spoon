@@ -278,60 +278,68 @@ export default function JournalPage() {
     setClosePnl(Number(net.toFixed(2)));
   }, [closeExit, closeSellFee, rowToClose]);
 
+  function buildRangeQS(start: string, end: string) {
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate   = new Date(`${end}T23:59:59.999`);
+    return new URLSearchParams({
+      start: startDate.toISOString(),
+      end:   endDate.toISOString(),
+    }).toString();
+  }
+
   const load = useCallback(async () => {
     try {
-      setLoading(true)
-      setError(null)
-      setMovedOutBanner(null)
+      setLoading(true);
+      setError(null);
+      setMovedOutBanner(null);
 
-      const qs = new URLSearchParams({ start, end }).toString()
+      const qs = buildRangeQS(start, end);
       const [jr, st, jn] = await Promise.all([
         fetch(`/api/journal?${qs}`, { cache: "no-store" }),
-        fetch(`/api/strategies`, { cache: "no-store" }),
-        fetch(`/api/journals`, { cache: "no-store" }),
-      ])
+        fetch(`/api/strategies`,   { cache: "no-store" }),
+        fetch(`/api/journals`,     { cache: "no-store" }),
+      ]);
 
-      if (!jr.ok) throw new Error(await jr.text())
-      if (!st.ok) throw new Error(await st.text())
+      if (!jr.ok) throw new Error(await jr.text());
+      if (!st.ok) throw new Error(await st.text());
 
-      const j = (await jr.json()) as { items: JournalRow[] }
-      setItems(j.items)
+      const j = (await jr.json()) as { items: JournalRow[] };
+      setItems(j.items);
 
       const sPayload:
         | { items?: Array<{ id: string; name: string | null; strategy_rules?: Array<{ rule: { id: string; title: string } }> }> }
         | Array<{ id: string; name: string | null }>
-        = await st.json()
+        = await st.json();
 
       const arr: StrategyWithRules[] = Array.isArray(sPayload)
         ? sPayload.map((x) => {
-            const prev = strategiesRef.current.find(s => s.id === x.id)
-            return { id: x.id, name: x.name, rules: prev?.rules ?? [] }
+            const prev = strategiesRef.current.find(s => s.id === x.id);
+            return { id: x.id, name: x.name, rules: prev?.rules ?? [] };
           })
         : (sPayload.items ?? []).map((x) => ({
             id: x.id,
             name: x.name,
             rules: (x.strategy_rules ?? []).map((sr) => ({ id: sr.rule.id, title: sr.rule.title })),
-          }))
-        setStrategies(arr)
+          }));
+      setStrategies(arr);
 
-      if (!jn.ok) throw new Error(await jn.text())
-      const jnPayload = (await jn.json()) as JournalsPayload
-      const list = jnPayload.items ?? []
-      setJournals(list)
-      setActiveJournalId(jnPayload.activeJournalId ?? null)
+      if (!jn.ok) throw new Error(await jn.text());
+      const jnPayload = (await jn.json()) as JournalsPayload;
+      const list = jnPayload.items ?? [];
+      setJournals(list);
+      setActiveJournalId(jnPayload.activeJournalId ?? null);
 
-      const name =
-        list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? ""
-      setActiveJournalName(name)
+      const name = list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? "";
+      setActiveJournalName(name);
 
       return j.items;
-
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load journal")
+      setError(e instanceof Error ? e.message : "Failed to load journal");
+      return [];
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [start, end])
+  }, [start, end]);
 
   const wTfNum = watch("timeframe_number");
   const wTfUnit = watch("timeframe_unit");
@@ -602,17 +610,23 @@ export default function JournalPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await r.text());
 
     const savedDate = new Date(base.trade_datetime);
-    const startDate = new Date(start); startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(end); endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate   = new Date(`${end}T23:59:59.999`);
 
     await load();
 
-    const stillThere = items.some(i => i.id === editingId);
-    if (!stillThere && (savedDate < startDate || savedDate > endDate)) {
-      setMovedOutBanner("Heads-up: the edited trade is outside the current date range filter.");
+    const isOutside =
+      savedDate.getTime() < startDate.getTime() || savedDate.getTime() > endDate.getTime();
+
+    if (isOutside) {
+      setMovedOutBanner(
+        mode === "edit"
+          ? "Heads-up: the edited trade is outside the current date range filter."
+          : "Heads-up: the new trade is outside the current date range filter."
+      );
     }
   }
 

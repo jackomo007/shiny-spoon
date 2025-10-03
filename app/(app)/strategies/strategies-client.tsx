@@ -59,21 +59,30 @@ export default function StrategiesClient() {
       defaultValues: { name: "", notes: "" },
     })
 
+  function buildRangeQS(start: string, end: string) {
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate   = new Date(`${end}T23:59:59.999`);
+    return new URLSearchParams({
+      start: startDate.toISOString(),
+      end:   endDate.toISOString(),
+    }).toString();
+  }
+
   const load = useCallback(async () => {
     try {
-      setLoading(true); setError(null)
-      const qs = new URLSearchParams({ start, end }).toString()
-      const r = await fetch(`/api/strategies?${qs}`, { cache: "no-store" })
-      if (!r.ok) throw new Error(await r.text())
-      const data = await r.json() as { items: Row[]; summary: { topPerformingId: string|null; mostUsedId: string|null } }
-      setItems(data.items)
-      setSummary(data.summary)
+      setLoading(true); setError(null);
+      const qs = buildRangeQS(start, end);
+      const r = await fetch(`/api/strategies?${qs}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json() as { items: Row[]; summary: { topPerformingId: string|null; mostUsedId: string|null } };
+      setItems(data.items);
+      setSummary(data.summary);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load strategies")
+      setError(e instanceof Error ? e.message : "Failed to load strategies");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [start, end])
+  }, [start, end]);
 
   useEffect(() => { void load() }, [load])
 
