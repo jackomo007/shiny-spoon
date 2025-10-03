@@ -1067,11 +1067,6 @@ export default function JournalPage() {
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-                      {hasExit && derivedStatus && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b>.
-                        </p>
-                      )}
                     </div>
 
                     <div>
@@ -1280,12 +1275,6 @@ export default function JournalPage() {
                       </select>
                       {errors.status && (
                         <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
-                      )}
-
-                      {hasExit && derivedStatus && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          Status will automatically be set to <b>{derivedStatus.replace("_", " ")}</b> on save.
-                        </p>
                       )}
                     </div>
                     <div>
