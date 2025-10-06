@@ -114,7 +114,11 @@ export async function POST(req: Request) {
     });
 
     const { text, model, prompt: usedPrompt, usage } =
-      await analyzeTradeWithChart({ imageUrl, prompt });
+      await analyzeTradeWithChart({
+        imageUrl,
+        prompt,
+        context: { overlay: snapshot },
+      });
 
     const MAX_TEXT = 65000,
       MAX_URL = 2048;

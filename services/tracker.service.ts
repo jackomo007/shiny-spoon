@@ -68,7 +68,9 @@ export async function runAnalysisForTracker(trackerId: string) {
       createdAt: new Date().toISOString(),
     };
 
-    const { text, model, prompt, usage } = await analyzeChartImage(imageUrl);
+    const { text, model, prompt, usage } = await analyzeChartImage(imageUrl, {
+      overlay: snapshot,
+    });
 
     await prisma.chart_analysis.create({
       data: {

@@ -18,13 +18,37 @@ function imagePart(url: string): ChatCompletionContentPartImage {
   return { type: "image_url", image_url: { url } };
 }
 
-export async function analyzeChartImage(imageUrl: string) {
+type OverlaySnapshot = {
+  symbol: string;
+  exchange: string;
+  timeframe: string;
+  priceClose: number;
+  priceDiff: number;
+  pricePct: number;
+  high: number;
+  low: number;
+  volumeLast: number;
+  avgVol30: number;
+  createdAt: string;
+};
+
+type ChartContext = {
+  overlay?: OverlaySnapshot;
+  rightAxisTicks?: number[];
+  plot?: { padding: number; heightPx: number };
+};
+
+export async function analyzeChartImage(imageUrl: string, ctx?: ChartContext) {
   const systemPrompt = await getPrompt("chart_analysis_system");
-  const userText = "Analyze this chart and tell me what's happening.";
+  const userText =
+    "Analyze this chart. Use the structured data below for precise prices and stats. If the image and data disagree, prefer the data.";
   const model = process.env.CHART_ANALYZER_MODEL ?? "gpt-4o-mini";
+
+  const structured = ctx ? JSON.stringify(ctx, null, 2) : "{}";
 
   const userContent: ChatCompletionContentPart[] = [
     textPart(userText),
+    textPart("```json\n" + structured + "\n```"),
     imagePart(imageUrl),
   ];
 
@@ -54,12 +78,16 @@ export async function analyzeTradeWithChart(args: {
   imageUrl: string;
   prompt: string;
   model?: string;
+  context?: ChartContext;
 }) {
   const model = args.model ?? (process.env.TRADE_ANALYZER_MODEL ?? "gpt-4o-mini");
   const systemPrompt = await getPrompt("trade_analyzer_system");
 
+  const structured = args.context ? JSON.stringify(args.context, null, 2) : "{}";
+
   const userContent: ChatCompletionContentPart[] = [
     textPart(args.prompt),
+    textPart("```json\n" + structured + "\n```"),
     imagePart(args.imageUrl),
   ];
 
