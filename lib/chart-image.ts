@@ -70,7 +70,6 @@ export async function generateCandlePng(
   const wick = opts.wickColor ?? "#374151"
   const bg = opts.bgColor ?? "#ffffff"
   const grid = opts.gridColor ?? "#eef2f7"
-  const axis = opts.axisColor ?? "#6b7280"
 
   const canvas = createCanvas(width, height)
   const ctx = canvas.getContext("2d")
@@ -106,14 +105,6 @@ export async function generateCandlePng(
     ctx.moveTo(plotX, y)
     ctx.lineTo(plotX + plotW, y)
     ctx.stroke()
-  }
-
-  ctx.fillStyle = axis
-  ctx.font = `12px ${family}`
-  for (let i = 0; i <= gridLines; i++) {
-    const val = maxH - (range * i) / gridLines
-    const y = plotY + (plotH * i) / gridLines
-    ctx.fillText(val.toFixed(2), Math.max(8, plotX - 42), y + 4)
   }
 
   const n = candles.length
