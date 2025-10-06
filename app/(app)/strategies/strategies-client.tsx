@@ -331,9 +331,11 @@ export default function StrategiesClient() {
           </button>
 
           <button
-            className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
+            type="button"
             onClick={resetToLast6Months}
+            className="group relative overflow-hidden rounded-xl bg-gray-100 px-3 py-2 text-sm hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 active:translate-y-[0.5px]"
           >
+            <span className="pointer-events-none absolute inset-0 rounded-xl bg-black/10 opacity-0 transition-opacity duration-150 group-active:opacity-100" />
             Reset
           </button>
         </div>
