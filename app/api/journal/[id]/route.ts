@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
+import { Prisma } from "@prisma/client"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
 
-const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
+const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/
 
 const BaseSchema = z.object({
   strategy_id: z.string().min(1),
@@ -25,6 +25,7 @@ const BaseSchema = z.object({
   timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
   buy_fee: z.number().nonnegative().default(0),
   sell_fee: z.number().nonnegative().optional(),
+  trading_fee: z.number().nonnegative().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
@@ -124,8 +125,8 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const sellFeeToPersist: Prisma.Decimal | undefined =
     (data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined)
 
-  await prisma.$transaction(async (tx) => {
-    await tx.journal_entry.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const u = await tx.journal_entry.update({
       where: { id },
       data: {
         trade_type: tradeType,
@@ -141,11 +142,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
         ...(sellFeeToPersist !== undefined ? { sell_fee: sellFeeToPersist } : {}),
+        trading_fee: new Prisma.Decimal(data.trading_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: exitToPersist,
         stop_loss_price: data.stop_loss_price ?? null,
       },
+      select: { id: true, status: true, exit_price: true, trading_fee: true },
     })
 
     if (tradeType === 1) {
@@ -177,11 +180,17 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         })
       }
     }
+
+    return u
   })
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({
+    id: updated.id,
+    status: updated.status as Status,
+    exit_price: updated.exit_price != null ? Number(updated.exit_price) : null,
+    trading_fee: Number(updated.trading_fee ?? 0),
+  })
 }
-
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params

@@ -23,8 +23,7 @@ type JournalRow = {
   strategy_id: string
   pnl: number | null
   leverage: number | null
-  buy_fee: number
-  sell_fee: number
+  trading_fee: number
   timeframe_code: string
   liquidation_price: number | null
   stop_loss_price: number | null
@@ -44,7 +43,7 @@ type JournalForm = {
 
   timeframe_number?: string
   timeframe_unit?: "S" | "M" | "H" | "D" | "W" | "Y"
-  buy_fee?: string
+  trading_fee?: string
 
   side?: Side
   status?: Status
@@ -67,6 +66,13 @@ type Rule = { id: string; title: string }
 type HasRules = { rules?: Rule[] | undefined }
 type HasStrategyRules = { strategy_rules?: Array<{ rule?: Rule | null | undefined }> | undefined }
 type MaybeWithRules = HasRules | HasStrategyRules | StrategyWithRules | undefined
+
+type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
+  trading_fee?: number | null
+  buy_fee?: number | null
+  sell_fee?: number | null
+}
+type JournalIndexResponse = { items: JournalApiItem[] }
 
 function hasRules(x: unknown): x is HasRules {
   return typeof x === "object" && x !== null && Array.isArray((x as HasRules).rules)
@@ -101,7 +107,6 @@ const fmt4 = (n: number | null | undefined) => {
 
 const money2 = (n: number) => `$${n.toFixed(2)}`;
 
-
 type BasePayload = {
   strategy_id: string
   asset_name: string
@@ -116,10 +121,8 @@ type BasePayload = {
   notes_entry: string | null
   notes_review: string | null
   timeframe_code: string
-  buy_fee: number
-  sell_fee?: number
+  trading_fee: number
 }
-
 
 type CreateSpotPayload = BasePayload & { trade_type: 1 }
 type CreateFuturesPayload = BasePayload & {
@@ -187,7 +190,7 @@ export default function JournalPage() {
       trade_datetime: toLocalInputValue(new Date()),
       timeframe_number: "4",
       timeframe_unit: "H",
-      buy_fee: "0", 
+      trading_fee: "0",
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
@@ -211,7 +214,7 @@ export default function JournalPage() {
   const [closing, setClosing] = useState(false);
   const [rowToClose, setRowToClose] = useState<JournalRow | null>(null);
   const [closeExit, setCloseExit] = useState<string>("");
-  const [closeSellFee, setCloseSellFee] = useState<string>("0");
+  const [closeTradingFee, setCloseTradingFee] = useState<string>("0");
   const [closePnl, setClosePnl] = useState<number | null>(null);
 
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
@@ -257,7 +260,7 @@ export default function JournalPage() {
     if (r.status !== "in_progress") return;
     setRowToClose(r);
     setCloseExit(r.exit_price != null ? String(r.exit_price) : "");
-    setCloseSellFee("0");
+    setCloseTradingFee(String(r.trading_fee ?? 0));
     setClosePnl(null);
     setCloseOpen(true);
   }
@@ -265,18 +268,17 @@ export default function JournalPage() {
   useEffect(() => {
     if (!rowToClose) return;
     const exit = parseFloat(closeExit);
-    const sellFeeNum = parseFloat(closeSellFee);
-    if (isNaN(exit) || isNaN(sellFeeNum)) { setClosePnl(null); return; }
+    const tradingFeeNum = parseFloat(closeTradingFee);
+    if (isNaN(exit) || isNaN(tradingFeeNum)) { setClosePnl(null); return; }
     const dir = (rowToClose.side === "buy" || rowToClose.side === "long") ? 1 : -1;
     const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
     const notional = rowToClose.trade_type === 2
       ? (rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1))
       : rowToClose.amount_spent;
     const gross = dir * notional * change;
-    const buyFee = Number(rowToClose.buy_fee ?? 0);
-    const net = gross - (buyFee + sellFeeNum);
+    const net = gross - tradingFeeNum;
     setClosePnl(Number(net.toFixed(2)));
-  }, [closeExit, closeSellFee, rowToClose]);
+  }, [closeExit, closeTradingFee, rowToClose]);
 
   function buildRangeQS(start: string, end: string) {
     const startDate = new Date(`${start}T00:00:00`);
@@ -298,6 +300,35 @@ export default function JournalPage() {
     void load();
   }
 
+  function normalizeJournal(it: JournalApiItem): JournalRow {
+    const unifiedFee =
+      (it.trading_fee ?? null) != null
+        ? Number(it.trading_fee)
+        : (Number(it.buy_fee ?? 0) + Number(it.sell_fee ?? 0))
+
+    return {
+      id: it.id,
+      asset_name: it.asset_name,
+      trade_type: it.trade_type,
+      side: it.side,
+      status: it.status,
+      entry_price: Number(it.entry_price),
+      exit_price: it.exit_price == null ? null : Number(it.exit_price),
+      amount_spent: Number(it.amount_spent),
+      date: it.date,
+      strategy_id: it.strategy_id,
+      pnl: it.pnl == null ? null : Number(it.pnl),
+      leverage: it.leverage == null ? null : Number(it.leverage),
+      timeframe_code: it.timeframe_code,
+      liquidation_price: it.liquidation_price == null ? null : Number(it.liquidation_price),
+      stop_loss_price: it.stop_loss_price == null ? null : Number(it.stop_loss_price),
+      strategy_rule_match: Number(it.strategy_rule_match ?? 0),
+      notes_entry: it.notes_entry,
+      notes_review: it.notes_review,
+      trading_fee: Number(unifiedFee) || 0,
+    }
+  }
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -314,8 +345,8 @@ export default function JournalPage() {
       if (!jr.ok) throw new Error(await jr.text());
       if (!st.ok) throw new Error(await st.text());
 
-      const j = (await jr.json()) as { items: JournalRow[] };
-      setItems(j.items);
+      const j: JournalIndexResponse = await jr.json();
+      setItems((j.items ?? []).map(normalizeJournal));
 
       const sPayload:
         | { items?: Array<{ id: string; name: string | null; strategy_rules?: Array<{ rule: { id: string; title: string } }> }> }
@@ -343,7 +374,7 @@ export default function JournalPage() {
       const name = list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? "";
       setActiveJournalName(name);
 
-      return j.items;
+      return (j.items ?? []).map(normalizeJournal);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load journal");
       return [];
@@ -439,7 +470,7 @@ export default function JournalPage() {
 
     setValue("timeframe_number", lastTfNum, { shouldValidate: false, shouldDirty: false });
     setValue("timeframe_unit", lastTfUnit,   { shouldValidate: false, shouldDirty: false });
-    setValue("buy_fee", "0", { shouldValidate: false, shouldDirty: false });
+    setValue("trading_fee", "0", { shouldValidate: false, shouldDirty: false });
 
     setOpen(true);
   }
@@ -471,16 +502,16 @@ export default function JournalPage() {
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
     })
-    const tf = row.timeframe_code || "";
-    const tfNum = tf.replace(/[A-Z]$/i, "");
-    const tfUnit = tf.slice(-1).toUpperCase() as "S"|"M"|"H"|"D"|"W"|"Y";
-    setValue("timeframe_number", tfNum || "1", { shouldValidate: false });
+    const tf = row.timeframe_code || ""
+    const tfNum = tf.replace(/[A-Z]$/i, "")
+    const tfUnit = tf.slice(-1).toUpperCase() as "S"|"M"|"H"|"D"|"W"|"Y"
+    setValue("timeframe_number", tfNum || "1", { shouldValidate: false })
     setValue(
       "timeframe_unit",
       (["S","M","H","D","W","Y"].includes(tfUnit) ? tfUnit : "H") as JournalForm["timeframe_unit"],
       { shouldValidate: false }
-    );
-    setValue("buy_fee", String(row.buy_fee ?? 0), { shouldValidate: false });
+    )
+    setValue("trading_fee", String(row.trading_fee ?? 0), { shouldValidate: false, shouldDirty: false })
     setValue("strategy_id", row.strategy_id, { shouldValidate: false, shouldDirty: false })
 
     const rulesForStrategy = normalizeRules(
@@ -554,17 +585,17 @@ export default function JournalPage() {
     }
     if (wizardStep === 2) {
       if (wTradeType === 1) {
-        const ok = await trigger(["status", "amount_spent", "entry_price", "buy_fee"])
+        const ok = await trigger(["status", "amount_spent", "entry_price", "trading_fee"])
         if (ok) setWizardStep(3)
       } else {
-      const ok = await trigger(["amount_spent", "entry_price", "leverage", "buy_fee", "status", "side"])
+        const ok = await trigger(["amount_spent", "entry_price", "leverage", "trading_fee", "status", "side"])
         if (ok) setWizardStep(3)
       }
       return
     }
   }
 
-  async function submitFinal(form: JournalForm) {
+ async function submitFinal(form: JournalForm) {
     const tradeType = Number(form.trade_type) as TradeType;
     const ruleCount = (form.matched_rule_ids ?? []).length;
 
@@ -576,7 +607,7 @@ export default function JournalPage() {
 
     const timeframe_code = `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
 
-    const base: Omit<BasePayload, "sell_fee"> & { sell_fee?: number } = {
+    const base: BasePayload = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
@@ -590,12 +621,8 @@ export default function JournalPage() {
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
       timeframe_code,
-      buy_fee: Number(form.buy_fee ?? 0),
+      trading_fee: Number(form.trading_fee ?? 0),
     };
-
-    if (base.status === "in_progress") {
-      base.sell_fee = 0;
-    }
 
     let payload: CreatePayload;
     if (tradeType === 2) {
@@ -623,6 +650,34 @@ export default function JournalPage() {
     });
     if (!r.ok) throw new Error(await r.text());
 
+    if (method === "PUT" && editingId) {
+      type PutReturn = {
+        id: string;
+        status: Status;
+        exit_price: number | null;
+        trading_fee: number;
+      };
+      const saved: PutReturn = await r.json();
+
+      setItems(prev =>
+        prev.map(it =>
+          it.id === editingId
+            ? {
+                ...it,
+                status: saved.status ?? it.status,
+                exit_price: saved.exit_price ?? it.exit_price,
+                trading_fee:
+                  typeof saved.trading_fee === "number"
+                    ? saved.trading_fee
+                    : it.trading_fee,
+              }
+            : it
+        )
+      );
+    } else {
+      await r.json().catch(() => undefined);
+    }
+
     const savedYMD = (form.trade_datetime || "").slice(0, 10);
 
     if (savedYMD < start || savedYMD > end) {
@@ -630,7 +685,7 @@ export default function JournalPage() {
       setEnd(savedYMD);
       await load();
     } else {
-      await load(); 
+      await load();
     }
 
     setMovedOutBanner(null);
@@ -639,9 +694,9 @@ export default function JournalPage() {
   const onSubmit = async (form: JournalForm) => {
     try {
       await submitFinal(form)
-        if (mode === "edit" && editingId) {
-          saveRuleIds(editingId, form.matched_rule_ids ?? [])
-        }
+      if (mode === "edit" && editingId) {
+        saveRuleIds(editingId, form.matched_rule_ids ?? [])
+      }
       setOpen(false)
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save")
@@ -698,28 +753,28 @@ export default function JournalPage() {
   }
 
   useEffect(() => {
-  let abort = false
-  async function loadRules() {
-    if (!wStrategyId) return
+    let abort = false
+    async function loadRules() {
+      if (!wStrategyId) return
 
-    const fromList = normalizeRules(
-      strategiesRef.current.find(s => s.id === wStrategyId)
-    )
-    if (fromList.length) {
-      if (!abort) setStrategyRules(fromList)
-    }
+      const fromList = normalizeRules(
+        strategiesRef.current.find(s => s.id === wStrategyId)
+      )
+      if (fromList.length) {
+        if (!abort) setStrategyRules(fromList)
+      }
 
-    try {
-      const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
-      if (!r.ok) throw new Error(await r.text())
-      const data: unknown = await r.json()
-      const normalized = normalizeRules(data as MaybeWithRules)
-      if (!abort) setStrategyRules(normalized)
-    } catch {
-      if (!abort) setStrategyRules(fromList ?? [])
+      try {
+        const r = await fetch(`/api/strategies/${wStrategyId}`, { cache: "no-store" })
+        if (!r.ok) throw new Error(await r.text())
+        const data: unknown = await r.json()
+        const normalized = normalizeRules(data as MaybeWithRules)
+        if (!abort) setStrategyRules(normalized)
+      } catch {
+        if (!abort) setStrategyRules(fromList ?? [])
+      }
     }
-  }
-  void loadRules()
+    void loadRules()
     return () => { abort = true }
   }, [wStrategyId, open])
 
@@ -742,14 +797,14 @@ export default function JournalPage() {
           >
             📒 Manage Journals
           </a>
-         <button
-          onClick={() => setExportOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">
-          📄 Export
-        </button>
+          <button
+            onClick={() => setExportOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">
+            📄 Export
+          </button>
           <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
         </div>
-    </div>
+      </div>
       {movedOutBanner && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{movedOutBanner}</div>
       )}
@@ -860,7 +915,8 @@ export default function JournalPage() {
           </div>
         </div>
 
-        <div className="px-6 pb-2 overflow-x-auto">
+        {/* tabela apenas em >= md */}
+        <div className="px-6 pb-2 overflow-x-auto hidden md:block">
           {loading ? (
             <div className="py-10 text-center text-sm text-gray-500">Loading…</div>
           ) : error ? (
@@ -921,6 +977,73 @@ export default function JournalPage() {
                 ))}
               </tbody>
             </Table>
+          )}
+        </div>
+
+        {/* cards apenas em < md */}
+        <div className="px-6 pb-4 md:hidden">
+          {loading ? (
+            <div className="py-8 text-center text-sm text-gray-500">Loading…</div>
+          ) : error ? (
+            <div className="py-8 text-center text-sm text-red-600">{error}</div>
+          ) : (
+            <div className="grid gap-3">
+              {rows.map(r => (
+                <div key={r.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {r.asset_name}{" "}
+                      <span className="text-xs text-gray-500">({r.trade_type === 2 ? "Futures" : "Spot"})</span>
+                    </div>
+                    <div className="text-xs px-2 py-1 rounded-full bg-gray-100">{r.timeframe_code}</div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-gray-500 text-xs">Side</div>
+                      <div className="font-mono">{r.side}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-gray-500 text-xs">Date</div>
+                      <div>{new Date(r.date).toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs">Entry</div>
+                      <div className="font-mono">{fmt4(r.entry_price)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-gray-500 text-xs">Exit</div>
+                      <div className="font-mono">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs">Amount Spent</div>
+                      <div className="font-mono">{money2(r.amount_spent)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-gray-500 text-xs">PnL</div>
+                      <div className="font-mono">{r.pnl != null ? money2(r.pnl) : "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    {r.status === "in_progress" ? (
+                      <button
+                        title="Close Trade"
+                        onClick={() => openCloseModal(r)}
+                        className="px-3 py-2 rounded bg-red-600 text-white text-xs hover:bg-red-700">
+                        Close Trade
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
+                    )}
+                    <div className="flex gap-3">
+                      <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
+                      <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </Card>
@@ -1093,77 +1216,77 @@ export default function JournalPage() {
               <>
                 {wTradeType === 1 ? (
                   <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm mb-1">Status</div>
-                      <select
-                        {...register("status", { required: "Status is required" })}
-                        onChange={(e) => {
-                          const val = e.target.value as Status;
-                          setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                        }}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      >
-                        <option value="in_progress">In Progress</option>
-                        <option value="win">Win</option>
-                        <option value="loss">Loss</option>
-                        <option value="break_even">Break-Even</option>
-                      </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">Status</div>
+                        <select
+                          {...register("status", { required: "Status is required" })}
+                          onChange={(e) => {
+                            const val = e.target.value as Status;
+                            setValue("status", val, { shouldDirty: true, shouldValidate: true });
+                          }}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        >
+                          <option value="in_progress">In Progress</option>
+                          <option value="win">Win</option>
+                          <option value="loss">Loss</option>
+                          <option value="break_even">Break-Even</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="text-sm mb-1">
+                          Trading Fee <span className="text-red-600">*</span>
+                        </div>
+                        <input
+                          {...register("trading_fee", {
+                            required: "Trading fee is required",
+                            validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                          })}
+                          inputMode="decimal"
+                          placeholder="0"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                        {errors.trading_fee && (
+                          <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <div className="text-sm mb-1">
-                        Buy Fee <span className="text-red-600">*</span>
+                        Amount Spent <span className="text-red-600">*</span>
                       </div>
                       <input
-                        {...register("buy_fee", {
-                          required: "Buy fee is required",
-                          validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
-                        })}
-                        defaultValue="0"
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.buy_fee && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm mb-1">
-                      Amount Spent <span className="text-red-600">*</span>
-                    </div>
-                    <input
-                      {...register("amount_spent", {
-                        required: "Amount spent is required",
-                        validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
-                      })}
-                      inputMode="decimal"
-                      placeholder="e.g. 500.00"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                    {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-sm mb-1">
-                        Entry Price <span className="text-red-600">*</span>
-                      </div>
-                      <input
-                        {...register("entry_price", {
-                          required: "Entry price is required",
+                        {...register("amount_spent", {
+                          required: "Amount spent is required",
                           validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
                         })}
                         inputMode="decimal"
-                        placeholder="e.g. 27654.32"
+                        placeholder="e.g. 500.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
                     </div>
-                  </div>
+
+                    <div className="grid grid-cols-1 md:col-span-full gap-4">
+                      <div>
+                        <div className="text-sm mb-1">
+                          Entry Price <span className="text-red-600">*</span>
+                        </div>
+                        <input
+                          {...register("entry_price", {
+                            required: "Entry price is required",
+                            validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
+                          })}
+                          inputMode="decimal"
+                          placeholder="e.g. 27654.32"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                        {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                      </div>
+                    </div>
+
                     <div>
                       <div className="text-sm mb-1">Exit Price</div>
                       <input
@@ -1237,7 +1360,7 @@ export default function JournalPage() {
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
                       </div>
-                      <div>
+                      <div className="md:col-span-full">
                         <div className="text-sm mb-1">Stop Loss Price</div>
                         <input
                           {...register("stop_loss_price")}
@@ -1249,22 +1372,21 @@ export default function JournalPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
+                      <div className="md:col-span-full">
                         <div className="text-sm mb-1">
-                          Buy Fee <span className="text-red-600">*</span>
+                          Trading Fee <span className="text-red-600">*</span>
                         </div>
                         <input
-                          {...register("buy_fee", {
-                            required: "Buy fee is required",
+                          {...register("trading_fee", {
+                            required: "Trading fee is required",
                             validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
                           })}
-                          defaultValue="0"
                           inputMode="decimal"
                           placeholder="0"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        {errors.buy_fee && (
-                          <p className="mt-1 text-xs text-red-600">{String(errors.buy_fee.message)}</p>
+                        {errors.trading_fee && (
+                          <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
                         )}
                       </div>
                     </div>
@@ -1290,7 +1412,7 @@ export default function JournalPage() {
                         )}
                       </div>
                       <div>
-                        <div className="text-sm mb-1">Liquidation Price (optional)</div>
+                        <div className="text-sm mb-1">Liquidation Price</div>
                         <input
                           {...register("liquidation_price")}
                           inputMode="decimal"
@@ -1340,7 +1462,7 @@ export default function JournalPage() {
             )}
             {wizardStep === 3 && (
               <>
-                 <div>
+                <div>
                   <div className="text-sm mb-2">
                     How Many Strategy Rules Did Your Setup Follow? (Optional)
                   </div>
@@ -1412,6 +1534,7 @@ export default function JournalPage() {
       >
         <div className="text-sm text-gray-600">This action cannot be undone.</div>
       </Modal>
+
       <Modal
         open={closeOpen}
         onClose={() => setCloseOpen(false)}
@@ -1425,9 +1548,9 @@ export default function JournalPage() {
               onClick={async () => {
                 if (!rowToClose) return;
                 const exitNum = parseFloat(closeExit);
-                const sellFeeNum = parseFloat(closeSellFee);
+                const tradingFeeNum = parseFloat(closeTradingFee);
                 if (!(exitNum > 0)) { alert("Exit price is required"); return; }
-                if (!(sellFeeNum >= 0)) { alert("Sell fee must be ≥ 0"); return; }
+                if (!(tradingFeeNum >= 0)) { alert("Trading fee must be ≥ 0"); return; }
                 try {
                   setClosing(true);
                   const computedStatus: Status = (() => {
@@ -1440,44 +1563,63 @@ export default function JournalPage() {
                   })();
 
                   const baseClose: BasePayload = {
-                  strategy_id: rowToClose.strategy_id,
-                  asset_name: rowToClose.asset_name,
-                  trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
-                  side: rowToClose.side,
-                  status: computedStatus,
-                  amount_spent: rowToClose.amount_spent,
-                  entry_price: rowToClose.entry_price,
-                  exit_price: exitNum,
-                  stop_loss_price: rowToClose.stop_loss_price ?? null,
-                  strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
-                  notes_entry: rowToClose.notes_entry ?? null,
-                  notes_review: rowToClose.notes_review ?? null,
-                  timeframe_code: rowToClose.timeframe_code,
-                  buy_fee: rowToClose.buy_fee ?? 0,
-                  sell_fee: sellFeeNum,
-                };
+                    strategy_id: rowToClose.strategy_id,
+                    asset_name: rowToClose.asset_name,
+                    trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
+                    side: rowToClose.side,
+                    status: computedStatus,
+                    amount_spent: rowToClose.amount_spent,
+                    entry_price: rowToClose.entry_price,
+                    exit_price: exitNum,
+                    stop_loss_price: rowToClose.stop_loss_price ?? null,
+                    strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
+                    notes_entry: rowToClose.notes_entry ?? null,
+                    notes_review: rowToClose.notes_review ?? null,
+                    timeframe_code: rowToClose.timeframe_code,
+                    trading_fee: tradingFeeNum,
+                  };
 
-                const payloadClose: CreatePayload =
-                  rowToClose.trade_type === 2
-                    ? {
-                        ...baseClose,
-                        trade_type: 2,
-                        futures: {
-                          leverage: rowToClose.leverage ?? 1,
-                          liquidation_price: rowToClose.liquidation_price ?? null,
-                        },
-                      }
-                    : {
-                        ...baseClose,
-                        trade_type: 1,
-                      };
+                  const payloadClose: CreatePayload =
+                    rowToClose.trade_type === 2
+                      ? {
+                          ...baseClose,
+                          trade_type: 2,
+                          futures: {
+                            leverage: rowToClose.leverage ?? 1,
+                            liquidation_price: rowToClose.liquidation_price ?? null,
+                          },
+                        }
+                      : {
+                          ...baseClose,
+                          trade_type: 1,
+                        };
 
-                const r = await fetch(`/api/journal/${rowToClose.id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payloadClose),
-                });
-                  if (!r.ok) throw new Error(await r.text());
+                  const r = await fetch(`/api/journal/${rowToClose.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payloadClose),
+                  });
+                  type PutReturn = {
+                    id: string;
+                    status: Status;
+                    exit_price: number | null;
+                    trading_fee: number;
+                  };
+
+                  const saved: PutReturn = await r.json();
+
+                  setItems(prev =>
+                    prev.map(it =>
+                      it.id === rowToClose.id
+                        ? {
+                            ...it,
+                            status: saved.status ?? it.status,
+                            exit_price: saved.exit_price ?? it.exit_price,
+                            trading_fee: typeof saved.trading_fee === "number" ? saved.trading_fee : it.trading_fee,
+                          }
+                        : it
+                    )
+                  );
                   setCloseOpen(false);
                   await load();
                 } catch (e) {
@@ -1518,10 +1660,10 @@ export default function JournalPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <div className="text-xs text-gray-500">Sell Fee <span className="text-red-600">*</span></div>
+                <div className="text-xs text-gray-500">Trading Fee <span className="text-red-600">*</span></div>
                 <input
-                  value={closeSellFee}
-                  onChange={(e) => setCloseSellFee(e.target.value)}
+                  value={closeTradingFee}
+                  onChange={(e) => setCloseTradingFee(e.target.value)}
                   inputMode="decimal"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
                 />

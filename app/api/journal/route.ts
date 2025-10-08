@@ -9,7 +9,7 @@ import { getActiveJournalId } from "@/lib/journal"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
 
-const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/;
+const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/
 
 function parseRange(searchParams: URLSearchParams) {
   const end = searchParams.get("end") ? new Date(searchParams.get("end")!) : new Date()
@@ -30,6 +30,7 @@ function calcPnl(input: {
   tradeType: 1 | 2
   buyFee?: number
   sellFee?: number
+  tradingFee?: number | null
 }): number | null {
   if (input.exit == null) return null
   const dir = (input.side === "buy" || input.side === "long") ? 1 : -1
@@ -37,8 +38,12 @@ function calcPnl(input: {
   const notional = input.tradeType === 2
     ? input.amountSpent * Math.max(1, input.leverage ?? 1)
     : input.amountSpent
+
   const gross = dir * notional * change
-  const fees = Number(input.buyFee ?? 0) + Number(input.sellFee ?? 0)
+  const fees = (input.tradingFee != null)
+    ? Number(input.tradingFee)
+    : (Number(input.buyFee ?? 0) + Number(input.sellFee ?? 0))
+
   const net = gross - fees
   return Number(net.toFixed(2))
 }
@@ -58,6 +63,7 @@ const BaseSchema = z.object({
   timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
   buy_fee: z.number().nonnegative().default(0),
   sell_fee: z.number().nonnegative().optional(),
+  trading_fee: z.number().nonnegative().optional(),
   strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
   notes_entry: z.string().optional().nullable(),
   notes_review: z.string().optional().nullable(),
@@ -137,6 +143,7 @@ export async function GET(req: Request) {
       tradeType: r.trade_type as 1 | 2,
       buyFee: Number(r.buy_fee),
       sellFee: Number(r.sell_fee),
+      tradingFee: r.trading_fee != null ? Number(r.trading_fee) : null,
     })
     return {
       id: r.id,
@@ -151,6 +158,7 @@ export async function GET(req: Request) {
       strategy_id: r.strategy_id,
       buy_fee: Number(r.buy_fee),
       sell_fee: Number(r.sell_fee),
+      trading_fee: r.trading_fee != null ? Number(r.trading_fee) : null,
       timeframe_code: r.timeframe_code,
       strategy_rule_match: r.strategy_rule_match,
       notes_entry: r.notes_entry ?? null,
@@ -191,9 +199,7 @@ export async function POST(req: Request) {
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
 
   const statusToPersist: Status = data.status as Status
-
   const exitToPersist = data.exit_price ?? null
-
   const sellFeeToPersist = data.sell_fee ?? 0
 
   const created = await prisma.$transaction(async (tx) => {
@@ -221,6 +227,8 @@ export async function POST(req: Request) {
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
         sell_fee: new Prisma.Decimal(sellFeeToPersist),
+        // grava trading_fee (novo)
+        trading_fee: new Prisma.Decimal(data.trading_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: exitToPersist,

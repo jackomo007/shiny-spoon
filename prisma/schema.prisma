@@ -123,6 +123,8 @@ model journal_entry {
   stop_loss_price   Decimal? @db.Decimal(18, 8)
   take_profit_price Decimal? @db.Decimal(18, 8)
 
+  trading_fee    Decimal @default(0.00000000) @db.Decimal(18, 8)
+
   timeframe_code String  @default("1D") @db.VarChar(8)
   buy_fee        Decimal @default(0.00000000) @db.Decimal(18, 8)
   sell_fee       Decimal @default(0.00000000) @db.Decimal(18, 8)
