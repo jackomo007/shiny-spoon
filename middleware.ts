@@ -91,11 +91,13 @@ export const config = {
     "/journal/:path*",
     "/chart-tracker/:path*",
     "/profile/:path*",
+    "/portfolio/:path*",
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/journal/:path*",
     "/api/strategies/:path*",
     "/api/billing/:path*",
     "/api/tracker/:path*",
+    "/api/portfolio/:path*", 
   ],
 }

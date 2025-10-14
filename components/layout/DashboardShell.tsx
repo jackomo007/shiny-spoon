@@ -49,6 +49,7 @@ export default function DashboardShell({ children }: Props) {
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
+              <Link href="/portfolio">Portfolio</Link>
               <button onClick={openComingSoon} className="hover:underline">Trading Course</button>
               {isAdmin && <Link href="/admin">Admin</Link>}
             </nav>
@@ -132,6 +133,7 @@ export default function DashboardShell({ children }: Props) {
             <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
             <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
+            <NavItem href="/portfolio" label="Portfolio" icon="💼" />
             {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
           </ul>
         </aside>
