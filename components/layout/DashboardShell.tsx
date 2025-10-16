@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { signOut } from "next-auth/react"
 import { useSession } from "next-auth/react"
+import { usePathname } from "next/navigation"
 import AccountSwitcher from "@/components/account/AccountSwitcher"
 
 type Props = { children: React.ReactNode }
@@ -32,27 +33,142 @@ export default function DashboardShell({ children }: Props) {
   const [openProfile, setOpenProfile] = useState(false)
   const [accOpen, setAccOpen] = useState(false)
   const [courseOpen, setCourseOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const pathname = usePathname()
 
   const openComingSoon = (e?: React.MouseEvent) => {
     e?.preventDefault()
     setCourseOpen(true)
   }
 
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
   return (
     <div className="min-h-dvh bg-gray-50">
-      <div className="bg-primary text-white">
+      <div className="bg-primary text-white relative">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 relative">
             <Image src="/img/brand/white.png" alt="Logo" width={128} height={24} />
-            <nav className="hidden md:flex gap-6 opacity-90">
+
+            <nav className="hidden xl:flex gap-6 opacity-90">
               <Link href="/dashboard">Home</Link>
+              <Link href="/portfolio">Portfolio Manager</Link>
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
-              <Link href="/portfolio">Portfolio</Link>
-              <button onClick={openComingSoon} className="hover:underline">Trading Course</button>
+              <button onClick={openComingSoon} className="hover:underline">
+                Trading Course
+              </button>
               {isAdmin && <Link href="/admin">Admin</Link>}
             </nav>
+
+            <button
+            className="inline-flex flex-col items-center justify-center rounded-full bg-white/15 p-2 hover:bg-white/20 xl:hidden"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label="Open menu"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-nav"
+            >
+              <span className="block h-0.5 w-5 bg-white mb-1.5" />
+              <span className="block h-0.5 w-5 bg-white mb-1.5" />
+              <span className="block h-0.5 w-5 bg-white" />
+            </button>
+
+            {mobileOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-[45] bg-black/30 xl:hidden"
+                  onClick={() => setMobileOpen(false)}
+                />
+                <div
+                  id="mobile-nav"
+                  className="absolute left-0 right-0 top-full z-50 xl:hidden border-t border-white/20 backdrop-blur-sm"
+                >
+                  <div className="mx-auto max-w-7xl px-6 py-3">
+                    <ul className="grid gap-2 text-white/90 animate-[fadeDown_160ms_ease-out]">
+                      <li>
+                        <Link
+                          href="/dashboard"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Home
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/portfolio"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Portfolio Manager
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/journal"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Trading Journal
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/strategies"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Strategy Creator
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/trade-analyzer"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Trade Analyzer
+                        </Link>
+                      </li>
+                      <li>
+                        <button
+                          onClick={() => {
+                            setMobileOpen(false)
+                            openComingSoon()
+                          }}
+                          className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/10"
+                        >
+                          Trading Course
+                        </button>
+                      </li>
+                      {isAdmin && (
+                        <li>
+                          <Link
+                            href="/admin"
+                            className="block rounded-xl px-3 py-2 hover:bg-white/10"
+                            onClick={() => setMobileOpen(false)}
+                          >
+                            Admin
+                          </Link>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -120,6 +236,7 @@ export default function DashboardShell({ children }: Props) {
 
           <ul className="mt-6 grid gap-2">
             <NavItem href="/dashboard" label="Home" icon="🏠" />
+            <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
             <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />
             <li>
               <button
@@ -133,7 +250,6 @@ export default function DashboardShell({ children }: Props) {
             <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
             <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
-            <NavItem href="/portfolio" label="Portfolio" icon="💼" />
             {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
           </ul>
         </aside>
@@ -141,6 +257,7 @@ export default function DashboardShell({ children }: Props) {
         <main>{children}</main>
       </div>
 
+      {/* Modal: Trading Course */}
       {courseOpen && (
         <div
           className="fixed inset-0 z-[70] bg-black/30 backdrop-blur-[1px] grid place-items-center"
@@ -166,6 +283,7 @@ export default function DashboardShell({ children }: Props) {
         </div>
       )}
 
+      {/* Drawer: Account Switcher */}
       {accOpen && (
         <div
           className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[1px]"

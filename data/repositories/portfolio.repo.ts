@@ -48,6 +48,20 @@ async function ensureDefaultStrategyId(accountId: string) {
   return created.id
 }
 
+async function ensureNoneStrategyId(accountId: string) {
+  const existing = await prisma.strategy.findFirst({
+    where: { account_id: accountId, name: "None" },
+    select: { id: true },
+  })
+  if (existing) return existing.id
+
+  const created = await prisma.strategy.create({
+    data: { account_id: accountId, name: "None" },
+    select: { id: true },
+  })
+  return created.id
+}
+
 export const PortfolioRepo = {
   async getPositions(accountId: string): Promise<PositionsMap> {
     const grouped = await prisma.journal_entry.groupBy({
@@ -155,16 +169,19 @@ export const PortfolioRepo = {
     cashToSpend: number
     feeUsd: number
     tradeAt?: Date
+    strategyId?: string | null
   }) {
     const { accountId, symbol, priceUsd, cashToSpend, feeUsd } = opts
     const qty = cashToSpend / priceUsd
     const when = opts.tradeAt ?? new Date()
 
+    const chosenStrategyId =
+      opts.strategyId === "NONE"
+        ? await ensureNoneStrategyId(accountId)
+        : (opts.strategyId ?? await ensureDefaultStrategyId(accountId))
+
     return prisma.$transaction(async (tx) => {
-      const [journalId, strategyId] = await Promise.all([
-        ensureDefaultJournalId(accountId),
-        ensureDefaultStrategyId(accountId),
-      ])
+      const journalId = await ensureDefaultJournalId(accountId)
 
       const buy = await tx.journal_entry.create({
         data: {
@@ -180,7 +197,7 @@ export const PortfolioRepo = {
           amount: qty,
           timeframe_code: "1D",
           trade_datetime: when,
-          strategy_id: strategyId,
+          strategy_id: chosenStrategyId,
           strategy_rule_match: 0,
           spot_trade: { create: {} },
         },
@@ -192,14 +209,14 @@ export const PortfolioRepo = {
           journal_id: journalId,
           trade_type: 0,
           asset_name: "CASH",
-          side: "sell",
+        side: "sell",
           status: "in_progress",
           entry_price: 1,
           amount_spent: cashToSpend + feeUsd,
           amount: cashToSpend + feeUsd,
           timeframe_code: "1D",
           trade_datetime: when,
-          strategy_id: strategyId,
+          strategy_id: chosenStrategyId,
           strategy_rule_match: 0,
           spot_trade: { create: {} },
           notes_entry: "[PORTFOLIO_CASH_OUT]",
@@ -217,17 +234,20 @@ export const PortfolioRepo = {
     amountToSell: number
     feeUsd: number
     tradeAt?: Date
+    strategyId?: string | null
   }) {
     const { accountId } = opts
     const when = opts.tradeAt ?? new Date()
     const gross = opts.priceUsd * opts.amountToSell
     const net = gross - opts.feeUsd
 
+    const chosenStrategyId =
+      opts.strategyId === "NONE"
+        ? await ensureNoneStrategyId(accountId)
+        : (opts.strategyId ?? await ensureDefaultStrategyId(accountId))
+
     return prisma.$transaction(async (tx) => {
-      const [journalId, strategyId] = await Promise.all([
-        ensureDefaultJournalId(accountId),
-        ensureDefaultStrategyId(accountId),
-      ])
+      const journalId = await ensureDefaultJournalId(accountId)
 
       const sell = await tx.journal_entry.create({
         data: {
@@ -243,7 +263,7 @@ export const PortfolioRepo = {
           amount: opts.amountToSell,
           timeframe_code: "1D",
           trade_datetime: when,
-          strategy_id: strategyId,
+          strategy_id: chosenStrategyId,
           strategy_rule_match: 0,
           spot_trade: { create: {} },
         },
@@ -262,7 +282,7 @@ export const PortfolioRepo = {
           amount: net,
           timeframe_code: "1D",
           trade_datetime: when,
-          strategy_id: strategyId,
+          strategy_id: chosenStrategyId,
           strategy_rule_match: 0,
           spot_trade: { create: {} },
           notes_entry: "[PORTFOLIO_CASH_IN]",
@@ -312,11 +332,14 @@ export const PortfolioRepo = {
     amount: number
     priceUsd: number
     feeUsd?: number
+    strategyId?: string | null
   }) {
-    const [journalId, strategyId] = await Promise.all([
-      ensureDefaultJournalId(opts.accountId),
-      ensureDefaultStrategyId(opts.accountId),
-    ])
+    const journalId = await ensureDefaultJournalId(opts.accountId)
+
+    const chosenStrategyId =
+      opts.strategyId === "NONE"
+        ? await ensureNoneStrategyId(opts.accountId)
+        : (opts.strategyId ?? await ensureDefaultStrategyId(opts.accountId))
 
     return prisma.journal_entry.create({
       data: {
@@ -332,7 +355,7 @@ export const PortfolioRepo = {
         amount: opts.amount,
         timeframe_code: "1D",
         trade_datetime: new Date(),
-        strategy_id: strategyId,
+        strategy_id: chosenStrategyId,
         strategy_rule_match: 0,
         spot_trade: { create: {} },
         notes_entry: "[PORTFOLIO_ADD]",

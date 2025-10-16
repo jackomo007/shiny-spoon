@@ -1,4 +1,3 @@
-// lib/ai-usage.ts
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -19,10 +18,10 @@ export async function recordAiUsage(opts: {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  accountId?: number | null;      // seu schema usa Int? aqui
+  accountId?: number | null;
   trackerId?: string | null;
   preAnalysisId?: string | null;
-  meta?: Prisma.InputJsonValue;   // JSON válido para o Prisma
+  meta?: Prisma.InputJsonValue;
 }) {
   const p = getPrice(opts.model);
   const cost = opts.inputTokens * p.inputPerTok + opts.outputTokens * p.outputPerTok;

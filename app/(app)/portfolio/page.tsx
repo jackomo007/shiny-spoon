@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react"
 import Card from "@/components/ui/Card"
 import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
+import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete"
 import { PieChart, Pie, Legend, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import type React from "react"
+
 
 type Item = {
   symbol: string
@@ -48,6 +51,9 @@ export default function PortfolioPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteSymbol, setDeleteSymbol] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [tab, setTab] = useState<"portfolio" | "history">("portfolio")
+
 
   const load = async () => {
     setLoading(true)
@@ -113,22 +119,41 @@ export default function PortfolioPage() {
     <div className="grid gap-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Portfolio</h1>
+          <h1 className="text-2xl font-semibold">Portfolio Manager</h1>
           <p className="text-sm text-gray-500">Build and manage your spot portfolio</p>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              className={`px-3 py-1.5 rounded-xl border ${tab === "portfolio" ? "bg-black text-white" : "bg-white"}`}
+              onClick={() => setTab("portfolio")}
+            >
+              Portfolio
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded-xl border ${tab === "history" ? "bg-black text-white" : "bg-white"}`}
+              onClick={() => setTab("history")}
+            >
+              Trade History
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button className="px-3 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setShowAddAsset(true)}>
-            + Add Asset
-          </button>
-          <button className="px-3 py-2 rounded-xl bg-emerald-600 text-white" onClick={() => setShowCash({ kind: "deposit" })}>
-            + Add Cash
-          </button>
-          <button className="px-3 py-2 rounded-xl bg-rose-600 text-white" onClick={() => setShowCash({ kind: "withdraw" })}>
-            Withdraw
-          </button>
-        </div>
+
+        {tab === "portfolio" && (
+          <div className="flex gap-2">
+            <button className="px-3 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setShowAddAsset(true)}>
+              + Add Asset
+            </button>
+            <button className="px-3 py-2 rounded-xl bg-emerald-600 text-white" onClick={() => setShowCash({ kind: "deposit" })}>
+              + Add Cash
+            </button>
+            <button className="px-3 py-2 rounded-xl bg-rose-600 text-white" onClick={() => setShowCash({ kind: "withdraw" })}>
+              Withdraw
+            </button>
+          </div>
+        )}
       </div>
 
+      {tab === "portfolio" ? (
       <Card className="p-0">
         {loading ? (
           <div className="h-[360px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
@@ -166,7 +191,7 @@ export default function PortfolioPage() {
                   <tr>
                     <Th>Asset</Th>
                     <Th>Amount</Th>
-                    <Th>Price</Th>
+                    <Th>Entry Price</Th>
                     <Th>Value</Th>
                     <Th>% Port.</Th>
                     <Th className="text-right">Actions</Th>
@@ -226,6 +251,9 @@ export default function PortfolioPage() {
           </div>
         )}
       </Card>
+            ) : (
+        <TradeHistoryCard />
+      )}
 
       {showAddAsset && (
         <AddAssetModal
@@ -318,12 +346,128 @@ export default function PortfolioPage() {
   )
 }
 
+function TradeHistoryCard() {
+  type Row = {
+    id: string
+    when: string
+    asset: string
+    kind: "buy" | "sell" | "cash_in" | "cash_out" | "init"
+    qty: number
+    priceUsd: number
+    feeUsd: number
+    cashDeltaUsd: number
+    note?: string | null
+  }
+
+  const [rows, setRows] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    ;(async () => {
+      setLoading(true); setErr(null)
+      try {
+        const r = await fetch("/api/portfolio/history?limit=500", { cache: "no-store" })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const j = (await r.json()) as { items: Row[] }
+        setRows(j.items)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to load")
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  return (
+    <Card className="p-0">
+      {loading ? (
+        <div className="h-[240px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
+      ) : err ? (
+        <div className="p-6 text-red-600">{err}</div>
+      ) : (
+        <div className="p-6">
+          <div className="text-lg font-semibold mb-4">Trade History</div>
+          <div className="rounded-xl bg-white">
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Date</Th>
+                  <Th>Asset</Th>
+                  <Th>Type</Th>
+                  <Th>Qty</Th>
+                  <Th>Entry Price</Th>
+                  <Th>Fee</Th>
+                  <Th>Cash</Th>
+                  <Th>Note</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <Tr key={r.id}>
+                    <Td>{new Date(r.when).toLocaleString()}</Td>
+                    <Td>{r.asset}</Td>
+                    <Td className="capitalize">{r.kind.replace("_", " ")}</Td>
+                    <Td>{r.qty.toFixed(8).replace(/\.?0+$/, "")}</Td>
+                    <Td>{usd(r.priceUsd)}</Td>
+                    <Td>{usd(r.feeUsd)}</Td>
+                    <Td className={r.cashDeltaUsd >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                      {usd(r.cashDeltaUsd)}
+                    </Td>
+                    <Td>{r.note ?? ""}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>; onError: (msg: string) => void }) {
+  type StrategyOpt = { id: string; name: string | null }
+
+  const [strategies, setStrategies] = useState<StrategyOpt[]>([])
+  const [strategyId, setStrategyId] = useState<string>("")
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const r = await fetch("/api/strategies", { cache: "no-store" })
+        if (!r.ok) return
+        const j = await r.json() as { items: Array<{ id: string; name: string | null }> }
+        const base = j.items.map(s => ({ id: s.id, name: s.name }))
+        const hasNone = base.some(s => (s.name ?? "").toLowerCase() === "none")
+        const list = hasNone ? base : [{ id: "NONE", name: "None" }, ...base]
+        setStrategies(list)
+      } catch {}
+    })()
+  }, [])
+
   const [symbol, setSymbol] = useState("")
-  const [amount, setAmount] = useState<number>(0)
-  const [price, setPrice] = useState<number>(0)
-  const [fee, setFee] = useState<number>(0)
+  const [amountStr, setAmountStr] = useState<string>("")
+  const [priceStr,  setPriceStr]  = useState<string>("")
+  const [feeStr,    setFeeStr]    = useState<string>("")
   const [busy, setBusy] = useState(false)
+
+  const amount = toNum(amountStr)
+  const price  = toNum(priceStr)
+  const feeRaw = toNum(feeStr)
+  const fee    = Number.isNaN(feeRaw) ? 0 : feeRaw
+
+  const canConfirm =
+    !!symbol &&
+    Number.isFinite(amount) && amount > 0 &&
+    Number.isFinite(price)  && price  > 0 &&
+    !busy
+
+  function normTicker(input: string): string {
+    const v = (input || "").trim().toUpperCase()
+    if (!v) return ""
+    return v.includes(":") ? v.split(":")[1]?.replace(/\s+/g, "") ?? "" : v.replace(/\s+/g, "")
+  }
 
   return (
     <Modal
@@ -337,17 +481,24 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
           </button>
           <button
             className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-            disabled={!symbol || amount <= 0 || price <= 0 || busy}
+            disabled={!canConfirm}
             onClick={async () => {
               try {
                 setBusy(true)
+                const payload = {
+                  symbol: symbol.toUpperCase(),
+                  amount,
+                  priceUsd: price,
+                  feeUsd: fee || 0,
+                  strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                }
                 const res = await fetch("/api/portfolio/add-asset", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ symbol: symbol.toUpperCase(), amount, priceUsd: price, feeUsd: fee || 0 }),
+                  body: JSON.stringify(payload),
                 })
                 if (!res.ok) {
-                  const j = await res.json().catch(() => ({}))
+                  const j = await res.json().catch(() => ({} as { error?: string }))
                   throw new Error(j?.error || "Failed to add asset")
                 }
                 await props.onDone()
@@ -364,38 +515,50 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
       }
     >
       <div className="grid gap-3">
-        <Field label="Symbol">
-          <input
-            list="asset-suggestions"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+        <Field label="Asset">
+          <AssetAutocomplete
             value={symbol}
-            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            placeholder="e.g. BTC, ETH, SOL"
+            onChange={(val: string) => setSymbol(normTicker(val))}
           />
-          <datalist id="asset-suggestions">
-            <option value="BTC" />
-            <option value="ETH" />
-            <option value="SOL" />
-            <option value="ADA" />
-            <option value="XRP" />
-            <option value="DOGE" />
-            <option value="BNB" />
-            <option value="USD" />
-          </datalist>
         </Field>
+
+        <Field label="Strategy (optional)">
+          <select
+            className="w-full rounded-xl border p-2"
+            value={strategyId}
+            onChange={(e) => setStrategyId(e.target.value)}
+          >
+            <option value="">Use default (Portfolio)</option>
+            {strategies.map((s) => (
+              <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
+            ))}
+          </select>
+        </Field>
+
+        {strategies.length > 0 && strategyId === "NONE" && (
+          <div className="text-sm text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+            Note: To get the most out of our AI trading tools and reduce risk, it’s important to have a clear strategy in place.
+            Trading without one can increase the chance of losses and limit how effectively our AI can assist you.
+          </div>
+        )}
+
         <Field label="Amount">
-          <NumInput value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+          <NumInputText value={amountStr} onChange={(e) => setAmountStr(e.target.value)} />
         </Field>
-        <Field label="Price (USD)">
-          <NumInput value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+
+        <Field label="Entry Price (USD)">
+          <NumInputText value={priceStr} onChange={(e) => setPriceStr(e.target.value)} />
         </Field>
+
         <Field label="Fee (USD) – optional">
-          <NumInput value={fee} onChange={(e) => setFee(Number(e.target.value))} />
+          <NumInputText value={feeStr} onChange={(e) => setFeeStr(e.target.value)} />
         </Field>
       </div>
     </Modal>
   )
 }
+
+
 
 function CashModal(props: { kind: "deposit" | "withdraw"; onClose: () => void; onDone: () => Promise<void>; onError: (msg: string) => void }) {
   const [amount, setAmount] = useState<number>(0)
@@ -457,6 +620,24 @@ function TradeModal(props: {
   onDone: () => Promise<void>
   onError: (msg: string) => void
 }) {
+  type StrategyOpt = { id: string; name: string | null }
+  const [strategies, setStrategies] = useState<StrategyOpt[]>([])
+  const [strategyId, setStrategyId] = useState<string>("")
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const r = await fetch("/api/strategies", { cache: "no-store" })
+        if (!r.ok) return
+        const j = await r.json() as { items: Array<{ id: string; name: string | null }> }
+        const base = j.items.map(s => ({ id: s.id, name: s.name }))
+        const hasNone = base.some(s => (s.name ?? "").toLowerCase() === "none")
+        const list = hasNone ? base : [{ id: "NONE", name: "None" }, ...base]
+        setStrategies(list)
+      } catch {}
+    })()
+  }, [])
+
   const [price, setPrice] = useState<number>(0)
   const [fee, setFee] = useState<number>(0)
   const [value, setValue] = useState<number>(0)
@@ -489,8 +670,20 @@ function TradeModal(props: {
                 setBusy(true)
                 const url = isBuy ? "/api/portfolio/buy" : "/api/portfolio/sell"
                 const body = isBuy
-                  ? { symbol: props.symbol, priceUsd: price, cashToSpend: value, feeUsd: fee || 0 }
-                  : { symbol: props.symbol, priceUsd: price, amountToSell: value, feeUsd: fee || 0 }
+                  ? {
+                      symbol: props.symbol,
+                      priceUsd: price,
+                      cashToSpend: value,
+                      feeUsd: fee || 0,
+                      strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                    }
+                  : {
+                      symbol: props.symbol,
+                      priceUsd: price,
+                      amountToSell: value,
+                      feeUsd: fee || 0,
+                      strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                    }
 
                 const res = await fetch(url, {
                   method: "POST",
@@ -498,7 +691,7 @@ function TradeModal(props: {
                   body: JSON.stringify(body),
                 })
                 if (!res.ok) {
-                  const j = await res.json().catch(() => ({}))
+                  const j = await res.json().catch(() => ({} as { error?: string }))
                   throw new Error(j?.error || "Trade failed")
                 }
                 await props.onDone()
@@ -515,8 +708,34 @@ function TradeModal(props: {
       }
     >
       <div className="grid gap-3">
-        <Field label="Price (USD)">
-          <NumInput value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+        <Field label="Strategy (optional)">
+          <select
+            className="w-full rounded-xl border p-2"
+            value={strategyId}
+            onChange={(e) => setStrategyId(e.target.value)}
+          >
+            <option value="">Use default (Portfolio)</option>
+            {strategies.map((s) => (
+              <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
+            ))}
+          </select>
+        </Field>
+
+        {strategies.length > 0 && strategyId === "NONE" && (
+          <div className="text-sm text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+            Note: To get the most out of our AI trading tools and reduce risk, it’s important to have a clear strategy in place.
+            Trading without one can increase the chance of losses and limit how effectively our AI can assist you.
+          </div>
+        )}
+
+        <Field label="Entry Price (USD)">
+          <NumInputText
+            value={Number.isFinite(price) ? String(price) : ""}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const v = (e.target.value ?? "").replace(",", ".").trim()
+              setPrice(v === "" ? 0 : Number(v))
+            }}
+          />
         </Field>
 
         {isBuy ? (
@@ -547,6 +766,34 @@ function Field(props: { label: string; children: React.ReactNode }) {
     </label>
   )
 }
-function NumInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input type="number" step="any" className="w-full rounded-xl border border-gray-200 px-3 py-2" {...props} />
+function toNum(v: string): number {
+  const s = (v ?? "").replace(",", ".").trim()
+  return s === "" ? NaN : Number(s)
 }
+
+function NumInputText(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      pattern="[0-9]*[.,]?[0-9]*"
+      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+      {...props}
+    />
+  )
+}
+
+function NumInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      step="any"
+      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+      {...props}
+    />
+  )
+}
+
+
+

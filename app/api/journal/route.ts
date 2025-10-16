@@ -227,7 +227,6 @@ export async function POST(req: Request) {
         timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
         sell_fee: new Prisma.Decimal(sellFeeToPersist),
-        // grava trading_fee (novo)
         trading_fee: new Prisma.Decimal(data.trading_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
