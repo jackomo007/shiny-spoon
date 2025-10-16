@@ -168,9 +168,9 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            <div className="h-[320px] rounded-xl border bg-white mb-6">
+            <div className="h-[400px] rounded-xl border bg-white mb-6">
               <div className="px-4 pt-3 font-medium">Allocation</div>
-              <div className="h-[280px]">
+              <div className="h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie dataKey="percent" nameKey="name" data={pieData} outerRadius={110} label stroke="#fff" strokeWidth={2}>
