@@ -190,7 +190,7 @@ export default function PortfolioPage() {
                 <thead>
                   <tr>
                     <Th>Asset</Th>
-                    <Th>Amount</Th>
+                    <Th>Amount Spent</Th>
                     <Th>Entry Price</Th>
                     <Th>Value</Th>
                     <Th>% Port.</Th>
@@ -515,6 +515,12 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
       }
     >
       <div className="grid gap-3">
+        {strategies.length > 0 && strategyId === "NONE" && (
+          <div className="text-sm text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+            Note: To get the most out of our AI trading tools and reduce risk, it’s important to have a clear strategy in place.
+            Trading without one can increase the chance of losses and limit how effectively our AI can assist you.
+          </div>
+        )}
         <Field label="Asset">
           <AssetAutocomplete
             value={symbol}
@@ -528,21 +534,14 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
             value={strategyId}
             onChange={(e) => setStrategyId(e.target.value)}
           >
-            <option value="">Use default (Portfolio)</option>
+            <option value="">Use default</option>
             {strategies.map((s) => (
               <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
             ))}
           </select>
         </Field>
 
-        {strategies.length > 0 && strategyId === "NONE" && (
-          <div className="text-sm text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-            Note: To get the most out of our AI trading tools and reduce risk, it’s important to have a clear strategy in place.
-            Trading without one can increase the chance of losses and limit how effectively our AI can assist you.
-          </div>
-        )}
-
-        <Field label="Amount">
+        <Field label="Amount Spent">
           <NumInputText value={amountStr} onChange={(e) => setAmountStr(e.target.value)} />
         </Field>
 
@@ -714,7 +713,7 @@ function TradeModal(props: {
             value={strategyId}
             onChange={(e) => setStrategyId(e.target.value)}
           >
-            <option value="">Use default (Portfolio)</option>
+            <option value="">Use default</option>
             {strategies.map((s) => (
               <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
             ))}

@@ -6,50 +6,13 @@ import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
+import { getDefaultStrategyId, isValidAssetName, qtyFrom, calcPnl } from "@/lib/trade-helpers"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
-
 const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/
 
-function parseRange(searchParams: URLSearchParams) {
-  const end = searchParams.get("end") ? new Date(searchParams.get("end")!) : new Date()
-  const start = searchParams.get("start")
-    ? new Date(searchParams.get("start")!)
-    : new Date(new Date().setMonth(end.getMonth() - 6))
-  start.setHours(0, 0, 0, 0)
-  end.setHours(23, 59, 59, 999)
-  return { start, end }
-}
-
-function calcPnl(input: {
-  side: "buy" | "sell" | "long" | "short"
-  entry: number
-  exit: number | null
-  amountSpent: number
-  leverage?: number | null
-  tradeType: 1 | 2
-  buyFee?: number
-  sellFee?: number
-  tradingFee?: number | null
-}): number | null {
-  if (input.exit == null) return null
-  const dir = (input.side === "buy" || input.side === "long") ? 1 : -1
-  const change = (input.exit - input.entry) / input.entry
-  const notional = input.tradeType === 2
-    ? input.amountSpent * Math.max(1, input.leverage ?? 1)
-    : input.amountSpent
-
-  const gross = dir * notional * change
-  const fees = (input.tradingFee != null)
-    ? Number(input.tradingFee)
-    : (Number(input.buyFee ?? 0) + Number(input.sellFee ?? 0))
-
-  const net = gross - fees
-  return Number(net.toFixed(2))
-}
-
 const BaseSchema = z.object({
-  strategy_id: z.string().min(1),
+  strategy_id: z.string().min(1).optional(),
   asset_name: z.string().min(1),
   trade_type: z.union([z.number(), z.string()]),
   trade_datetime: z.string().min(1),
@@ -71,46 +34,22 @@ const BaseSchema = z.object({
     leverage: z.number().int().min(1),
     liquidation_price: z.number().positive().optional().nullable(),
   }).optional(),
+  source: z.enum(["portfolio"]).optional(),
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount_spent"], message: "Required" })
   }
   const t = Number(v.trade_type)
-  if (t === 2 && !v.futures) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
-  }
-  if (t === 1 && !["buy", "sell"].includes(v.side)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
-  }
-  if (t === 2 && !["long", "short"].includes(v.side)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Futures trades must be long/short" })
-  }
+  if (t === 2 && !v.futures) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["futures"], message: "Futures data required" })
+  if (t === 1 && !["buy", "sell"].includes(v.side)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Spot trades must be buy/sell" })
+  if (t === 2 && !["long", "short"].includes(v.side)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["side"], message: "Futures trades must be long/short" })
 })
 .transform(v => ({
   ...v,
   trade_type: Number(v.trade_type),
   amount_spent: v.amount_spent ?? v.amount!,
 }))
-
-const CreateSchema = BaseSchema
-
-function qtyFrom(params: { amountSpent: number; entryPrice: number; tradeType: number; leverage?: number }): number {
-  const { amountSpent, entryPrice, tradeType, leverage } = params
-  if (entryPrice <= 0) return 0
-  const notional = tradeType === 2 ? amountSpent * Math.max(1, leverage ?? 1) : amountSpent
-  return notional / entryPrice
-}
-
-async function isValidSymbol(sym: string): Promise<boolean> {
-  const key = process.env.CMC_API_KEY
-  if (!key) return true
-  const u = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?listing_status=active&symbol=${encodeURIComponent(sym)}&limit=1`
-  const resp = await fetch(u, { headers: { "X-CMC_PRO_API_KEY": key }, cache: "no-store" })
-  if (!resp.ok) return true
-  const js = await resp.json() as { data?: Array<{ symbol: string }> }
-  return (js.data ?? []).some(d => d.symbol.toUpperCase() === sym.toUpperCase())
-}
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions)
@@ -120,8 +59,11 @@ export async function GET(req: Request) {
   const accountId = await getActiveAccountId(userId)
   if (!accountId) return NextResponse.json({ error: "Account not found" }, { status: 404 })
 
-  const { searchParams } = new URL(req.url)
-  const { start, end } = parseRange(searchParams)
+  const url = new URL(req.url)
+  const end = url.searchParams.get("end") ? new Date(url.searchParams.get("end")!) : new Date()
+  const start = url.searchParams.get("start") ? new Date(url.searchParams.get("start")!) : new Date(new Date().setMonth(end.getMonth() - 6))
+  start.setHours(0, 0, 0, 0)
+  end.setHours(23, 59, 59, 999)
 
   const journalId = await getActiveJournalId(userId)
 
@@ -177,12 +119,12 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const parsed = CreateSchema.safeParse(await req.json())
+  const parsed = BaseSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-
   const data = parsed.data
-  if (!(await isValidSymbol(data.asset_name))) {
-    return NextResponse.json({ error: "Invalid asset symbol" }, { status: 400 })
+
+  if (!(await isValidAssetName(data.asset_name))) {
+    return NextResponse.json({ error: "Invalid asset symbol (use e.g. BTCUSDT or a verified symbol)" }, { status: 400 })
   }
 
   const userId = Number(session.user.id)
@@ -191,9 +133,10 @@ export async function POST(req: Request) {
 
   const journalId = await getActiveJournalId(userId)
   const tradeType = data.trade_type
+  const strategyId = data.strategy_id ?? await getDefaultStrategyId(accountId)
 
   const okStrategy = await prisma.strategy.findFirst({
-    where: { id: data.strategy_id, account_id: accountId },
+    where: { id: strategyId, account_id: accountId },
     select: { id: true },
   })
   if (!okStrategy) return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
@@ -215,19 +158,19 @@ export async function POST(req: Request) {
         account_id: accountId,
         journal_id: journalId,
         trade_type: tradeType,
-        asset_name: data.asset_name,
+        asset_name: data.asset_name.toUpperCase(),
         trade_datetime: new Date(data.trade_datetime),
         side: data.side,
         status: statusToPersist,
         amount_spent: data.amount_spent,
         amount: amountQty,
-        strategy_id: data.strategy_id,
-        notes_entry: data.notes_entry ?? null,
+        strategy_id: strategyId,
+        notes_entry: data.source === "portfolio" ? `[JE:PORTFOLIO]` : (data.notes_entry ?? null),
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
-        buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        sell_fee: new Prisma.Decimal(sellFeeToPersist),
-        trading_fee: new Prisma.Decimal(data.trading_fee ?? 0),
+        buy_fee: Number(data.buy_fee ?? 0),
+        sell_fee: Number(sellFeeToPersist),
+        trading_fee: Number(data.trading_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
         exit_price: exitToPersist,
@@ -247,6 +190,41 @@ export async function POST(req: Request) {
           leverage: f.leverage,
           liquidation_price: f.liquidation_price,
           margin_used: marginUsed,
+        },
+      })
+    }
+
+    if (data.source === "portfolio") {
+      const when = new Date(data.trade_datetime)
+      const price = Number(data.entry_price)
+      const qty = amountQty
+      const fee = Number(data.buy_fee ?? 0) + Number(data.sell_fee ?? 0) + Number(data.trading_fee ?? 0)
+
+      let kind: "buy" | "sell" | "cash_in" | "cash_out" | "init" = "buy"
+      if (data.asset_name.toUpperCase() === "CASH") {
+        kind = data.side === "buy" ? "cash_in" : "cash_out"
+      } else {
+        kind = data.side === "sell" ? "sell" : "buy"
+      }
+
+      const cashDelta =
+        kind === "sell" ? (price * qty - fee)
+        : kind === "buy"  ? -(price * qty + fee)
+        : kind === "cash_in" ? Number(data.amount_spent)
+        : kind === "cash_out" ? -Number(data.amount_spent)
+        : 0
+
+      await tx.portfolio_trade.create({
+        data: {
+          account_id: accountId,
+          trade_datetime: when,
+          asset_name: data.asset_name.toUpperCase(),
+          kind,
+          qty,
+          price_usd: price,
+          fee_usd: fee,
+          cash_delta_usd: cashDelta,
+          note: `[JE:${je.id}]`,
         },
       })
     }

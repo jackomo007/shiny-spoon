@@ -21,10 +21,17 @@ export async function recordAiUsage(opts: {
   accountId?: number | null;
   trackerId?: string | null;
   preAnalysisId?: string | null;
-  meta?: Prisma.InputJsonValue;
+  meta?: unknown;
 }) {
   const p = getPrice(opts.model);
   const cost = opts.inputTokens * p.inputPerTok + opts.outputTokens * p.outputPerTok;
+  const metaStr =
+  opts.meta == null
+    ? null
+    : typeof opts.meta === "string"
+    ? opts.meta
+    : JSON.stringify(opts.meta);
+
 
   try {
     const row = await prisma.ai_usage.create({
@@ -37,7 +44,7 @@ export async function recordAiUsage(opts: {
         account_id: opts.accountId ?? null,
         tracker_id: opts.trackerId ?? null,
         pre_analysis_id: opts.preAnalysisId ?? null,
-        meta: opts.meta ?? undefined,
+        meta: metaStr,
       },
     });
     console.log("[ai_usage] created", {

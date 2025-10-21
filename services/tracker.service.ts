@@ -72,6 +72,9 @@ export async function runAnalysisForTracker(trackerId: string) {
       overlay: snapshot,
     });
 
+    const snapshotStr =
+      typeof snapshot === "string" ? snapshot : JSON.stringify(snapshot);
+
     await prisma.chart_analysis.create({
       data: {
         tracker_id: tracker.id,
@@ -79,7 +82,7 @@ export async function runAnalysisForTracker(trackerId: string) {
         analysis_text: text,
         model_used: model,
         prompt_used: prompt,
-        overlay_snapshot: snapshot,
+        overlay_snapshot: snapshotStr, 
       },
     });
 

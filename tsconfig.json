@@ -22,6 +22,6 @@
       "@/lib/*": ["./lib/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "types", "scripts/seed-verified-assets.mjs"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "types", "scripts/seed-verified-assets.mjs", "scripts/fixStrategies.js"],
   "exclude": ["node_modules"]
 }

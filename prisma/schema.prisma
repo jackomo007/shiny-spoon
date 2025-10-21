@@ -7,62 +7,45 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum account_type {
-  crypto
-  stock
-  forex
-}
-
 model user {
-  id            Int       @id @default(autoincrement())
-  public_id     String    @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
-  email         String    @unique(map: "email") @db.VarChar(255)
-  username      String    @unique(map: "username") @db.VarChar(100)
-  password_hash String    @db.Text
-  created_at    DateTime? @default(now()) @db.DateTime(0)
-
-  display_name String? @db.VarChar(100)
-  avatar_url   String? @db.VarChar(2048)
-
-  is_admin Boolean @default(false)
-
+  id              Int          @id @default(autoincrement())
+  public_id       String       @unique(map: "public_id") @default(dbgenerated("(uuid())")) @db.Char(36)
+  email           String       @unique(map: "email") @db.VarChar(255)
+  username        String       @unique(map: "username") @db.VarChar(100)
+  password_hash   String       @db.Text
+  created_at      DateTime?    @default(now()) @db.DateTime(0)
+  is_admin        Boolean      @default(false)
+  avatar_url      String?      @db.VarChar(2048)
+  display_name    String?      @db.VarChar(100)
   accounts        account[]
   updated_prompts app_prompt[]
 }
 
 model account {
-  id         String       @id @default(uuid()) @db.Char(36)
-  user_id    Int
-  type       account_type
-  name       String?      @db.VarChar(100)
-  created_at DateTime     @default(now()) @db.DateTime(0)
-
-  user user @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
-
+  id                 String               @id @default(uuid()) @db.Char(36)
+  user_id            Int
+  type               account_type
+  name               String?              @db.VarChar(100)
+  created_at         DateTime             @default(now()) @db.DateTime(0)
+  user               user                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
+  subscriptions      chart_subscription[]
+  journals           journal[]
+  journal_entries    journal_entry[]
+  strategies         strategy[]
   pre_trade_analyses trade_pre_analysis[]
-
-  strategies      strategy[]
-  journals        journal[]
-  journal_entries journal_entry[]
-
-  subscriptions chart_subscription[]
 
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
 }
 
 model strategy {
-  id           String    @id @default(uuid()) @db.Char(36)
-  name         String?   @db.VarChar(255)
-  date_created DateTime? @default(now()) @db.DateTime(0)
-
-  account_id String  @db.Char(36)
-  account    account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
-
-  notes String? @db.Text
-
-  strategy_rules strategy_rule[]
-
+  id                 String               @id @default(uuid()) @db.Char(36)
+  name               String?              @db.VarChar(255)
+  date_created       DateTime?            @default(now()) @db.DateTime(0)
+  account_id         String               @db.Char(36)
+  notes              String?              @db.Text
+  account            account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
+  strategy_rules     strategy_rule[]
   pre_trade_analyses trade_pre_analysis[]
 
   @@index([account_id], map: "fk_strategy_account")
@@ -70,12 +53,11 @@ model strategy {
 
 model rule {
   id             String          @id @default(uuid()) @db.Char(36)
-  title          String          @db.VarChar(191)
   description    String?         @db.Text
+  title          String          @unique
   strategy_rules strategy_rule[]
 
-  @@unique([title])
-  @@index([title], map: "rule_title_idx")
+  @@index([title])
 }
 
 model strategy_rule {
@@ -83,9 +65,8 @@ model strategy_rule {
   strategy_id  String    @db.Char(36)
   rule_id      String    @db.Char(36)
   date_created DateTime? @default(now()) @db.DateTime(0)
-
-  strategy strategy @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
-  rule     rule     @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
+  strategy     strategy  @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
+  rule         rule      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
 
   @@index([rule_id], map: "rule_id")
   @@index([strategy_id], map: "strategy_id")
@@ -95,52 +76,42 @@ model journal {
   id         String          @id @default(uuid()) @db.Char(36)
   name       String          @db.VarChar(100)
   account_id String          @db.Char(36)
+  created_at DateTime        @default(now()) @db.DateTime(0)
   account    account         @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_account")
   entries    journal_entry[]
-
-  created_at DateTime @default(now()) @db.DateTime(0)
 
   @@unique([account_id, name], map: "uniq_account_name")
   @@index([account_id], map: "idx_journal_account")
 }
 
 model journal_entry {
-  id String @id @default(uuid()) @db.Char(36)
-
-  account_id String
-  account    account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
-
-  journal_id String  @db.Char(36)
-  journal    journal @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
-
-  trade_type  Int
-  asset_name  String               @db.VarChar(50)
-  side        journal_entry_side
-  status      journal_entry_status @default(in_progress)
-  entry_price Decimal              @default(0.00000000) @db.Decimal(18, 8)
-  exit_price  Decimal?             @db.Decimal(18, 8)
-
-  stop_loss_price   Decimal? @db.Decimal(18, 8)
-  take_profit_price Decimal? @db.Decimal(18, 8)
-
-  trading_fee    Decimal @default(0.00000000) @db.Decimal(18, 8)
-
-  timeframe_code String  @default("1D") @db.VarChar(8)
-  buy_fee        Decimal @default(0.00000000) @db.Decimal(18, 8)
-  sell_fee       Decimal @default(0.00000000) @db.Decimal(18, 8)
-
-  amount_spent Decimal @db.Decimal(18, 8)
-  amount       Decimal @db.Decimal(18, 8)
-
-  trade_datetime      DateTime @db.DateTime(0)
-  strategy_id         String   @db.Char(36)
-  notes_entry         String?  @db.Text
-  notes_review        String?  @db.Text
-  created_at          DateTime @default(now()) @db.Timestamp(0)
+  id                  String               @id @default(uuid()) @db.Char(36)
+  account_id          String
+  trade_type          Int
+  asset_name          String               @db.VarChar(50)
+  side                journal_entry_side
+  status              journal_entry_status @default(in_progress)
+  entry_price         Decimal              @default(0.00000000) @db.Decimal(18, 8)
+  exit_price          Decimal?             @db.Decimal(18, 8)
+  amount              Decimal              @db.Decimal(18, 8)
+  trade_datetime      DateTime             @db.DateTime(0)
+  strategy_id         String               @db.Char(36)
+  notes_entry         String?              @db.Text
+  notes_review        String?              @db.Text
+  created_at          DateTime             @default(now()) @db.Timestamp(0)
   strategy_rule_match Int
-
-  futures_trade futures_trade[]
-  spot_trade    spot_trade[]
+  stop_loss_price     Decimal?             @db.Decimal(18, 8)
+  take_profit_price   Decimal?             @db.Decimal(18, 8)
+  amount_spent        Decimal              @db.Decimal(18, 8)
+  journal_id          String               @db.Char(36)
+  buy_fee             Decimal              @default(0.00000000) @db.Decimal(18, 8)
+  sell_fee            Decimal              @default(0.00000000) @db.Decimal(18, 8)
+  timeframe_code      String               @default("1D") @db.VarChar(8)
+  trading_fee         Float                @default(0)
+  futures_trade       futures_trade[]
+  account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
+  journal             journal              @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
+  spot_trade          spot_trade[]
 
   @@index([strategy_id], map: "fk_journal_entry_strategy")
   @@index([account_id], map: "fk_journal_entry_account")
@@ -203,6 +174,134 @@ model crypto_open_interest {
   fetched_at          DateTime @default(now()) @db.Timestamp(0)
 }
 
+model chart_tracker {
+  id             String               @id @default(uuid()) @db.Char(36)
+  tv_symbol      String               @db.VarChar(100)
+  display_symbol String               @db.VarChar(50)
+  tf             timeframe
+  active         Boolean              @default(true)
+  last_run_at    DateTime?            @db.DateTime(0)
+  created_at     DateTime             @default(now()) @db.DateTime(0)
+  updated_at     DateTime             @updatedAt @db.DateTime(0)
+  analyses       chart_analysis[]
+  subscriptions  chart_subscription[]
+
+  @@unique([tv_symbol, tf], name: "tv_symbol_tf", map: "uniq_tv_symbol_tf")
+  @@index([tf], map: "idx_chart_tf")
+}
+
+model chart_subscription {
+  id         String        @id @default(uuid()) @db.Char(36)
+  account_id String        @db.Char(36)
+  tracker_id String        @db.Char(36)
+  created_at DateTime      @default(now()) @db.DateTime(0)
+  account    account       @relation(fields: [account_id], references: [id], onDelete: Cascade, map: "fk_subscription_account")
+  tracker    chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_subscription_tracker")
+
+  @@unique([account_id, tracker_id], map: "uniq_account_tracker")
+  @@index([tracker_id], map: "idx_subscription_tracker")
+}
+
+model chart_analysis {
+  id               String        @id @default(uuid()) @db.Char(36)
+  tracker_id       String        @db.Char(36)
+  image_url        String        @db.Text
+  analysis_text    String        @db.Text
+  model_used       String?       @db.VarChar(50)
+  prompt_used      String?       @db.Text
+  created_at       DateTime      @default(now()) @db.DateTime(0)
+  overlay_snapshot String?       @db.LongText
+  tracker          chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_analysis_tracker")
+
+  @@index([tracker_id, created_at], map: "idx_analysis_tracker_created")
+}
+
+model trade_pre_analysis {
+  id             String             @id @default(uuid()) @db.Char(36)
+  account_id     String             @db.Char(36)
+  strategy_id    String?            @db.Char(36)
+  asset_symbol   String             @db.VarChar(50)
+  trade_type     Int
+  side           journal_entry_side
+  amount_spent   Decimal            @db.Decimal(18, 8)
+  entry_price    Decimal            @db.Decimal(18, 8)
+  target_price   Decimal?           @db.Decimal(18, 8)
+  stop_price     Decimal?           @db.Decimal(18, 8)
+  chart_image    String             @db.VarChar(2048)
+  analysis_text  String             @db.LongText
+  model_used     String?            @db.VarChar(100)
+  prompt_used    String?            @db.LongText
+  created_at     DateTime           @default(now()) @db.DateTime(0)
+  timeframe_code String             @default("1H") @db.VarChar(8)
+  account        account            @relation(fields: [account_id], references: [id], onDelete: Cascade)
+  strategy       strategy?          @relation(fields: [strategy_id], references: [id])
+
+  @@index([account_id, created_at], map: "idx_pre_analysis_acc_created")
+  @@index([strategy_id], map: "trade_pre_analysis_strategy_id_fkey")
+}
+
+model verified_asset {
+  id         String   @id @default(uuid()) @db.Char(36)
+  symbol     String   @unique @db.VarChar(50)
+  name       String?  @db.VarChar(100)
+  exchange   String   @default("Binance") @db.VarChar(50)
+  created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+model app_prompt {
+  id          String   @id @default(uuid()) @db.Char(36)
+  key         String   @unique @db.VarChar(100)
+  title       String
+  description String?  @db.VarChar(255)
+  content     String   @db.LongText
+  updated_by  Int?
+  updated_at  DateTime @updatedAt @db.DateTime(0)
+  created_at  DateTime @default(now()) @db.DateTime(0)
+  updater     user?    @relation(fields: [updated_by], references: [id])
+
+  @@index([updated_by], map: "app_prompt_updated_by_fkey")
+}
+
+model ai_usage {
+  id              String        @id @default(uuid()) @db.Char(36)
+  kind            ai_usage_kind
+  model_used      String        @db.VarChar(100)
+  input_tokens    Int           @default(0)
+  output_tokens   Int           @default(0)
+  cost_usd        Decimal       @default(0.000000) @db.Decimal(12, 6)
+  account_id      Int?
+  tracker_id      String?       @db.Char(36)
+  pre_analysis_id String?       @db.Char(36)
+  meta            String?       @db.LongText
+  created_at      DateTime      @default(now()) @db.DateTime(0)
+
+  @@index([kind], map: "idx_ai_usage_kind")
+  @@index([created_at], map: "idx_ai_usage_created_at")
+  @@index([account_id], map: "idx_ai_usage_account")
+}
+
+model portfolio_trade {
+  id             String   @id @default(uuid()) @db.Char(36)
+  account_id     String   @db.Char(36)
+  trade_datetime DateTime @db.DateTime(0)
+  asset_name     String   @db.VarChar(50)
+  kind           String   @db.VarChar(20)
+  qty            Decimal  @db.Decimal(18, 8)
+  price_usd      Decimal  @db.Decimal(18, 8)
+  fee_usd        Decimal  @db.Decimal(18, 8)
+  cash_delta_usd Decimal  @db.Decimal(18, 8)
+  note           String?  @db.Text
+  created_at     DateTime @default(now()) @db.DateTime(0)
+
+  @@index([account_id, trade_datetime], map: "idx_pt_acc_dt")
+}
+
+enum account_type {
+  crypto
+  stock
+  forex
+}
+
 enum journal_entry_side {
   buy
   sell
@@ -223,125 +322,7 @@ enum timeframe {
   d1
 }
 
-model chart_tracker {
-  id             String    @id @default(uuid()) @db.Char(36)
-  tv_symbol      String    @db.VarChar(100)
-  display_symbol String    @db.VarChar(50)
-  tf             timeframe
-  active         Boolean   @default(true)
-  last_run_at    DateTime? @db.DateTime(0)
-
-  created_at DateTime @default(now()) @db.DateTime(0)
-  updated_at DateTime @updatedAt @db.DateTime(0)
-
-  subscriptions chart_subscription[]
-  analyses      chart_analysis[]
-
-  @@unique([tv_symbol, tf], name: "tv_symbol_tf", map: "uniq_tv_symbol_tf")
-  @@index([tf], map: "idx_chart_tf")
-}
-
-model chart_subscription {
-  id         String   @id @default(uuid()) @db.Char(36)
-  account_id String   @db.Char(36)
-  tracker_id String   @db.Char(36)
-  created_at DateTime @default(now()) @db.DateTime(0)
-
-  account account       @relation(fields: [account_id], references: [id], onDelete: Cascade, map: "fk_subscription_account")
-  tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_subscription_tracker")
-
-  @@unique([account_id, tracker_id], map: "uniq_account_tracker")
-  @@index([tracker_id], map: "idx_subscription_tracker")
-}
-
-model chart_analysis {
-  id            String  @id @default(uuid()) @db.Char(36)
-  tracker_id    String  @db.Char(36)
-  image_url     String  @db.Text
-  analysis_text String  @db.Text
-  model_used    String? @db.VarChar(50)
-  prompt_used   String? @db.Text
-
-  overlay_snapshot Json?
-
-  created_at DateTime @default(now()) @db.DateTime(0)
-
-  tracker chart_tracker @relation(fields: [tracker_id], references: [id], onDelete: Cascade, map: "fk_analysis_tracker")
-
-  @@index([tracker_id, created_at], map: "idx_analysis_tracker_created")
-}
-
-model trade_pre_analysis {
-  id           String  @id @default(uuid()) @db.Char(36)
-  account_id   String  @db.Char(36)
-  strategy_id  String? @db.Char(36)
-  asset_symbol String  @db.VarChar(50)
-
-  trade_type   Int
-  side         journal_entry_side
-  amount_spent Decimal            @db.Decimal(18, 8)
-  entry_price  Decimal            @db.Decimal(18, 8)
-  target_price Decimal?           @db.Decimal(18, 8)
-  stop_price   Decimal?           @db.Decimal(18, 8)
-
-  timeframe_code String @default("1H") @db.VarChar(8)
-
-  chart_image   String  @db.VarChar(2048)
-  analysis_text String  @db.LongText
-  model_used    String? @db.VarChar(100)
-  prompt_used   String? @db.LongText
-
-  created_at DateTime @default(now()) @db.DateTime(0)
-
-  account  account   @relation(fields: [account_id], references: [id], onDelete: Cascade)
-  strategy strategy? @relation(fields: [strategy_id], references: [id], onDelete: SetNull)
-
-  @@index([account_id, created_at], map: "idx_pre_analysis_acc_created")
-}
-
-model verified_asset {
-  id         String   @id @default(uuid()) @db.Char(36)
-  symbol     String   @unique @db.VarChar(50)
-  name       String?  @db.VarChar(100)
-  exchange   String   @default("Binance") @db.VarChar(50)
-  created_at DateTime @default(now()) @db.DateTime(0)
-}
-
-model app_prompt {
-  id          String  @id @default(uuid()) @db.Char(36)
-  key         String  @unique @db.VarChar(100)
-  title       String  @db.VarChar(191)
-  description String? @db.VarChar(255)
-  content     String  @db.LongText
-
-  updated_by Int?
-  updater    user? @relation(fields: [updated_by], references: [id], onDelete: SetNull)
-
-  updated_at DateTime @updatedAt @db.DateTime(0)
-  created_at DateTime @default(now()) @db.DateTime(0)
-}
-
 enum ai_usage_kind {
   chart
   trade
-}
-
-model ai_usage {
-  id            String        @id @default(uuid()) @db.Char(36)
-  kind          ai_usage_kind
-  model_used    String        @db.VarChar(100)
-  input_tokens  Int           @default(0)
-  output_tokens Int           @default(0)
-  cost_usd      Decimal       @default(0.00) @db.Decimal(12, 6)
-
-  account_id      Int?
-  tracker_id      String? @db.Char(36)
-  pre_analysis_id String? @db.Char(36)
-
-  meta       Json?
-  created_at DateTime @default(now()) @db.DateTime(0)
-
-  @@index([kind], map: "idx_ai_usage_kind")
-  @@index([created_at], map: "idx_ai_usage_created_at")
-  @@index([account_id], map: "idx_ai_usage_account")
 }
