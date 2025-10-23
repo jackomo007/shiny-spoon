@@ -265,21 +265,23 @@ model app_prompt {
 }
 
 model ai_usage {
-  id              String        @id @default(uuid()) @db.Char(36)
+  id              String   @id @default(uuid()) @db.Char(36)
   kind            ai_usage_kind
-  model_used      String        @db.VarChar(100)
-  input_tokens    Int           @default(0)
-  output_tokens   Int           @default(0)
-  cost_usd        Decimal       @default(0.000000) @db.Decimal(12, 6)
+  model_used      String   @db.VarChar(100)
+  input_tokens    Int      @default(0)
+  output_tokens   Int      @default(0)
+  cost_usd        Decimal  @default(0.000000) @db.Decimal(12, 6)
   account_id      Int?
-  tracker_id      String?       @db.Char(36)
-  pre_analysis_id String?       @db.Char(36)
-  created_at      DateTime      @default(now()) @db.DateTime(0)
+  tracker_id      String?  @db.Char(36)
+  pre_analysis_id String?  @db.Char(36)
+  meta            String?  @db.LongText
+  created_at      DateTime @default(now()) @db.DateTime(0)
 
   @@index([kind], map: "idx_ai_usage_kind")
   @@index([created_at], map: "idx_ai_usage_created_at")
   @@index([account_id], map: "idx_ai_usage_account")
 }
+
 
 model portfolio_trade {
   id             String   @id @default(uuid()) @db.Char(36)
