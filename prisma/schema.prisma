@@ -107,7 +107,7 @@ model journal_entry {
   buy_fee             Decimal              @default(0.00000000) @db.Decimal(18, 8)
   sell_fee            Decimal              @default(0.00000000) @db.Decimal(18, 8)
   timeframe_code      String               @default("1D") @db.VarChar(8)
-  trading_fee         Float                @default(0)
+  trading_fee         Float                @default(0)      
   futures_trade       futures_trade[]
   account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
   journal             journal              @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
@@ -246,6 +246,8 @@ model verified_asset {
   name       String?  @db.VarChar(100)
   exchange   String   @default("Binance") @db.VarChar(50)
   created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([name])
 }
 
 model app_prompt {
@@ -272,7 +274,6 @@ model ai_usage {
   account_id      Int?
   tracker_id      String?       @db.Char(36)
   pre_analysis_id String?       @db.Char(36)
-  meta            String?       @db.LongText
   created_at      DateTime      @default(now()) @db.DateTime(0)
 
   @@index([kind], map: "idx_ai_usage_kind")
