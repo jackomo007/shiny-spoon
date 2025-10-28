@@ -59,17 +59,39 @@ export default function DashboardShell({ children }: Props) {
       <div className="bg-primary text-white relative">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6 relative">
-            <Image src="/img/brand/white.png" alt="Logo" width={128} height={24} />
+            <Link
+              href="/"
+              className="inline-flex items-center"
+              aria-label="Stakk AI – Home"
+              title="Stakk AI"
+            >
+              <span
+                className="font-extrabold leading-none tracking-tight"
+                style={{
+                  fontSize: 24,
+                  color: "#0F1220", 
+                }}
+              >
+                Stakk
+              </span>
 
+              <span style={{ width: 6, display: "inline-block" }} />
+
+              <span
+                className="font-extrabold leading-none tracking-tight bg-clip-text text-transparent bg-gradient-to-r"
+                style={{
+                  fontSize: 24,
+                  backgroundImage: "linear-gradient(90deg, #6D28D9 0%, #A855F7 100%)",
+                }}
+              >
+                AI
+              </span>
+            </Link>
             <nav className="hidden xl:flex gap-6 opacity-90">
               <Link href="/dashboard">Home</Link>
-              <Link href="/portfolio">Portfolio Manager</Link>
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
-              <button onClick={openComingSoon} className="hover:underline">
-                Trading Course
-              </button>
               {isAdmin && <Link href="/admin">Admin</Link>}
             </nav>
 
@@ -108,15 +130,6 @@ export default function DashboardShell({ children }: Props) {
                       </li>
                       <li>
                         <Link
-                          href="/portfolio"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          Portfolio Manager
-                        </Link>
-                      </li>
-                      <li>
-                        <Link
                           href="/journal"
                           className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
                           onClick={() => setMobileOpen(false)}
@@ -142,7 +155,7 @@ export default function DashboardShell({ children }: Props) {
                           Trade Analyzer
                         </Link>
                       </li>
-                      <li>
+                      {/* <li>
                         <button
                           onClick={() => {
                             setMobileOpen(false)
@@ -152,7 +165,7 @@ export default function DashboardShell({ children }: Props) {
                         >
                           Trading Course
                         </button>
-                      </li>
+                      </li> */}
                       {isAdmin && (
                         <li>
                           <Link
@@ -236,16 +249,16 @@ export default function DashboardShell({ children }: Props) {
 
           <ul className="mt-6 grid gap-2">
             <NavItem href="/dashboard" label="Home" icon="🏠" />
-            <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
-            <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />
+            {isAdmin && <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />}
+            {isAdmin && <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />}
             <li>
-              <button
+              {/* <button
                 onClick={openComingSoon}
                 className="w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
               >
                 <span className="w-6 text-center">🎓</span>
                 <span>Trading Course</span>
-              </button>
+              </button> */}
             </li>
             <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />

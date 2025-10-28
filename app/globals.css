@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #5800cc;
-  --color-bg: #ffffff;
+  --color-primary: #5801cc;
+  --color-bg: #f6f1ff;
 }
 
 .bg-primary { background-color: var(--color-primary); }

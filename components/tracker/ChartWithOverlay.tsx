@@ -238,7 +238,7 @@ export default function ChartWithOverlay({
           width: panelWidth,
           background: "rgba(248, 250, 252, 0.92)",
           backdropFilter: "blur(6px)",
-          borderColor: "#e5e7eb",
+          borderColor: "#7a3df0",
         }}
         aria-label="Market details"
       >
