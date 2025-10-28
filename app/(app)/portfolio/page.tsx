@@ -35,6 +35,51 @@ const colorFor = (name: string) => {
 }
 const dotColor = (sym: string) => (sym === "CASH" ? "#9CA3AF" : colorFor(sym))
 
+function nowLocalForInput(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const yyyy = d.getFullYear()
+  const mm = pad(d.getMonth() + 1)
+  const dd = pad(d.getDate())
+  const hh = pad(d.getHours())
+  const mi = pad(d.getMinutes())
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
+function DateTimeInput(props: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  return (
+    <input
+      type="datetime-local"
+      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+      value={props.value}
+      onChange={(e) => props.onChange(e.target.value)}
+      disabled={props.disabled}
+    />
+  )
+}
+
+function DecimalInput(props: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+      value={props.value}
+      placeholder={props.placeholder}
+      onChange={(e) => {
+        let v = (e.target.value ?? "").replace(/\s+/g, "")
+        v = v.replace(",", ".")
+        v = v.replace(/[^0-9.]/g, "")
+        const firstDot = v.indexOf(".")
+        if (firstDot !== -1) {
+          v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "")
+        }
+        props.onChange(v)
+      }}
+    />
+  )
+}
+
 export default function PortfolioPage() {
   const [data, setData] = useState<PortfolioRes | null>(null)
   const [loading, setLoading] = useState(true)
@@ -154,104 +199,104 @@ export default function PortfolioPage() {
       </div>
 
       {tab === "portfolio" ? (
-      <Card className="p-0">
-        {loading ? (
-          <div className="h-[360px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
-        ) : error ? (
-          <div className="p-6 text-red-600">{error}</div>
-        ) : (
-          <div className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <div className="text-lg font-semibold">Total Portfolio Value: {usd(data!.totalValueUsd)}</div>
-              <div className="text-sm text-gray-600">
-                Cash: <span className="font-medium">{usd(data!.cashUsd)}</span>
+        <Card className="p-0">
+          {loading ? (
+            <div className="h-[360px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
+          ) : error ? (
+            <div className="p-6 text-red-600">{error}</div>
+          ) : (
+            <div className="p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <div className="text-lg font-semibold">Total Portfolio Value: {usd(data!.totalValueUsd)}</div>
+                <div className="text-sm text-gray-600">
+                  Cash: <span className="font-medium">{usd(data!.cashUsd)}</span>
+                </div>
+              </div>
+
+              <div className="h-[400px] rounded-xl border bg-white mb-6">
+                <div className="px-4 pt-3 font-medium">Allocation</div>
+                <div className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie dataKey="percent" nameKey="name" data={pieData} outerRadius={110} label stroke="#fff" strokeWidth={2}>
+                        {pieData.map((entry) => (
+                          <Cell key={entry.name} fill={dotColor(entry.name)} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white">
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Asset</Th>
+                      <Th>Amount Spent</Th>
+                      <Th>Entry Price</Th>
+                      <Th>Value</Th>
+                      <Th>% Port.</Th>
+                      <Th className="text-right">Actions</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.items ?? []).map((i) => (
+                      <Tr key={i.symbol}>
+                        <Td className="font-medium">
+                          <span
+                            className="inline-block mr-2 h-2.5 w-2.5 rounded-full align-middle"
+                            style={{ background: dotColor(i.symbol) }}
+                          />
+                          {i.symbol}
+                        </Td>
+                        <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
+                        <Td>{usd(i.priceUsd)}</Td>
+                        <Td>{usd(i.valueUsd)}</Td>
+                        <Td>{i.percent.toFixed(2)}%</Td>
+                        <Td className="text-right">
+                          <div className="inline-flex gap-2">
+                            <button
+                              className="px-2 py-1 rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                              disabled={i.symbol === "CASH"}
+                              onClick={() => setTrade({ symbol: i.symbol, type: "buy" })}
+                            >
+                              Buy
+                            </button>
+                            <button
+                              className="px-2 py-1 rounded-lg bg-rose-600 text-white disabled:opacity-50"
+                              disabled={i.symbol === "CASH" || i.amount <= 0}
+                              onClick={() => setTrade({ symbol: i.symbol, type: "sell" })}
+                            >
+                              Sell
+                            </button>
+                            <button
+                              className="px-2 py-1 rounded-lg bg-gray-100 text-gray-800 disabled:opacity-50 border"
+                              disabled={!i.canDelete}
+                              title={
+                                i.symbol === "CASH"
+                                  ? "Cash cannot be removed"
+                                  : i.canDelete
+                                  ? "Remove"
+                                  : "Only entries created via Add Asset (not linked to the journal) can be removed"
+                              }
+                              onClick={() => askDelete(i.symbol)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
               </div>
             </div>
-
-            <div className="h-[400px] rounded-xl border bg-white mb-6">
-              <div className="px-4 pt-3 font-medium">Allocation</div>
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie dataKey="percent" nameKey="name" data={pieData} outerRadius={110} label stroke="#fff" strokeWidth={2}>
-                      {pieData.map((entry) => (
-                        <Cell key={entry.name} fill={dotColor(entry.name)} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-white">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Asset</Th>
-                    <Th>Amount Spent</Th>
-                    <Th>Entry Price</Th>
-                    <Th>Value</Th>
-                    <Th>% Port.</Th>
-                    <Th className="text-right">Actions</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.items ?? []).map((i) => (
-                    <Tr key={i.symbol}>
-                      <Td className="font-medium">
-                        <span
-                          className="inline-block mr-2 h-2.5 w-2.5 rounded-full align-middle"
-                          style={{ background: dotColor(i.symbol) }}
-                        />
-                        {i.symbol}
-                      </Td>
-                      <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
-                      <Td>{usd(i.priceUsd)}</Td>
-                      <Td>{usd(i.valueUsd)}</Td>
-                      <Td>{i.percent.toFixed(2)}%</Td>
-                      <Td className="text-right">
-                        <div className="inline-flex gap-2">
-                          <button
-                            className="px-2 py-1 rounded-lg bg-emerald-600 text-white disabled:opacity-50"
-                            disabled={i.symbol === "CASH"}
-                            onClick={() => setTrade({ symbol: i.symbol, type: "buy" })}
-                          >
-                            Buy
-                          </button>
-                          <button
-                            className="px-2 py-1 rounded-lg bg-rose-600 text-white disabled:opacity-50"
-                            disabled={i.symbol === "CASH" || i.amount <= 0}
-                            onClick={() => setTrade({ symbol: i.symbol, type: "sell" })}
-                          >
-                            Sell
-                          </button>
-                          <button
-                            className="px-2 py-1 rounded-lg bg-gray-100 text-gray-800 disabled:opacity-50 border"
-                            disabled={!i.canDelete}
-                            title={
-                              i.symbol === "CASH"
-                                ? "Cash cannot be removed"
-                                : i.canDelete
-                                ? "Remove"
-                                : "Only entries created via Add Asset (not linked to the journal) can be removed"
-                            }
-                            onClick={() => askDelete(i.symbol)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          </div>
-        )}
-      </Card>
-            ) : (
+          )}
+        </Card>
+      ) : (
         <TradeHistoryCard />
       )}
 
@@ -269,6 +314,7 @@ export default function PortfolioPage() {
       {showCash && (
         <CashModal
           kind={showCash.kind}
+          cashAvail={data?.cashUsd ?? 0}
           onClose={() => setShowCash(null)}
           onDone={async () => {
             setShowCash(null)
@@ -431,6 +477,7 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
 
   const [strategies, setStrategies] = useState<StrategyOpt[]>([])
   const [strategyId, setStrategyId] = useState<string>("")
+  const [when, setWhen] = useState<string>(nowLocalForInput())
 
   useEffect(() => {
     ;(async () => {
@@ -451,6 +498,11 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
   const [priceStr,  setPriceStr]  = useState<string>("")
   const [feeStr,    setFeeStr]    = useState<string>("")
   const [busy, setBusy] = useState(false)
+
+  const toNum = (v: string): number => {
+    const s = (v ?? "").replace(",", ".").trim()
+    return s === "" ? NaN : Number(s)
+  }
 
   const amount = toNum(amountStr)
   const price  = toNum(priceStr)
@@ -491,6 +543,7 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
                   priceUsd: price,
                   feeUsd: fee || 0,
                   strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                  executedAt: new Date(when).toISOString(),
                 }
                 const res = await fetch("/api/portfolio/add-asset", {
                   method: "POST",
@@ -542,26 +595,36 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
         </Field>
 
         <Field label="Amount Spent">
-          <NumInputText value={amountStr} onChange={(e) => setAmountStr(e.target.value)} />
+          <DecimalInput value={amountStr} onChange={setAmountStr} />
         </Field>
 
         <Field label="Entry Price (USD)">
-          <NumInputText value={priceStr} onChange={(e) => setPriceStr(e.target.value)} />
+          <DecimalInput value={priceStr} onChange={setPriceStr} />
         </Field>
 
         <Field label="Fee (USD) – optional">
-          <NumInputText value={feeStr} onChange={(e) => setFeeStr(e.target.value)} />
+          <DecimalInput value={feeStr} onChange={setFeeStr} />
+        </Field>
+
+        <Field label="Date & Time">
+          <DateTimeInput value={when} onChange={setWhen} />
         </Field>
       </div>
     </Modal>
   )
 }
 
-
-
-function CashModal(props: { kind: "deposit" | "withdraw"; onClose: () => void; onDone: () => Promise<void>; onError: (msg: string) => void }) {
+function CashModal(props: {
+  kind: "deposit" | "withdraw"
+  cashAvail: number
+  onClose: () => void
+  onDone: () => Promise<void>
+  onError: (msg: string) => void
+}) {
   const [amount, setAmount] = useState<number>(0)
   const [busy, setBusy] = useState(false)
+  const isWithdraw = props.kind === "withdraw"
+  const [when] = useState<string>(nowLocalForInput()) 
 
   return (
     <Modal
@@ -575,7 +638,7 @@ function CashModal(props: { kind: "deposit" | "withdraw"; onClose: () => void; o
           </button>
           <button
             className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-            disabled={amount <= 0 || busy}
+            disabled={amount <= 0 || busy || (isWithdraw && amount > (props.cashAvail ?? 0) + 1e-8)}
             onClick={async () => {
               try {
                 setBusy(true)
@@ -603,8 +666,32 @@ function CashModal(props: { kind: "deposit" | "withdraw"; onClose: () => void; o
     >
       <div className="grid gap-3">
         <Field label="Amount (USD)">
-          <NumInput value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+          <div className="flex gap-2">
+            <NumInput
+              value={amount}
+              onChange={(e) => setAmount(Number(e.target.value))}
+              onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+            />
+            {isWithdraw && (
+              <button
+                type="button"
+                className="px-3 py-2 rounded-xl border"
+                onClick={() => setAmount(Number((props.cashAvail ?? 0).toFixed(2)))}
+                title="Withdraw all available cash"
+              >
+                Max
+              </button>
+            )}
+          </div>
         </Field>
+
+        <Field label="Date & Time">
+          <DateTimeInput value={when} onChange={() => {}} disabled />
+        </Field>
+
+        {isWithdraw && (
+          <div className="text-xs text-gray-500">Cash available: {usd(props.cashAvail ?? 0)}</div>
+        )}
       </div>
     </Modal>
   )
@@ -622,6 +709,7 @@ function TradeModal(props: {
   type StrategyOpt = { id: string; name: string | null }
   const [strategies, setStrategies] = useState<StrategyOpt[]>([])
   const [strategyId, setStrategyId] = useState<string>("")
+  const [when, setWhen] = useState<string>(nowLocalForInput())
 
   useEffect(() => {
     ;(async () => {
@@ -637,7 +725,8 @@ function TradeModal(props: {
     })()
   }, [])
 
-  const [price, setPrice] = useState<number>(0)
+  const [priceStr, setPriceStr] = useState<string>("")
+  const price = priceStr === "" ? 0 : Number(priceStr)
   const [fee, setFee] = useState<number>(0)
   const [value, setValue] = useState<number>(0)
   const [busy, setBusy] = useState(false)
@@ -675,6 +764,7 @@ function TradeModal(props: {
                       cashToSpend: value,
                       feeUsd: fee || 0,
                       strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                      executedAt: new Date(when).toISOString(),
                     }
                   : {
                       symbol: props.symbol,
@@ -682,6 +772,7 @@ function TradeModal(props: {
                       amountToSell: value,
                       feeUsd: fee || 0,
                       strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
+                      executedAt: new Date(when).toISOString(),
                     }
 
                 const res = await fetch(url, {
@@ -727,28 +818,58 @@ function TradeModal(props: {
           </div>
         )}
 
+        <Field label="Date & Time">
+          <DateTimeInput value={when} onChange={setWhen} />
+        </Field>
+
         <Field label="Entry Price (USD)">
-          <NumInputText
-            value={Number.isFinite(price) ? String(price) : ""}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              const v = (e.target.value ?? "").replace(",", ".").trim()
-              setPrice(v === "" ? 0 : Number(v))
-            }}
-          />
+          <DecimalInput value={priceStr} onChange={setPriceStr} />
         </Field>
 
         {isBuy ? (
           <Field label="Cash to Spend (USD)">
-            <NumInput value={value} onChange={(e) => setValue(Number(e.target.value))} />
+            <div className="flex gap-2">
+              <NumInput
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+                onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+              />
+              <button
+                type="button"
+                className="px-3 py-2 rounded-xl border"
+                onClick={() => setValue(Number((props.cashAvail ?? 0).toFixed(2)))}
+                title="Use maximum available cash"
+              >
+                Max
+              </button>
+            </div>
           </Field>
         ) : (
           <Field label="Amount to Sell">
-            <NumInput value={value} onChange={(e) => setValue(Number(e.target.value))} />
+            <div className="flex gap-2">
+              <NumInput
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+                onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+              />
+              <button
+                type="button"
+                className="px-3 py-2 rounded-xl border"
+                onClick={() => setValue(props.maxQty ?? 0)}
+                title="Sell full position"
+              >
+                Max
+              </button>
+            </div>
           </Field>
         )}
 
         <Field label="Fee (USD)">
-          <NumInput value={fee} onChange={(e) => setFee(Number(e.target.value))} />
+          <NumInput
+            value={fee}
+            onChange={(e) => setFee(Number(e.target.value))}
+            onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+          />
         </Field>
 
         <div className="text-xs text-gray-500">{limitText}</div>
@@ -764,10 +885,6 @@ function Field(props: { label: string; children: React.ReactNode }) {
       {props.children}
     </label>
   )
-}
-function toNum(v: string): number {
-  const s = (v ?? "").replace(",", ".").trim()
-  return s === "" ? NaN : Number(s)
 }
 
 function NumInputText(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -793,6 +910,3 @@ function NumInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     />
   )
 }
-
-
-

@@ -298,12 +298,15 @@ export const PortfolioRepo = {
     amountUsd: number
     kind: "deposit" | "withdraw"
     note?: string
+    tradeAt?: Date  
   }) {
     const side: journal_entry_side = opts.kind === "deposit" ? "buy" : "sell"
     const [journalId, strategyId] = await Promise.all([
       ensureDefaultJournalId(opts.accountId),
       ensureDefaultStrategyId(opts.accountId),
     ])
+
+     const when = opts.tradeAt ?? new Date() 
 
     return prisma.journal_entry.create({
       data: {
@@ -317,7 +320,7 @@ export const PortfolioRepo = {
         amount_spent: 0,
         amount: opts.amountUsd,
         timeframe_code: "1D",
-        trade_datetime: new Date(),
+        trade_datetime: when, 
         strategy_id: strategyId,
         strategy_rule_match: 0,
         spot_trade: { create: {} },
@@ -333,6 +336,7 @@ export const PortfolioRepo = {
     priceUsd: number
     feeUsd?: number
     strategyId?: string | null
+    tradeAt?: Date 
   }) {
     const journalId = await ensureDefaultJournalId(opts.accountId)
 
@@ -340,6 +344,8 @@ export const PortfolioRepo = {
       opts.strategyId === "NONE"
         ? await ensureNoneStrategyId(opts.accountId)
         : (opts.strategyId ?? await ensureDefaultStrategyId(opts.accountId))
+
+    const when = opts.tradeAt ?? new Date()
 
     return prisma.journal_entry.create({
       data: {
@@ -354,7 +360,7 @@ export const PortfolioRepo = {
         amount_spent: opts.amount * opts.priceUsd + (opts.feeUsd ?? 0),
         amount: opts.amount,
         timeframe_code: "1D",
-        trade_datetime: new Date(),
+        trade_datetime: when,   
         strategy_id: chosenStrategyId,
         strategy_rule_match: 0,
         spot_trade: { create: {} },

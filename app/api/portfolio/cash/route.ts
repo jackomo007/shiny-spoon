@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     accountId,
     amountUsd: data.amountUsd,
     kind: data.kind,
+    tradeAt: new Date(),
   })
 
   return NextResponse.json({ ok: true })

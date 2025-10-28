@@ -12,6 +12,7 @@ const Body = z.object({
   cashToSpend: z.number().positive(),
   feeUsd: z.number().min(0).default(0),
   strategyId: z.string().min(1).optional(),
+  executedAt: z.string().datetime(), 
 })
 
 export async function POST(req: Request) {
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
       cashToSpend: data.cashToSpend,
       feeUsd: data.feeUsd ?? 0,
       strategyId: data.strategyId ?? null,
+      tradeAt: new Date(data.executedAt),
     })
 
     return NextResponse.json({ ok: true })
