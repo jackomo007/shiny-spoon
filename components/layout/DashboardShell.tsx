@@ -56,7 +56,7 @@ export default function DashboardShell({ children }: Props) {
 
   return (
     <div className="min-h-dvh bg-gray-50">
-      <div className="bg-primary text-white relative">
+      <div className="bg-[#f6f1ff] text-gray relative">
         <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6 relative">
             <Link
