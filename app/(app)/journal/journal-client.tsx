@@ -105,6 +105,26 @@ const fmt4 = (n: number | null | undefined) => {
   return trimmed ? `${i}.${trimmed}` : i; 
 };
 
+function parseDecimal(input: string | number | null | undefined): number {
+  if (input == null) return NaN;
+  let s = String(input).trim().replace(/\s/g, "");
+  const lastDot = s.lastIndexOf(".");
+  const lastComma = s.lastIndexOf(",");
+  if (lastDot !== -1 && lastComma !== -1) {
+    if (lastDot > lastComma) s = s.replace(/,/g, "");
+    else s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    s = s.replace(/,/g, ".");
+  }
+  return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
+}
+
+function decimalOrZero(input: string | number | null | undefined): number {
+  const n = parseDecimal(input ?? "");
+  return isNaN(n) ? 0 : n;
+}
+
+
 const money2 = (n: number) => `$${n.toFixed(2)}`;
 
 type BasePayload = {
@@ -216,6 +236,9 @@ export default function JournalPage() {
   const [closeExit, setCloseExit] = useState<string>("");
   const [closeTradingFee, setCloseTradingFee] = useState<string>("0");
   const [closePnl, setClosePnl] = useState<number | null>(null);
+  const [closeExitError, setCloseExitError] = useState<string | null>(null);
+  const [closeFeeError, setCloseFeeError] = useState<string | null>(null);
+
 
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
   const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
@@ -260,16 +283,19 @@ export default function JournalPage() {
     if (r.status !== "in_progress") return;
     setRowToClose(r);
     setCloseExit(r.exit_price != null ? String(r.exit_price) : "");
-    setCloseTradingFee(String(r.trading_fee ?? 0));
+    setCloseTradingFee(String(r.trading_fee ?? "")); 
     setClosePnl(null);
+    setCloseExitError(null);
+    setCloseFeeError(null);
     setCloseOpen(true);
   }
 
   useEffect(() => {
     if (!rowToClose) return;
-    const exit = parseFloat(closeExit);
-    const tradingFeeNum = parseFloat(closeTradingFee);
-    if (isNaN(exit) || isNaN(tradingFeeNum)) { setClosePnl(null); return; }
+    const exit = parseDecimal(closeExit);
+    if (isNaN(exit)) { setClosePnl(null); return; }
+
+    const tradingFeeNum = decimalOrZero(closeTradingFee);
     const dir = (rowToClose.side === "buy" || rowToClose.side === "long") ? 1 : -1;
     const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
     const notional = rowToClose.trade_type === 2
@@ -915,7 +941,6 @@ export default function JournalPage() {
           </div>
         </div>
 
-        {/* tabela apenas em >= md */}
         <div className="px-6 pb-2 overflow-x-auto hidden md:block">
           {loading ? (
             <div className="py-10 text-center text-sm text-gray-500">Loading…</div>
@@ -1547,19 +1572,22 @@ export default function JournalPage() {
             <button
               onClick={async () => {
                 if (!rowToClose) return;
-                const exitNum = parseFloat(closeExit);
-                const tradingFeeNum = parseFloat(closeTradingFee);
-                if (!(exitNum > 0)) { alert("Exit price is required"); return; }
-                if (!(tradingFeeNum >= 0)) { alert("Trading fee must be ≥ 0"); return; }
+                setCloseExitError(null);
+                setCloseFeeError(null);
+
+                const exitNum = parseDecimal(closeExit);
+                if (!(exitNum > 0)) { setCloseExitError("Exit price is required"); return; }
+
+                const tradingFeeNum = decimalOrZero(closeTradingFee);
+                if (!(tradingFeeNum >= 0)) { setCloseFeeError("Trading fee must be ≥ 0"); return; }
+
                 try {
                   setClosing(true);
                   const computedStatus: Status = (() => {
-                    if (!rowToClose) return "win";
                     if (exitNum === rowToClose.entry_price) return "break_even";
                     const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
                     return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
-                      ? "win"
-                      : "loss";
+                      ? "win" : "loss";
                   })();
 
                   const baseClose: BasePayload = {
@@ -1581,45 +1609,21 @@ export default function JournalPage() {
 
                   const payloadClose: CreatePayload =
                     rowToClose.trade_type === 2
-                      ? {
-                          ...baseClose,
-                          trade_type: 2,
-                          futures: {
-                            leverage: rowToClose.leverage ?? 1,
-                            liquidation_price: rowToClose.liquidation_price ?? null,
-                          },
-                        }
-                      : {
-                          ...baseClose,
-                          trade_type: 1,
-                        };
+                      ? { ...baseClose, trade_type: 2, futures: { leverage: rowToClose.leverage ?? 1, liquidation_price: rowToClose.liquidation_price ?? null } }
+                      : { ...baseClose, trade_type: 1 };
 
                   const r = await fetch(`/api/journal/${rowToClose.id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payloadClose),
                   });
-                  type PutReturn = {
-                    id: string;
-                    status: Status;
-                    exit_price: number | null;
-                    trading_fee: number;
-                  };
+                  const saved = await r.json();
 
-                  const saved: PutReturn = await r.json();
-
-                  setItems(prev =>
-                    prev.map(it =>
-                      it.id === rowToClose.id
-                        ? {
-                            ...it,
-                            status: saved.status ?? it.status,
-                            exit_price: saved.exit_price ?? it.exit_price,
-                            trading_fee: typeof saved.trading_fee === "number" ? saved.trading_fee : it.trading_fee,
-                          }
-                        : it
-                    )
-                  );
+                  setItems(prev => prev.map(it =>
+                    it.id === rowToClose.id
+                      ? { ...it, status: saved.status ?? it.status, exit_price: saved.exit_price ?? it.exit_price, trading_fee: typeof saved.trading_fee === "number" ? saved.trading_fee : it.trading_fee }
+                      : it
+                  ));
                   setCloseOpen(false);
                   await load();
                 } catch (e) {
@@ -1647,10 +1651,11 @@ export default function JournalPage() {
                 <div className="text-xs text-gray-500">Exit</div>
                 <input
                   value={closeExit}
-                  onChange={(e) => setCloseExit(e.target.value)}
+                  onChange={(e) => { setCloseExit(e.target.value); setCloseExitError(null); }}
                   inputMode="decimal"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  className={`w-full rounded-xl border px-3 py-2 ${closeExitError ? "border-red-500" : "border-gray-200"}`}
                 />
+                {closeExitError && <div className="mt-1 text-xs text-red-600">{closeExitError}</div>}
               </div>
               <div>
                 <div className="text-xs text-gray-500">PnL (net)</div>
@@ -1663,10 +1668,12 @@ export default function JournalPage() {
                 <div className="text-xs text-gray-500">Trading Fee <span className="text-red-600">*</span></div>
                 <input
                   value={closeTradingFee}
-                  onChange={(e) => setCloseTradingFee(e.target.value)}
+                  onChange={(e) => { setCloseTradingFee(e.target.value); setCloseFeeError(null); }}
                   inputMode="decimal"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  className={`w-full rounded-xl border px-3 py-2 ${closeFeeError ? "border-red-500" : "border-gray-200"}`}
+                  placeholder="0"
                 />
+                {closeFeeError && <div className="mt-1 text-xs text-red-600">{closeFeeError}</div>}
               </div>
             </div>
           </div>
@@ -1756,7 +1763,7 @@ export default function JournalPage() {
       </Modal>
 
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
-        <span>© 2025 Maverik AI. All rights reserved.</span>
+        <span>© 2025 Stakk AI. All rights reserved.</span>
         <a href="#" className="hover:underline">Support</a>
         <a href="#" className="hover:underline">Terms</a>
         <a href="#" className="hover:underline">Privacy</a>
