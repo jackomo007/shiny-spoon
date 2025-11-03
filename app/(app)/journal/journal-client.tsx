@@ -124,6 +124,10 @@ function decimalOrZero(input: string | number | null | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
+function toNum(input: string | number | null | undefined): number {
+  return parseDecimal(input ?? "");
+}
+
 
 const money2 = (n: number) => `$${n.toFixed(2)}`;
 
@@ -417,8 +421,8 @@ export default function JournalPage() {
   const hasExit = !!(wExit && String(wExit).trim());
 
   const derivedStatus = useMemo<Status | null>(() => {
-    const ex = parseFloat(String(wExit ?? ""));
-    const en = parseFloat(String(wEntry ?? ""));
+    const ex = parseDecimal(wExit ?? "");
+    const en = parseDecimal(wEntry ?? "");
     if (!(ex > 0) || !(en > 0)) return null;
     const longLike = wSide === "buy" || wSide === "long";
     if (ex === en) return "break_even";
@@ -633,31 +637,51 @@ export default function JournalPage() {
 
     const timeframe_code = `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
 
+    const amt = toNum(form.amount_spent);
+    const entry = toNum(form.entry_price);
+    const fee   = toNum(form.trading_fee ?? "0");
+    const exit  = (form.exit_price && form.exit_price.trim()) ? toNum(form.exit_price) : null;
+    const sl    = (form.stop_loss_price && form.stop_loss_price.trim()) ? toNum(form.stop_loss_price) : null;
+
+    if (!(amt > 0) || !(entry > 0) || !(fee >= 0)) {
+      alert("Please enter valid numbers (you can use commas).");
+      return;
+    }
+
     const base: BasePayload = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
       side: coercedSide,
       status: (form.status ?? "in_progress") as Status,
-      amount_spent: Number(form.amount_spent ?? 0),
-      entry_price: Number(form.entry_price ?? 0),
-      exit_price: form.exit_price ? Number(form.exit_price) : null,
-      stop_loss_price: form.stop_loss_price ? Number(form.stop_loss_price) : null,
+      amount_spent: amt,
+      entry_price: entry,
+      exit_price: exit,
+      stop_loss_price: sl,
       strategy_rule_match: ruleCount,
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
       timeframe_code,
-      trading_fee: Number(form.trading_fee ?? 0),
+      trading_fee: fee,
     };
 
     let payload: CreatePayload;
+
     if (tradeType === 2) {
-      const liq = form.liquidation_price?.trim()
-        ? Number(form.liquidation_price)
-        : null;
+      const levParsed = parseDecimal(form.leverage ?? "");
+      if (!(levParsed > 0)) {
+        alert("Leverage must be > 0");
+        return;
+      }
+
+      const liqParsed =
+        form.liquidation_price && form.liquidation_price.trim()
+          ? parseDecimal(form.liquidation_price)
+          : NaN;
+      const liq = isNaN(liqParsed) ? null : liqParsed;
 
       const futures: CreateFuturesPayload["futures"] = {
-        leverage: Number(form.leverage ?? 0),
+        leverage: levParsed,
         liquidation_price: liq,
       };
 
@@ -1266,7 +1290,7 @@ export default function JournalPage() {
                         <input
                           {...register("trading_fee", {
                             required: "Trading fee is required",
-                            validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                            validate: (v) => parseDecimal(v ?? "0") >= 0 || "Must be ≥ 0",
                           })}
                           inputMode="decimal"
                           placeholder="0"
@@ -1285,7 +1309,7 @@ export default function JournalPage() {
                       <input
                         {...register("amount_spent", {
                           required: "Amount spent is required",
-                          validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
+                          validate: (v) => parseDecimal(v ?? "0") > 0 || "Must be > 0",
                         })}
                         inputMode="decimal"
                         placeholder="e.g. 500.00"
@@ -1302,7 +1326,7 @@ export default function JournalPage() {
                         <input
                           {...register("entry_price", {
                             required: "Entry price is required",
-                            validate: (v) => parseFloat(v ?? "0") > 0 || "Must be > 0",
+                            validate: (v) => parseDecimal(v ?? "0") > 0 || "Must be > 0",
                           })}
                           inputMode="decimal"
                           placeholder="e.g. 27654.32"
@@ -1342,7 +1366,7 @@ export default function JournalPage() {
                         {...register("amount_spent", {
                           required: "Amount spent is required",
                           validate: (v) =>
-                            parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
+                            parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
                         })}
                         inputMode="decimal"
                         placeholder="e.g. 1000.00"
@@ -1364,7 +1388,7 @@ export default function JournalPage() {
                           {...register("entry_price", {
                             required: "Entry price is required",
                             validate: (v) =>
-                              parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
+                              parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
                           })}
                           inputMode="decimal"
                           placeholder="e.g. 27654.32"
@@ -1404,7 +1428,7 @@ export default function JournalPage() {
                         <input
                           {...register("trading_fee", {
                             required: "Trading fee is required",
-                            validate: (v) => parseFloat(v ?? "0") >= 0 || "Must be ≥ 0",
+                            validate: (v) => parseDecimal(v ?? "0") >= 0 || "Must be ≥ 0",
                           })}
                           inputMode="decimal"
                           placeholder="0"
@@ -1425,7 +1449,7 @@ export default function JournalPage() {
                           {...register("leverage", {
                             required: "Leverage is required",
                             validate: (v) =>
-                              parseFloat(v ?? "0") > 0 ? true : "Must be > 0",
+                              parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
                           })}
                           placeholder="e.g. 10"
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
