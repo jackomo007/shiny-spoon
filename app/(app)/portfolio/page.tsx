@@ -563,7 +563,6 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
             value={strategyId}
             onChange={(e) => setStrategyId(e.target.value)}
           >
-            <option value="">Use default</option>
             {strategies.map((s) => (
               <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
             ))}
@@ -804,7 +803,6 @@ function TradeModal(props: {
             value={strategyId}
             onChange={(e) => setStrategyId(e.target.value)}
           >
-            <option value="">Use default</option>
             {strategies.map((s) => (
               <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
             ))}
