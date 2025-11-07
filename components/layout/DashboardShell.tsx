@@ -254,15 +254,15 @@ export default function DashboardShell({ children }: Props) {
             <NavItem href="/dashboard" label="Home" icon="🏠" />
             {isAdmin && <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />}
             {isAdmin && <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />}
-            <li>
-              {/* <button
+            {/* <li>
+              <button
                 onClick={openComingSoon}
                 className="w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
               >
                 <span className="w-6 text-center">🎓</span>
                 <span>Trading Course</span>
-              </button> */}
-            </li>
+              </button>
+            </li> */}
             <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
             <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
