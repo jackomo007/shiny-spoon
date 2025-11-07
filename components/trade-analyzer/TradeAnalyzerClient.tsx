@@ -4,6 +4,7 @@ import { useState } from "react";
 import Card from "@/components/ui/Card";
 import ChartWithOverlay from "@/components/tracker/ChartWithOverlay";
 import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
+import { MoneyInputStandalone } from "@/components/form/MaskedFields";
 
 type StrategyOpt = { id: string; name: string | null };
 type TradeType = "spot" | "futures";
@@ -52,10 +53,12 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
   const [asset, setAsset] = useState("");
   const [tradeType, setTradeType] = useState<TradeType>("spot");
   const [side, setSide] = useState<Side>("buy");
-  const [amountSpent, setAmountSpent] = useState<number>(100);
-  const [entry, setEntry] = useState<string>("");
-  const [target, setTarget] = useState<number | "">("");
-  const [stop, setStop] = useState<number | "">("");
+
+  const [amountSpentRaw, setAmountSpentRaw] = useState<string>(" ");
+  const [entryRaw, setEntryRaw] = useState<string>("");
+  const [targetRaw, setTargetRaw] = useState<string>("");
+  const [stopRaw, setStopRaw] = useState<string>(""); 
+
   const [tfCode, setTfCode] = useState<string>("1h");
 
   const [loading, setLoading] = useState(false);
@@ -68,8 +71,11 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
     if (t === "futures" && (side === "buy" || side === "sell")) setSide("long");
   }
 
-  const entryNum  = entry.trim() === "" ? NaN : Number(entry);
-  const amountNum = Number(amountSpent);
+  const amountNum = amountSpentRaw === "" ? NaN : Number(amountSpentRaw);
+  const entryNum  = entryRaw === "" ? NaN : Number(entryRaw);
+  const targetNum = targetRaw === "" ? null : Number(targetRaw);
+  const stopNum   = stopRaw === "" ? null : Number(stopRaw);
+
   const hasAsset  = asset.trim().length >= 2;
   const hasEntry  = Number.isFinite(entryNum) && entryNum > 0;
   const hasAmount = Number.isFinite(amountNum) && amountNum > 0;
@@ -95,10 +101,10 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
         asset: asset.trim().toUpperCase(),
         trade_type: tradeType,
         side,
-        amount_spent: Number(amountSpent),
-        entry_price: Number(entry),
-        target_price: target === "" ? null : Number(target),
-        stop_price: stop === "" ? null : Number(stop),
+        amount_spent: Number(amountSpentRaw),
+        entry_price: Number(entryRaw),
+        target_price: targetNum === null ? null : Number(targetNum),
+        stop_price:   stopNum   === null ? null : Number(stopNum),
         timeframe_code: tfCode.trim(),
       };
 
@@ -213,48 +219,45 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
           )}
 
           <div>
-            <label className="text-sm text-gray-600">Amount Spent</label>
-            <input
-              type="number"
+            <label className="text-sm text-gray-600">Amount Spent (USD)</label>
+            <MoneyInputStandalone
+              valueRaw={amountSpentRaw}
+              onChangeRaw={setAmountSpentRaw}
+              placeholder="0"
               className="w-full rounded-xl border p-2"
-              value={amountSpent}
-              onChange={(e) => setAmountSpent(Number(e.target.value))}
-              min={0}
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-600">Entry Price</label>
-            <input
-              type="number"
+            <label className="text-sm text-gray-600">Entry Price (USD)</label>
+            <MoneyInputStandalone
+              valueRaw={entryRaw}
+              onChangeRaw={setEntryRaw}
+              maxDecimals={8}
+              placeholder="0"
               className="w-full rounded-xl border p-2"
-              value={entry}
-              onChange={(e) => setEntry(e.currentTarget.value)}
-              min={0}
-              inputMode="decimal"
-              step="any"
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-600">Target Exit Price</label>
-            <input
-              type="number"
+            <label className="text-sm text-gray-600">Target Exit Price (USD)</label>
+            <MoneyInputStandalone
+              valueRaw={targetRaw}
+              onChangeRaw={setTargetRaw}
+              maxDecimals={8}
+              placeholder="0"
               className="w-full rounded-xl border p-2"
-              value={target}
-              onChange={(e) => setTarget(e.target.value === "" ? "" : Number(e.target.value))}
-              min={0}
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-600">Stop Loss Price</label>
-            <input
-              type="number"
+            <label className="text-sm text-gray-600">Stop Loss Price (USD)</label>
+            <MoneyInputStandalone
+              valueRaw={stopRaw}
+              onChangeRaw={setStopRaw}
+              maxDecimals={8}
+              placeholder="0"
               className="w-full rounded-xl border p-2"
-              value={stop}
-              onChange={(e) => setStop(e.target.value === "" ? "" : Number(e.target.value))}
-              min={0}
             />
           </div>
         </div>

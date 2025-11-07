@@ -5,6 +5,9 @@ import { useForm } from "react-hook-form"
 import Card from "@/components/ui/Card"
 import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
+import { MoneyInputStandalone, MoneyField, DecimalField } from "@/components/form/MaskedFields";
+
+import { toDisplay } from "@/utils/numberMask"
 
 type TradeType = 1 | 2
 type Status = "in_progress" | "win" | "loss" | "break_even"
@@ -43,16 +46,17 @@ type JournalForm = {
 
   timeframe_number?: string
   timeframe_unit?: "S" | "M" | "H" | "D" | "W" | "Y"
-  trading_fee?: string
 
-  side?: Side
-  status?: Status
+  trading_fee?: string
   amount_spent?: string
   entry_price?: string
   exit_price?: string
   stop_loss_price?: string
   leverage?: string
   liquidation_price?: string
+
+  side?: Side
+  status?: Status
 
   matched_rule_ids?: string[]
   notes_entry?: string
@@ -200,6 +204,7 @@ export default function JournalPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -242,7 +247,7 @@ export default function JournalPage() {
   const [closePnl, setClosePnl] = useState<number | null>(null);
   const [closeExitError, setCloseExitError] = useState<string | null>(null);
   const [closeFeeError, setCloseFeeError] = useState<string | null>(null);
-
+  
 
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
   const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
@@ -257,7 +262,7 @@ export default function JournalPage() {
   }
   function clearRuleIds(entryId: string) {
     try { localStorage.removeItem(makeRuleKey(entryId)) } catch {}
-}
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -440,7 +445,7 @@ export default function JournalPage() {
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
-  try {
+    try {
       const saved = JSON.parse(localStorage.getItem("jrnl.range") || "{}");
       if (saved.start) setStart(saved.start);
       if (saved.end) setEnd(saved.end);
@@ -625,7 +630,7 @@ export default function JournalPage() {
     }
   }
 
- async function submitFinal(form: JournalForm) {
+  async function submitFinal(form: JournalForm) {
     const tradeType = Number(form.trade_type) as TradeType;
     const ruleCount = (form.matched_rule_ids ?? []).length;
 
@@ -1029,7 +1034,6 @@ export default function JournalPage() {
           )}
         </div>
 
-        {/* cards apenas em < md */}
         <div className="px-6 pb-4 md:hidden">
           {loading ? (
             <div className="py-8 text-center text-sm text-gray-500">Loading…</div>
@@ -1261,216 +1265,11 @@ export default function JournalPage() {
               </>
             )}
 
-            {wizardStep === 2 && (
-              <>
-                {wTradeType === 1 ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">Status</div>
-                        <select
-                          {...register("status", { required: "Status is required" })}
-                          onChange={(e) => {
-                            const val = e.target.value as Status;
-                            setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                          }}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        >
-                          <option value="in_progress">In Progress</option>
-                          <option value="win">Win</option>
-                          <option value="loss">Loss</option>
-                          <option value="break_even">Break-Even</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <div className="text-sm mb-1">
-                          Trading Fee <span className="text-red-600">*</span>
-                        </div>
-                        <input
-                          {...register("trading_fee", {
-                            required: "Trading fee is required",
-                            validate: (v) => parseDecimal(v ?? "0") >= 0 || "Must be ≥ 0",
-                          })}
-                          inputMode="decimal"
-                          placeholder="0"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                        {errors.trading_fee && (
-                          <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm mb-1">
-                        Amount Spent <span className="text-red-600">*</span>
-                      </div>
-                      <input
-                        {...register("amount_spent", {
-                          required: "Amount spent is required",
-                          validate: (v) => parseDecimal(v ?? "0") > 0 || "Must be > 0",
-                        })}
-                        inputMode="decimal"
-                        placeholder="e.g. 500.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:col-span-full gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Entry Price <span className="text-red-600">*</span>
-                        </div>
-                        <input
-                          {...register("entry_price", {
-                            required: "Entry price is required",
-                            validate: (v) => parseDecimal(v ?? "0") > 0 || "Must be > 0",
-                          })}
-                          inputMode="decimal"
-                          placeholder="e.g. 27654.32"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                        {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm mb-1">Exit Price</div>
-                      <input
-                        {...register("exit_price")}
-                        inputMode="decimal"
-                        placeholder="e.g. 28000.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="text-sm mb-1">Stop Loss Price</div>
-                      <input
-                        {...register("stop_loss_price")}
-                        inputMode="decimal"
-                        placeholder="e.g. 25000.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="text-sm mb-1">
-                        Amount Spent <span className="text-red-600">*</span>
-                      </div>
-                      <input
-                        {...register("amount_spent", {
-                          required: "Amount spent is required",
-                          validate: (v) =>
-                            parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
-                        })}
-                        inputMode="decimal"
-                        placeholder="e.g. 1000.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                      {errors.amount_spent && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {String(errors.amount_spent.message)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Entry Price <span className="text-red-600">*</span>
-                        </div>
-                        <input
-                          {...register("entry_price", {
-                            required: "Entry price is required",
-                            validate: (v) =>
-                              parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
-                          })}
-                          inputMode="decimal"
-                          placeholder="e.g. 27654.32"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                        {errors.entry_price && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.entry_price.message)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Exit Price</div>
-                        <input
-                          {...register("exit_price")}
-                          inputMode="decimal"
-                          placeholder="e.g. 28000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
-                      <div className="md:col-span-full">
-                        <div className="text-sm mb-1">Stop Loss Price</div>
-                        <input
-                          {...register("stop_loss_price")}
-                          inputMode="decimal"
-                          placeholder="e.g. 25000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-full">
-                        <div className="text-sm mb-1">
-                          Trading Fee <span className="text-red-600">*</span>
-                        </div>
-                        <input
-                          {...register("trading_fee", {
-                            required: "Trading fee is required",
-                            validate: (v) => parseDecimal(v ?? "0") >= 0 || "Must be ≥ 0",
-                          })}
-                          inputMode="decimal"
-                          placeholder="0"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                        {errors.trading_fee && (
-                          <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Leverage <span className="text-red-600">*</span>
-                        </div>
-                        <input
-                          {...register("leverage", {
-                            required: "Leverage is required",
-                            validate: (v) =>
-                              parseDecimal(v ?? "0") > 0 ? true : "Must be > 0",
-                          })}
-                          placeholder="e.g. 10"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                        {errors.leverage && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.leverage.message)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Liquidation Price</div>
-                        <input
-                          {...register("liquidation_price")}
-                          inputMode="decimal"
-                          placeholder="e.g. 10000.32"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
-                    </div>
-
+          {wizardStep === 2 && (
+            <>
+              {wTradeType === 1 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm mb-1">Status</div>
                       <select
@@ -1486,29 +1285,240 @@ export default function JournalPage() {
                         <option value="loss">Loss</option>
                         <option value="break_even">Break-Even</option>
                       </select>
-                      {errors.status && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
+                    </div>
+
+                    <div>
+                      <div className="text-sm mb-1">
+                        Trading Fee <span className="text-red-600">*</span>
+                      </div>
+                      <MoneyField<JournalForm>
+                        name="trading_fee"
+                        control={control}
+                        placeholder="0"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        rules={{
+                          required: "Trading fee is required",
+                          validate: (v) => parseDecimal((v ?? "").toString() || "0") >= 0 || "Must be ≥ 0",
+                        }}
+                      />
+                      {errors.trading_fee && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
                       )}
                     </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm mb-1">
+                      Amount Spent <span className="text-red-600">*</span>
+                    </div>
+                    <MoneyField<JournalForm>
+                      name="amount_spent"
+                      control={control}
+                      placeholder="e.g. 500.00"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      rules={{
+                        required: "Amount spent is required",
+                        validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                      }}
+                    />
+                    {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:col-span-full gap-4">
                     <div>
-                      <div className="text-sm mb-1">Side</div>
-                      <select
-                        {...register("side", { required: "Side is required" })}
+                      <div className="text-sm mb-1">
+                        Entry Price <span className="text-red-600">*</span>
+                      </div>
+                      <MoneyField<JournalForm>
+                        name="entry_price"
+                        control={control}
+                        placeholder="e.g. 27654.32"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      >
-                        <option value="long">Long</option>
-                        <option value="short">Short</option>
-                      </select>
-                      {errors.side && (
+                        rules={{
+                          required: "Entry price is required",
+                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                        }}
+                      />
+                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm mb-1">Exit Price</div>
+                    <MoneyField<JournalForm>
+                      name="exit_price"
+                      control={control}
+                      placeholder="e.g. 28000.00"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-sm mb-1">Stop Loss Price</div>
+                    <MoneyField<JournalForm>
+                      name="stop_loss_price"
+                      control={control}
+                      placeholder="e.g. 25000.00"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <div className="text-sm mb-1">
+                      Amount Spent <span className="text-red-600">*</span>
+                    </div>
+                    <MoneyField<JournalForm>
+                      name="amount_spent"
+                      control={control}
+                      placeholder="e.g. 1000.00"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      rules={{
+                        required: "Amount spent is required",
+                        validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                      }}
+                    />
+                    {errors.amount_spent && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {String(errors.amount_spent.message)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm mb-1">
+                        Entry Price <span className="text-red-600">*</span>
+                      </div>
+                      <MoneyField<JournalForm>
+                        name="entry_price"
+                        control={control}
+                        placeholder="e.g. 27654.32"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        rules={{
+                          required: "Entry price is required",
+                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                        }}
+                      />
+                      {errors.entry_price && (
                         <p className="mt-1 text-xs text-red-600">
-                          {String(errors.side.message)}
+                          {String(errors.entry_price.message)}
                         </p>
                       )}
                     </div>
-                  </>
-                )}
-              </>
-            )}
+                    <div>
+                      <div className="text-sm mb-1">Exit Price</div>
+                      <MoneyField<JournalForm>
+                        name="exit_price"
+                        control={control}
+                        placeholder="e.g. 28000.00"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                    </div>
+                    <div className="md:col-span-full">
+                      <div className="text-sm mb-1">Stop Loss Price</div>
+                      <MoneyField<JournalForm>
+                        name="stop_loss_price"
+                        control={control}
+                        placeholder="e.g. 25000.00"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-full">
+                      <div className="text-sm mb-1">
+                        Trading Fee <span className="text-red-600">*</span>
+                      </div>
+                      <MoneyField<JournalForm>
+                        name="trading_fee"
+                        control={control}
+                        placeholder="0"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        rules={{
+                          required: "Trading fee is required",
+                          validate: (v) => parseDecimal((v ?? "").toString() || "0") >= 0 || "Must be ≥ 0",
+                        }}
+                      />
+                      {errors.trading_fee && (
+                        <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm mb-1">
+                        Leverage <span className="text-red-600">*</span>
+                      </div>
+                      <DecimalField<JournalForm>
+                        name="leverage"
+                        control={control}
+                        placeholder="e.g. 10"
+                        maxDecimals={2}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        rules={{
+                          required: "Leverage is required",
+                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                        }}
+                      />
+                      {errors.leverage && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.leverage.message)}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm mb-1">Liquidation Price</div>
+                      <MoneyField<JournalForm>
+                        name="liquidation_price"
+                        control={control}
+                        placeholder="e.g. 10000.32"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm mb-1">Status</div>
+                    <select
+                      {...register("status", { required: "Status is required" })}
+                      onChange={(e) => {
+                        const val = e.target.value as Status;
+                        setValue("status", val, { shouldDirty: true, shouldValidate: true });
+                      }}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    >
+                      <option value="in_progress">In Progress</option>
+                      <option value="win">Win</option>
+                      <option value="loss">Loss</option>
+                      <option value="break_even">Break-Even</option>
+                    </select>
+                    {errors.status && (
+                      <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm mb-1">Side</div>
+                    <select
+                      {...register("side", { required: "Side is required" })}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    >
+                      <option value="long">Long</option>
+                      <option value="short">Short</option>
+                    </select>
+                    {errors.side && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {String(errors.side.message)}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
             {wizardStep === 3 && (
               <>
                 <div>
@@ -1675,8 +1685,16 @@ export default function JournalPage() {
                 <div className="text-xs text-gray-500">Exit</div>
                 <input
                   value={closeExit}
-                  onChange={(e) => { setCloseExit(e.target.value); setCloseExitError(null); }}
+                  onChange={(e) => {
+                    setCloseExit(toDisplay(e.target.value, 8));
+                    setCloseExitError(null);
+                  }}
                   inputMode="decimal"
+                  pattern="[0-9.,]*"
+                  onBeforeInput={(e: React.FormEvent<HTMLInputElement> & { nativeEvent: InputEvent }) => {
+                    const ch = e.nativeEvent.data ?? "";
+                    if (ch && !/^[0-9.,\s]+$/.test(ch)) e.preventDefault();
+                  }}
                   className={`w-full rounded-xl border px-3 py-2 ${closeExitError ? "border-red-500" : "border-gray-200"}`}
                 />
                 {closeExitError && <div className="mt-1 text-xs text-red-600">{closeExitError}</div>}
@@ -1689,14 +1707,21 @@ export default function JournalPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <div className="text-xs text-gray-500">Trading Fee <span className="text-red-600">*</span></div>
-                <input
-                  value={closeTradingFee}
-                  onChange={(e) => { setCloseTradingFee(e.target.value); setCloseFeeError(null); }}
-                  inputMode="decimal"
-                  className={`w-full rounded-xl border px-3 py-2 ${closeFeeError ? "border-red-500" : "border-gray-200"}`}
+                <div className="text-xs text-gray-500">
+                  Trading Fee <span className="text-red-600">*</span>
+                </div>
+
+                <MoneyInputStandalone
+                  valueRaw={closeTradingFee}
+                  onChangeRaw={(v) => {
+                    setCloseTradingFee(v);
+                    setCloseFeeError(null);
+                  }}
                   placeholder="0"
+                  className={`w-full rounded-xl border px-3 py-2 ${closeFeeError ? "border-red-500" : "border-gray-200"}`}
+                  maxDecimals={2}
                 />
+
                 {closeFeeError && <div className="mt-1 text-xs text-red-600">{closeFeeError}</div>}
               </div>
             </div>

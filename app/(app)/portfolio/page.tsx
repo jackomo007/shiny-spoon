@@ -6,6 +6,7 @@ import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
 import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete"
 import { PieChart, Pie, Legend, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import { MoneyInputStandalone } from "@/components/form/MaskedFields"
 import type React from "react"
 
 
@@ -58,28 +59,6 @@ function DateTimeInput(props: { value: string; onChange: (v: string) => void; di
   )
 }
 
-function DecimalInput(props: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-      value={props.value}
-      placeholder={props.placeholder}
-      onChange={(e) => {
-        let v = (e.target.value ?? "").replace(/\s+/g, "")
-        v = v.replace(",", ".")
-        v = v.replace(/[^0-9.]/g, "")
-        const firstDot = v.indexOf(".")
-        if (firstDot !== -1) {
-          v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "")
-        }
-        props.onChange(v)
-      }}
-    />
-  )
-}
-
 export default function PortfolioPage() {
   const [data, setData] = useState<PortfolioRes | null>(null)
   const [loading, setLoading] = useState(true)
@@ -98,7 +77,7 @@ export default function PortfolioPage() {
   const [deleting, setDeleting] = useState(false)
 
   const [tab, setTab] = useState<"portfolio" | "history">("portfolio")
-
+  
 
   const load = async () => {
     setLoading(true)
@@ -499,10 +478,7 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
   const [feeStr,    setFeeStr]    = useState<string>("")
   const [busy, setBusy] = useState(false)
 
-  const toNum = (v: string): number => {
-    const s = (v ?? "").replace(",", ".").trim()
-    return s === "" ? NaN : Number(s)
-  }
+  const toNum = (v: string): number => (v ?? "") === "" ? NaN : Number(v)
 
   const amount = toNum(amountStr)
   const price  = toNum(priceStr)
@@ -594,16 +570,32 @@ function AddAssetModal(props: { onClose: () => void; onDone: () => Promise<void>
           </select>
         </Field>
 
-        <Field label="Amount Spent">
-          <DecimalInput value={amountStr} onChange={setAmountStr} />
+        <Field label="Amount Spent (USD)">
+          <MoneyInputStandalone
+            valueRaw={amountStr}
+            onChangeRaw={setAmountStr}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+          />
         </Field>
 
         <Field label="Entry Price (USD)">
-          <DecimalInput value={priceStr} onChange={setPriceStr} />
+          <MoneyInputStandalone
+            valueRaw={priceStr}
+            onChangeRaw={setPriceStr}
+            maxDecimals={8}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+          />
         </Field>
 
         <Field label="Fee (USD) – optional">
-          <DecimalInput value={feeStr} onChange={setFeeStr} />
+          <MoneyInputStandalone
+            valueRaw={feeStr}
+            onChangeRaw={setFeeStr}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+          />
         </Field>
 
         <Field label="Date & Time">
@@ -621,10 +613,11 @@ function CashModal(props: {
   onDone: () => Promise<void>
   onError: (msg: string) => void
 }) {
-  const [amount, setAmount] = useState<number>(0)
+  const [amountRaw, setAmountRaw] = useState<string>("")
+  const amountNum = amountRaw === "" ? 0 : Number(amountRaw)
   const [busy, setBusy] = useState(false)
   const isWithdraw = props.kind === "withdraw"
-  const [when] = useState<string>(nowLocalForInput()) 
+  const [when] = useState<string>(nowLocalForInput())
 
   return (
     <Modal
@@ -638,14 +631,14 @@ function CashModal(props: {
           </button>
           <button
             className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-            disabled={amount <= 0 || busy || (isWithdraw && amount > (props.cashAvail ?? 0) + 1e-8)}
+            disabled={amountNum <= 0 || busy || (isWithdraw && amountNum > (props.cashAvail ?? 0) + 1e-8)}
             onClick={async () => {
               try {
                 setBusy(true)
                 const res = await fetch("/api/portfolio/cash", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ amountUsd: amount, kind: props.kind }),
+                  body: JSON.stringify({ amountUsd: amountNum, kind: props.kind }),
                 })
                 if (!res.ok) {
                   const j = await res.json().catch(() => ({}))
@@ -667,16 +660,17 @@ function CashModal(props: {
       <div className="grid gap-3">
         <Field label="Amount (USD)">
           <div className="flex gap-2">
-            <NumInput
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+            <MoneyInputStandalone
+              valueRaw={amountRaw}
+              onChangeRaw={setAmountRaw}
+              placeholder="0"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2"
             />
             {isWithdraw && (
               <button
                 type="button"
                 className="px-3 py-2 rounded-xl border"
-                onClick={() => setAmount(Number((props.cashAvail ?? 0).toFixed(2)))}
+                onClick={() => setAmountRaw((props.cashAvail ?? 0).toFixed(2))}
                 title="Withdraw all available cash"
               >
                 Max
@@ -725,20 +719,26 @@ function TradeModal(props: {
     })()
   }, [])
 
+  // masked money fields as strings
   const [priceStr, setPriceStr] = useState<string>("")
-  const price = priceStr === "" ? 0 : Number(priceStr)
-  const [fee, setFee] = useState<number>(0)
-  const [value, setValue] = useState<number>(0)
+  const [feeStr, setFeeStr] = useState<string>("")
+  const isBuy = props.type === "buy"
+  const [valueCashStr, setValueCashStr] = useState<string>("") // Cash to Spend (USD) for buy
+  const [valueQty, setValueQty] = useState<number>(0)          // Amount to Sell for sell
+
+  const priceNum = priceStr === "" ? 0 : Number(priceStr)
+  const feeNum   = feeStr   === "" ? 0 : Number(feeStr)
+  const valueNum = isBuy ? (valueCashStr === "" ? 0 : Number(valueCashStr)) : valueQty
+
   const [busy, setBusy] = useState(false)
 
-  const isBuy = props.type === "buy"
   const limitText = isBuy ? `Cash available: ${usd(props.cashAvail)}` : `Max qty: ${props.maxQty}`
 
   const disabled =
-    price <= 0 ||
-    value <= 0 ||
+    priceNum <= 0 ||
+    valueNum <= 0 ||
     busy ||
-    (isBuy ? value + fee > props.cashAvail + 1e-8 : value > props.maxQty + 1e-8)
+    (isBuy ? valueNum + feeNum > props.cashAvail + 1e-8 : valueNum > props.maxQty + 1e-8)
 
   return (
     <Modal
@@ -760,17 +760,17 @@ function TradeModal(props: {
                 const body = isBuy
                   ? {
                       symbol: props.symbol,
-                      priceUsd: price,
-                      cashToSpend: value,
-                      feeUsd: fee || 0,
+                      priceUsd: priceNum,
+                      cashToSpend: valueNum,
+                      feeUsd: feeNum || 0,
                       strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
                       executedAt: new Date(when).toISOString(),
                     }
                   : {
                       symbol: props.symbol,
-                      priceUsd: price,
-                      amountToSell: value,
-                      feeUsd: fee || 0,
+                      priceUsd: priceNum,
+                      amountToSell: valueNum,
+                      feeUsd: feeNum || 0,
                       strategyId: (strategyId && strategyId !== "NONE") ? strategyId : undefined,
                       executedAt: new Date(when).toISOString(),
                     }
@@ -823,21 +823,28 @@ function TradeModal(props: {
         </Field>
 
         <Field label="Entry Price (USD)">
-          <DecimalInput value={priceStr} onChange={setPriceStr} />
+          <MoneyInputStandalone
+            valueRaw={priceStr}
+            onChangeRaw={setPriceStr}
+            maxDecimals={8}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+          />
         </Field>
 
         {isBuy ? (
           <Field label="Cash to Spend (USD)">
             <div className="flex gap-2">
-              <NumInput
-                value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
-                onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+              <MoneyInputStandalone
+                valueRaw={valueCashStr}
+                onChangeRaw={setValueCashStr}
+                placeholder="0"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
               />
               <button
                 type="button"
                 className="px-3 py-2 rounded-xl border"
-                onClick={() => setValue(Number((props.cashAvail ?? 0).toFixed(2)))}
+                onClick={() => setValueCashStr((props.cashAvail ?? 0).toFixed(2))}
                 title="Use maximum available cash"
               >
                 Max
@@ -848,14 +855,14 @@ function TradeModal(props: {
           <Field label="Amount to Sell">
             <div className="flex gap-2">
               <NumInput
-                value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
+                value={valueQty}
+                onChange={(e) => setValueQty(Number(e.target.value))}
                 onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
               />
               <button
                 type="button"
                 className="px-3 py-2 rounded-xl border"
-                onClick={() => setValue(props.maxQty ?? 0)}
+                onClick={() => setValueQty(props.maxQty ?? 0)}
                 title="Sell full position"
               >
                 Max
@@ -865,10 +872,11 @@ function TradeModal(props: {
         )}
 
         <Field label="Fee (USD)">
-          <NumInput
-            value={fee}
-            onChange={(e) => setFee(Number(e.target.value))}
-            onKeyDown={(e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault() }}
+          <MoneyInputStandalone
+            valueRaw={feeStr}
+            onChangeRaw={setFeeStr}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
           />
         </Field>
 
@@ -884,18 +892,6 @@ function Field(props: { label: string; children: React.ReactNode }) {
       <span className="text-xs text-gray-500">{props.label}</span>
       {props.children}
     </label>
-  )
-}
-
-function NumInputText(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      pattern="[0-9]*[.,]?[0-9]*"
-      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-      {...props}
-    />
   )
 }
 
