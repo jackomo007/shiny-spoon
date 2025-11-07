@@ -16,7 +16,6 @@ type Item = {
   priceUsd: number
   valueUsd: number
   percent: number
-  canDelete: boolean
 }
 
 type PortfolioRes = {
@@ -77,7 +76,6 @@ export default function PortfolioPage() {
   const [deleting, setDeleting] = useState(false)
 
   const [tab, setTab] = useState<"portfolio" | "history">("portfolio")
-  
 
   const load = async () => {
     setLoading(true)
@@ -117,15 +115,17 @@ export default function PortfolioPage() {
     if (!deleteSymbol) return
     try {
       setDeleting(true)
-      const res = await fetch(`/api/portfolio/${deleteSymbol}`, { method: "DELETE" })
+      // agora deletamos por símbolo com cascade no backend (Prisma)
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(deleteSymbol)}?cascade=true`, { method: "DELETE" })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
         throw new Error(j?.error || "Delete failed")
       }
       setConfirmOpen(false)
+      const deletedSym = deleteSymbol
       setDeleteSymbol(null)
       await load()
-      showInfo("Deleted", `${deleteSymbol} removed from portfolio.`)
+      showInfo("Deleted", `${deletedSym} and related journal entries were removed.`)
     } catch (err) {
       showInfo("Error", err instanceof Error ? err.message : "Delete failed")
     } finally {
@@ -223,6 +223,7 @@ export default function PortfolioPage() {
                   </thead>
                   <tbody>
                     {(data?.items ?? []).map((i) => (
+                      // <<<< CORRIGIDO: key por símbolo
                       <Tr key={i.symbol}>
                         <Td className="font-medium">
                           <span
@@ -252,15 +253,8 @@ export default function PortfolioPage() {
                               Sell
                             </button>
                             <button
-                              className="px-2 py-1 rounded-lg bg-gray-100 text-gray-800 disabled:opacity-50 border"
-                              disabled={!i.canDelete}
-                              title={
-                                i.symbol === "CASH"
-                                  ? "Cash cannot be removed"
-                                  : i.canDelete
-                                  ? "Remove"
-                                  : "Only entries created via Add Asset (not linked to the journal) can be removed"
-                              }
+                              className="px-2 py-1 rounded-lg bg-gray-100 text-gray-800 border hover:bg-gray-200"
+                              title="Delete position and all related journal entries"
                               onClick={() => askDelete(i.symbol)}
                             >
                               Delete
@@ -337,7 +331,11 @@ export default function PortfolioPage() {
           </div>
         }
       >
-        <div className="text-sm text-gray-600">This removes only the initial entries created via “Add Asset”.</div>
+        <div className="text-sm text-gray-700">
+          This will permanently remove <b>{deleteSymbol}</b> from your Portfolio
+          <br />
+          <b>and all related entries in the Trading Journal</b> (child and parent records).
+        </div>
       </Modal>
 
       <Modal
@@ -718,12 +716,11 @@ function TradeModal(props: {
     })()
   }, [])
 
-  // masked money fields as strings
   const [priceStr, setPriceStr] = useState<string>("")
   const [feeStr, setFeeStr] = useState<string>("")
   const isBuy = props.type === "buy"
-  const [valueCashStr, setValueCashStr] = useState<string>("") // Cash to Spend (USD) for buy
-  const [valueQty, setValueQty] = useState<number>(0)          // Amount to Sell for sell
+  const [valueCashStr, setValueCashStr] = useState<string>("")
+  const [valueQty, setValueQty] = useState<number>(0)
 
   const priceNum = priceStr === "" ? 0 : Number(priceStr)
   const feeNum   = feeStr   === "" ? 0 : Number(feeStr)
