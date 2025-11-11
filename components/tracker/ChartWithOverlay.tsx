@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useLayoutEffect, useState } from "react";
 type OverlaySnapshot = {
   symbol: string;
   exchange: string;
-  timeframe: string;
+  timeframe: string | "1h" | "4h" | "1d";
   priceClose: number;
   priceDiff: number;
   pricePct: number;
@@ -145,7 +145,9 @@ export default function ChartWithOverlay({
 
   const up = pct !== null && pct !== undefined ? pct >= 0 : true;
   const exchangeName = hasSnapshot ? snapshot!.exchange : "Binance";
-  const tfLabel = hasSnapshot ? snapshot!.timeframe.toUpperCase() : timeframe.toUpperCase();
+  const tfLabel =
+    (hasSnapshot ? snapshot?.timeframe : timeframe)?.toString().toUpperCase() ??
+    timeframe.toUpperCase();
 
   function fmt(n?: number | null) {
     if (n === null || n === undefined || Number.isNaN(n)) return "-";

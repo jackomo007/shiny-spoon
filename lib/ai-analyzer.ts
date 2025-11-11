@@ -1,3 +1,4 @@
+// lib/ai-analyzer.ts
 import OpenAI from "openai";
 import { getPrompt } from "@/lib/app-prompts";
 import type {
@@ -43,7 +44,7 @@ export async function analyzeChartImage(imageUrl: string, ctx?: ChartContext) {
   const userText =
     "Analyze this chart. Use the structured data below for precise prices and stats. If the image and data disagree, prefer the data.";
   const model = process.env.CHART_ANALYZER_MODEL ?? "gpt-4o-mini";
-
+  
   const structured = ctx ? JSON.stringify(ctx, null, 2) : "{}";
 
   const userContent: ChatCompletionContentPart[] = [
@@ -74,37 +75,30 @@ export async function analyzeChartImage(imageUrl: string, ctx?: ChartContext) {
   };
 }
 
-export async function analyzeTradeWithChart(args: {
-  imageUrl: string;
+export async function analyzeTradeText({
+  prompt,
+  model,
+}: {
   prompt: string;
   model?: string;
-  context?: ChartContext;
 }) {
-  const model = args.model ?? (process.env.TRADE_ANALYZER_MODEL ?? "gpt-4o-mini");
   const systemPrompt = await getPrompt("trade_analyzer_system");
-
-  const structured = args.context ? JSON.stringify(args.context, null, 2) : "{}";
-
-  const userContent: ChatCompletionContentPart[] = [
-    textPart(args.prompt),
-    textPart("```json\n" + structured + "\n```"),
-    imagePart(args.imageUrl),
-  ];
+  const usedModel = model ?? (process.env.TRADE_ANALYZER_MODEL ?? "gpt-4o-mini");
 
   const res = await openai.chat.completions.create({
-    model,
+    model: usedModel,
     temperature: 0.2,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
+      { role: "user", content: prompt },
     ],
   });
 
-  const text = res.choices[0]?.message?.content?.trim() || "Sem análise.";
+  const text = res.choices[0]?.message?.content?.trim() || "No analysis.";
   const usage: Usage = {
     input: res.usage?.prompt_tokens ?? 0,
     output: res.usage?.completion_tokens ?? 0,
   };
 
-  return { text, model, prompt: args.prompt, usage };
+  return { text, model: usedModel, prompt, usage };
 }

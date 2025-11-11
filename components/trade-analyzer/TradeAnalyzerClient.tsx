@@ -1,111 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
-import ChartWithOverlay from "@/components/tracker/ChartWithOverlay";
-import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
 import { MoneyInputStandalone } from "@/components/form/MaskedFields";
+import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
 
-type StrategyOpt = { id: string; name: string | null };
-type TradeType = "spot" | "futures";
-type Side = "buy" | "sell" | "long" | "short";
-
-type OverlaySnapshot = {
-  symbol: string;
-  exchange: string;
-  timeframe: string;
-  priceClose: number;
-  priceDiff: number;
-  pricePct: number;
-  high: number;
-  low: number;
-  volumeLast: number;
-  avgVol30: number;
-  createdAt: string;
-};
+function toStringSafe(v: unknown): string {
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
 
 type ApiSuccess = {
   id: string;
-  imageUrl: string;
   analysis: string;
   createdAt: string;
-  snapshot?: OverlaySnapshot | null;
 };
+
 type ApiError = { error: string | unknown };
+
+type StrategyOpt = { id: string; name: string | null };
 
 function isApiSuccess(x: unknown): x is ApiSuccess {
   if (typeof x !== "object" || x === null) return false;
   const o = x as Record<string, unknown>;
   return (
     typeof o.id === "string" &&
-    typeof o.imageUrl === "string" &&
     typeof o.analysis === "string" &&
     typeof o.createdAt === "string"
   );
 }
+
 function isApiError(x: unknown): x is ApiError {
-  if (typeof x !== "object" || x === null) return false;
-  return "error" in x;
+  return typeof x === "object" && x !== null && "error" in (x as Record<string, unknown>);
 }
 
-export default function TradeAnalyzerClient({ strategies }: { strategies: StrategyOpt[] }) {
-  const [strategyId, setStrategyId] = useState<string>("");
+export default function TradeAnalyzerClient({ strategies: _strategies }: { strategies?: StrategyOpt[] } = {}) {
   const [asset, setAsset] = useState("");
-  const [tradeType, setTradeType] = useState<TradeType>("spot");
-  const [side, setSide] = useState<Side>("buy");
-
-  const [amountSpentRaw, setAmountSpentRaw] = useState<string>(" ");
+  const [amountSpentRaw, setAmountSpentRaw] = useState<string>("");
   const [entryRaw, setEntryRaw] = useState<string>("");
-  const [targetRaw, setTargetRaw] = useState<string>("");
-  const [stopRaw, setStopRaw] = useState<string>(""); 
-
-  const [tfCode, setTfCode] = useState<string>("1h");
+  const [takeProfitRaw, setTakeProfitRaw] = useState<string>("");
+  const [stopRaw, setStopRaw] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>("");
-  const [imageUrl, setImageUrl] = useState<string>("");
-  const [snapshot, setSnapshot] = useState<OverlaySnapshot | null>(null);
-
-  function ensureSide(t: TradeType) {
-    if (t === "spot") setSide("buy");
-    if (t === "futures" && (side === "buy" || side === "sell")) setSide("long");
-  }
 
   const amountNum = amountSpentRaw === "" ? NaN : Number(amountSpentRaw);
-  const entryNum  = entryRaw === "" ? NaN : Number(entryRaw);
-  const targetNum = targetRaw === "" ? null : Number(targetRaw);
-  const stopNum   = stopRaw === "" ? null : Number(stopRaw);
+  const entryNum = entryRaw === "" ? NaN : Number(entryRaw);
+  const tpNum = takeProfitRaw === "" ? NaN : Number(takeProfitRaw);
+  const stopNum = stopRaw === "" ? NaN : Number(stopRaw);
 
-  const hasAsset  = asset.trim().length >= 2;
-  const hasEntry  = Number.isFinite(entryNum) && entryNum > 0;
+  const hasAsset = asset.trim().length >= 2;
   const hasAmount = Number.isFinite(amountNum) && amountNum > 0;
-  const isValid   = hasAsset && hasEntry && hasAmount;
+  const hasEntry = Number.isFinite(entryNum) && entryNum > 0;
+  const hasTP = Number.isFinite(tpNum) && tpNum > 0;
+  const hasSL = Number.isFinite(stopNum) && stopNum > 0;
+
+  const isValid = hasAsset && hasAmount && hasEntry && hasTP && hasSL;
 
   async function submit() {
     if (!isValid) {
       const msgs: string[] = [];
       if (!hasAsset) msgs.push("Asset must be provided (min 2 chars).");
-      if (!hasEntry) msgs.push("Entry price must be > 0.");
-      if (!hasAmount) msgs.push("Amount spent must be > 0.");
+      if (!hasAmount) msgs.push("Amount Spent must be > 0.");
+      if (!hasEntry) msgs.push("Entry Price must be > 0.");
+      if (!hasTP) msgs.push("Take Profit Price must be > 0.");
+      if (!hasSL) msgs.push("Stop Loss Price must be > 0.");
       alert(msgs.join("\n"));
       return;
     }
+
     setLoading(true);
     setAnalysis("");
-    setImageUrl("");
-    setSnapshot(null);
 
     try {
       const payload = {
-        strategy_id: strategyId || undefined,
         asset: asset.trim().toUpperCase(),
-        trade_type: tradeType,
-        side,
         amount_spent: Number(amountSpentRaw),
         entry_price: Number(entryRaw),
-        target_price: targetNum === null ? null : Number(targetNum),
-        stop_price:   stopNum   === null ? null : Number(stopNum),
-        timeframe_code: tfCode.trim(),
+        take_profit_price: Number(takeProfitRaw),
+        stop_price: Number(stopRaw),
       };
 
       const res = await fetch("/api/trade-analyzer", {
@@ -121,22 +98,20 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
 
       if (!res.ok) {
         const msg = isApiError(json)
-          ? typeof json.error === "string"
-            ? json.error
-            : JSON.stringify(json.error)
+          ? typeof (json as ApiError).error === "string"
+            ? (json as ApiError).error
+            : JSON.stringify((json as ApiError).error)
           : `HTTP ${res.status}${text ? ` - ${text}` : ""}`;
-        throw new Error(msg);
+        throw new Error(toStringSafe(msg));
       }
 
       if (!isApiSuccess(json)) {
-        throw new Error("Invalid response shape from server");
+        throw new Error(toStringSafe("Invalid response shape from server"));
       }
 
       setAnalysis(json.analysis);
-      setImageUrl(json.imageUrl);
-      setSnapshot(json.snapshot ?? null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed";
+      const msg = err instanceof Error ? err.message : toStringSafe(err);
       alert(msg);
     } finally {
       setLoading(false);
@@ -157,66 +132,10 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
 
       <Card>
         <div className="grid md:grid-cols-3 gap-4">
-          {/* <div>
-            <label className="text-sm text-gray-600">Strategy Used</label>
-            <select
-              className="w-full rounded-xl border p-2"
-              value={strategyId}
-              onChange={(e) => setStrategyId(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {strategies.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name ?? s.id}
-                </option>
-              ))}
-            </select>
-          </div> */}
-
           <div>
             <label className="text-sm text-gray-600">Asset</label>
             <AssetAutocomplete value={asset} onChange={setAsset} />
           </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Timeframe</label>
-            <input
-              className="w-full rounded-xl border p-2"
-              value={tfCode}
-              onChange={(e) => setTfCode(e.target.value)}
-              placeholder="e.g., 15m, 1h, 4h, 1d, 1w, 1M"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Trade Type</label>
-            <select
-              className="w-full rounded-xl border p-2"
-              value={tradeType}
-              onChange={(e) => {
-                const t = e.target.value as TradeType;
-                setTradeType(t);
-                ensureSide(t);
-              }}
-            >
-              <option value="spot">Spot</option>
-              <option value="futures">Futures</option>
-            </select>
-          </div>
-
-          {tradeType === "futures" && (
-            <div>
-              <label className="text-sm text-gray-600">Trade Side</label>
-              <select
-                className="w-full rounded-xl border p-2"
-                value={side}
-                onChange={(e) => setSide(e.target.value as Side)}
-              >
-                <option value="long">Long</option>
-                <option value="short">Short</option>
-              </select>
-            </div>
-          )}
 
           <div>
             <label className="text-sm text-gray-600">Amount Spent (USD)</label>
@@ -240,10 +159,10 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
           </div>
 
           <div>
-            <label className="text-sm text-gray-600">Target Exit Price (USD)</label>
+            <label className="text-sm text-gray-600">Take Profit Price (USD)</label>
             <MoneyInputStandalone
-              valueRaw={targetRaw}
-              onChangeRaw={setTargetRaw}
+              valueRaw={takeProfitRaw}
+              onChangeRaw={setTakeProfitRaw}
               maxDecimals={8}
               placeholder="0"
               className="w-full rounded-xl border p-2"
@@ -273,23 +192,9 @@ export default function TradeAnalyzerClient({ strategies }: { strategies: Strate
         </div>
       </Card>
 
-      {(imageUrl || analysis) && (
+      {analysis && (
         <Card>
           <div className="text-lg font-semibold mb-3">Result</div>
-
-          {imageUrl && (
-            <div className="rounded-xl border mb-4 overflow-hidden">
-              <ChartWithOverlay
-                imageUrl={imageUrl}
-                symbol={asset.toUpperCase()}
-                timeframe={["1h", "4h", "d1"].includes(tfCode.toLowerCase()) ? (tfCode.toLowerCase() as "h1"|"h4"|"d1") : "h1"}
-                panelWidth={280}
-                title={`${asset.toUpperCase()} · ${tfCode.toUpperCase()} (Pre-Trade)`}
-                snapshot={snapshot ?? undefined}
-              />
-            </div>
-          )}
-
           <pre className="whitespace-pre-wrap text-sm leading-relaxed">{analysis}</pre>
         </Card>
       )}

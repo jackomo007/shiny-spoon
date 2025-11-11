@@ -18,5 +18,5 @@ export default async function TradeAnalyzerPage() {
       })
     : [];
 
-  return <TradeAnalyzerClient strategies={strategies} />;
+  return <TradeAnalyzerClient />;
 }
