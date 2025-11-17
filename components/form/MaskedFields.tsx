@@ -46,7 +46,7 @@ function normalizeDecimalFlexible(s: string): string {
   return x;
 }
 
-function limitDecimals(x: string, max = 2): string {
+export function limitDecimals(x: string, max = 8): string {
   const [i, d] = x.split(".");
   if (!d) return i;
   return `${i}.${d.slice(0, max)}`;
@@ -70,13 +70,40 @@ function toDisplayUS(raw: string, maxDecimals: number): string {
   return d != null && d !== "" ? `${intUS}.${d}` : intUS;
 }
 
-function toDisplayMoneyUS(raw: string): string {
+/**
+ * Converte dígitos "puros" para um número com casas decimais.
+ * Ex.: digitsToRaw("1675", 3) => "1.675"
+ */
+function digitsToRaw(digits: string, decimalPlaces: number): string {
+  if (!digits) return "";
+
+  if (decimalPlaces <= 0) {
+    return stripLeadingZerosInt(digits || "0");
+  }
+
+  if (digits.length <= decimalPlaces) {
+    const padded = digits.padStart(decimalPlaces, "0");
+    return `0.${padded}`;
+  }
+
+  const intPart = digits.slice(0, digits.length - decimalPlaces);
+  const decPart = digits.slice(-decimalPlaces);
+  return `${intPart}.${decPart}`;
+}
+
+/**
+ * Agora aceita quantidade variável de casas decimais.
+ */
+function toDisplayMoneyUS(raw: string, decimalPlaces = 2): string {
   if (!raw) return "";
-  const normalized = limitDecimals(normalizeDecimalFlexible(raw), 2);
+  const normalized = limitDecimals(
+    normalizeDecimalFlexible(raw),
+    decimalPlaces
+  );
   if (!normalized) return "";
   const [i, d = ""] = normalized.split(".");
   const intUS = addGroupingUS(stripLeadingZerosInt(i || "0"));
-  const dec = (d + "00").slice(0, 2);
+  const dec = (d + "0".repeat(decimalPlaces)).slice(0, decimalPlaces);
   return `${intUS}.${dec}`;
 }
 
@@ -202,6 +229,10 @@ export function IntegerField<T extends AnyForm>(props: BaseProps<T>) {
   return <BaseMaskedField {...props} maxDecimals={0} />;
 }
 
+/**
+ * MoneyField agora aceita `decimalPlaces` (default = 2).
+ * Ex.: decimalPlaces={3} → 1675 => 1.675
+ */
 export function MoneyField<T extends AnyForm>({
   name,
   control,
@@ -209,7 +240,8 @@ export function MoneyField<T extends AnyForm>({
   className,
   rules,
   disabled,
-}: BaseProps<T>) {
+  decimalPlaces = 2,
+}: BaseProps<T> & { decimalPlaces?: number }) {
   const validate = mergeValidate<T>(rules?.validate);
 
   return (
@@ -221,7 +253,10 @@ export function MoneyField<T extends AnyForm>({
         validate,
       }}
       render={({ field, fieldState }) => {
-        const displayValue = toDisplayMoneyUS(String(field.value ?? ""));
+        const displayValue = toDisplayMoneyUS(
+          String(field.value ?? ""),
+          decimalPlaces
+        );
 
         return (
           <input
@@ -249,16 +284,7 @@ export function MoneyField<T extends AnyForm>({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
               const txt = e.target.value;
               const digits = txt.replace(/\D/g, "");
-              let raw = "";
-              if (digits.length === 0) {
-                raw = "";
-              } else if (digits.length === 1) {
-                raw = `0.0${digits}`;
-              } else if (digits.length === 2) {
-                raw = `0.${digits}`;
-              } else {
-                raw = `${digits.slice(0, -2)}.${digits.slice(-2)}`;
-              }
+              const raw = digitsToRaw(digits, decimalPlaces);
               field.onChange(raw);
             }}
             onBlur={field.onBlur}
@@ -270,6 +296,9 @@ export function MoneyField<T extends AnyForm>({
   );
 }
 
+/**
+ * Standalone, também usando casas decimais configuráveis via `maxDecimals`.
+ */
 export function MoneyInputStandalone({
   valueRaw,
   onChangeRaw,
@@ -287,7 +316,7 @@ export function MoneyInputStandalone({
 }) {
   return (
     <input
-      value={toDisplayMoneyUS(valueRaw)}
+      value={toDisplayMoneyUS(valueRaw, maxDecimals)}
       placeholder={placeholder}
       className={
         className ?? "w-full rounded-xl border border-gray-200 px-3 py-2"
@@ -308,11 +337,7 @@ export function MoneyInputStandalone({
       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
         const txt = e.target.value;
         const digits = txt.replace(/\D/g, "");
-        let raw = "";
-        if (digits.length === 0) raw = "";
-        else if (digits.length === 1) raw = `0.0${digits}`;
-        else if (digits.length === 2) raw = `0.${digits}`;
-        else raw = `${digits.slice(0, -2)}.${digits.slice(-2)}`;
+        const raw = digitsToRaw(digits, maxDecimals);
         onChangeRaw(limitDecimals(raw, maxDecimals));
       }}
       onBlur={() => {
