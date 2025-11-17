@@ -4,26 +4,19 @@ export function sanitizeInput(raw: string): string {
 
 export function normalizeDecimal(s: string): string {
   let x = sanitizeInput(s);
+  if (!x) return "";
 
-  if (x.includes(".")) {
-    x = x.replace(/,/g, "");
-    const first = x.indexOf(".");
-    return x.slice(0, first + 1) + x.slice(first + 1).replace(/\./g, "");
+  x = x.replace(/,/g, "");
+
+  const firstDot = x.indexOf(".");
+  if (firstDot !== -1) {
+    const intPart = x.slice(0, firstDot);
+    const decimalPart = x.slice(firstDot + 1).replace(/\./g, "");
+    return decimalPart ? `${intPart}.${decimalPart}` : intPart;
   }
 
-  const lastComma = x.lastIndexOf(",");
-  if (lastComma !== -1) {
-    x = x.slice(0, lastComma).replace(/,/g, "") + "." + x.slice(lastComma + 1).replace(/,/g, "");
-  } else {
-  }
-
-  const first = x.indexOf(".");
-  if (first !== -1) {
-    x = x.slice(0, first + 1) + x.slice(first + 1).replace(/\./g, "");
-  }
   return x;
 }
-
 
 export function limitDecimals(x: string, max = 2): string {
   const [i, d] = x.split(".");
@@ -50,11 +43,9 @@ export function toDisplay(raw: string, maxDecimals: number): string {
 
 export function toRaw(display: string, maxDecimals: number): string {
   if (!display) return "";
-  const noGrouping = display.replace(/,/g, "");
-  const normalized = limitDecimals(normalizeDecimal(noGrouping), maxDecimals);
+  const normalized = limitDecimals(normalizeDecimal(display), maxDecimals);
   return normalized;
 }
-
 
 export function isValidNumberString(v: string): boolean {
   return v === "" || /^(\d+(\.\d+)?)$/.test(v);

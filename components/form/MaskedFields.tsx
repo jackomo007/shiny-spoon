@@ -31,15 +31,19 @@ function sanitizeInput(raw: string): string {
 }
 
 function normalizeDecimalFlexible(s: string): string {
-  const x0 = sanitizeInput(s);
-  if (!x0) return "";
-  const lastDot = x0.lastIndexOf(".");
-  const lastComma = x0.lastIndexOf(",");
-  const decPos = Math.max(lastDot, lastComma);
-  if (decPos === -1) return x0.replace(/[.,]/g, "");
-  const intPart = x0.slice(0, decPos).replace(/[.,]/g, "");
-  const decPart = x0.slice(decPos + 1).replace(/[.,]/g, "");
-  return decPart ? `${intPart}.${decPart}` : intPart;
+  let x = sanitizeInput(s);
+  if (!x) return "";
+
+  x = x.replace(/,/g, "");
+
+  const firstDot = x.indexOf(".");
+  if (firstDot !== -1) {
+    const intPart = x.slice(0, firstDot);
+    const decimalPart = x.slice(firstDot + 1).replace(/\./g, "");
+    return decimalPart ? `${intPart}.${decimalPart}` : intPart;
+  }
+
+  return x;
 }
 
 function limitDecimals(x: string, max = 2): string {
@@ -53,27 +57,27 @@ function stripLeadingZerosInt(i: string): string {
   return trimmed === "" ? "0" : trimmed;
 }
 
-function addGroupingBR(intPart: string): string {
-  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+function addGroupingUS(intPart: string): string {
+  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-function toDisplayBR(raw: string, maxDecimals: number): string {
+function toDisplayUS(raw: string, maxDecimals: number): string {
   if (!raw) return "";
   const normalized = limitDecimals(normalizeDecimalFlexible(raw), maxDecimals);
   if (!normalized) return "";
   const [i, d] = normalized.split(".");
-  const intBR = addGroupingBR(stripLeadingZerosInt(i || "0"));
-  return d != null && d !== "" ? `${intBR},${d}` : intBR;
+  const intUS = addGroupingUS(stripLeadingZerosInt(i || "0"));
+  return d != null && d !== "" ? `${intUS}.${d}` : intUS;
 }
 
-function toDisplayMoneyBR(raw: string): string {
+function toDisplayMoneyUS(raw: string): string {
   if (!raw) return "";
   const normalized = limitDecimals(normalizeDecimalFlexible(raw), 2);
   if (!normalized) return "";
   const [i, d = ""] = normalized.split(".");
-  const intBR = addGroupingBR(stripLeadingZerosInt(i || "0"));
+  const intUS = addGroupingUS(stripLeadingZerosInt(i || "0"));
   const dec = (d + "00").slice(0, 2);
-  return `${intBR},${dec}`;
+  return `${intUS}.${dec}`;
 }
 
 function toRawNeutral(display: string, maxDecimals: number): string {
@@ -149,7 +153,7 @@ function BaseMaskedField<T extends AnyForm>({
         validate,
       }}
       render={({ field, fieldState }) => {
-        const displayValue = toDisplayBR(String(field.value ?? ""), maxDecimals);
+        const displayValue = toDisplayUS(String(field.value ?? ""), maxDecimals);
 
         return (
           <input
@@ -217,7 +221,7 @@ export function MoneyField<T extends AnyForm>({
         validate,
       }}
       render={({ field, fieldState }) => {
-        const displayValue = toDisplayMoneyBR(String(field.value ?? ""));
+        const displayValue = toDisplayMoneyUS(String(field.value ?? ""));
 
         return (
           <input
@@ -266,7 +270,6 @@ export function MoneyField<T extends AnyForm>({
   );
 }
 
-/** Standalone money input (sem react-hook-form), recebe/entrega RAW "1234.56" */
 export function MoneyInputStandalone({
   valueRaw,
   onChangeRaw,
@@ -284,7 +287,7 @@ export function MoneyInputStandalone({
 }) {
   return (
     <input
-      value={toDisplayMoneyBR(valueRaw)}
+      value={toDisplayMoneyUS(valueRaw)}
       placeholder={placeholder}
       className={
         className ?? "w-full rounded-xl border border-gray-200 px-3 py-2"
