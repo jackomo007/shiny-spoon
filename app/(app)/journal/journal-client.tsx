@@ -113,14 +113,11 @@ const fmt4 = (n: number | null | undefined) => {
 function parseDecimal(input: string | number | null | undefined): number {
   if (input == null) return NaN;
   let s = String(input).trim().replace(/\s/g, "");
-  const lastDot = s.lastIndexOf(".");
-  const lastComma = s.lastIndexOf(",");
-  if (lastDot !== -1 && lastComma !== -1) {
-    if (lastDot > lastComma) s = s.replace(/,/g, "");
-    else s = s.replace(/\./g, "").replace(",", ".");
-  } else {
-    s = s.replace(/,/g, ".");
-  }
+
+  s = s.replace(/(\d),(?=\d{3}\b)/g, "$1");
+
+  s = s.replace(/,/g, ".");
+
   return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
 }
 
