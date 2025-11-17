@@ -1,11 +1,13 @@
 "use client"
 
+import type React from "react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import Card from "@/components/ui/Card"
 import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
-import { MoneyInputStandalone, MoneyField, DecimalField } from "@/components/form/MaskedFields";
+import { MoneyInputStandalone, MoneyField, DecimalField } from "@/components/form/MaskedFields"
 
 import { toDisplay } from "@/utils/numberMask"
 
@@ -30,7 +32,7 @@ type JournalRow = {
   timeframe_code: string
   liquidation_price: number | null
   stop_loss_price: number | null
-  strategy_rule_match: number 
+  strategy_rule_match: number
   notes_entry: string | null
   notes_review: string | null
 }
@@ -101,39 +103,38 @@ function toISO(dtLocal: string): string {
 }
 
 const fmt4 = (n: number | null | undefined) => {
-  if (n == null) return "—";
-  const s = String(n);
-  const [i, d = ""] = s.split(".");
-  const d4 = d.slice(0, 4);
-  const trimmed = d4.replace(/0+$/, "");
-  return trimmed ? `${i}.${trimmed}` : i; 
-};
+  if (n == null) return "—"
+  const s = String(n)
+  const [i, d = ""] = s.split(".")
+  const d4 = d.slice(0, 4)
+  const trimmed = d4.replace(/0+$/, "")
+  return trimmed ? `${i}.${trimmed}` : i
+}
 
 function parseDecimal(input: string | number | null | undefined): number {
-  if (input == null) return NaN;
-  let s = String(input).trim().replace(/\s/g, "");
-  const lastDot = s.lastIndexOf(".");
-  const lastComma = s.lastIndexOf(",");
+  if (input == null) return NaN
+  let s = String(input).trim().replace(/\s/g, "")
+  const lastDot = s.lastIndexOf(".")
+  const lastComma = s.lastIndexOf(",")
   if (lastDot !== -1 && lastComma !== -1) {
-    if (lastDot > lastComma) s = s.replace(/,/g, "");
-    else s = s.replace(/\./g, "").replace(",", ".");
+    if (lastDot > lastComma) s = s.replace(/,/g, "")
+    else s = s.replace(/\./g, "").replace(",", ".")
   } else {
-    s = s.replace(/,/g, ".");
+    s = s.replace(/,/g, ".")
   }
-  return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
+  return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN
 }
 
 function decimalOrZero(input: string | number | null | undefined): number {
-  const n = parseDecimal(input ?? "");
-  return isNaN(n) ? 0 : n;
+  const n = parseDecimal(input ?? "")
+  return isNaN(n) ? 0 : n
 }
 
 function toNum(input: string | number | null | undefined): number {
-  return parseDecimal(input ?? "");
+  return parseDecimal(input ?? "")
 }
 
-
-const money2 = (n: number) => `$${n.toFixed(3)}`;
+const money2 = (n: number) => `$${n.toFixed(3)}`
 
 type BasePayload = {
   strategy_id: string
@@ -164,6 +165,8 @@ export default function JournalPage() {
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<JournalRow[]>([])
   const [strategies, setStrategies] = useState<StrategyWithRules[]>([])
+  const searchParams = useSearchParams()
+  const [handledFromPortfolio, setHandledFromPortfolio] = useState(false)
 
   const [start, setStart] = useState<string>(() => {
     const end = new Date()
@@ -200,7 +203,7 @@ export default function JournalPage() {
   const [assetError, setAssetError] = useState<string | null>(null)
   const validSymbolsRef = useRef<Set<string>>(new Set())
   const assetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [exportOpen, setExportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false)
 
   const {
     register,
@@ -239,29 +242,34 @@ export default function JournalPage() {
   const [firstRunSaving, setFirstRunSaving] = useState(false)
   const [firstRunError, setFirstRunError] = useState<string | null>(null)
 
-  const [closeOpen, setCloseOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [rowToClose, setRowToClose] = useState<JournalRow | null>(null);
-  const [closeExit, setCloseExit] = useState<string>("");
-  const [closeTradingFee, setCloseTradingFee] = useState<string>("0");
-  const [closePnl, setClosePnl] = useState<number | null>(null);
-  const [closeExitError, setCloseExitError] = useState<string | null>(null);
-  const [closeFeeError, setCloseFeeError] = useState<string | null>(null);
-  
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [rowToClose, setRowToClose] = useState<JournalRow | null>(null)
+  const [closeExit, setCloseExit] = useState<string>("")
+  const [closeTradingFee, setCloseTradingFee] = useState<string>("0")
+  const [closePnl, setClosePnl] = useState<number | null>(null)
+  const [closeExitError, setCloseExitError] = useState<string | null>(null)
+  const [closeFeeError, setCloseFeeError] = useState<string | null>(null)
 
   const RULE_CACHE_PREFIX = "jrnl.ruleIds."
   const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`
   function saveRuleIds(entryId: string, ids: string[]) {
-    try { localStorage.setItem(makeRuleKey(entryId), JSON.stringify(ids)) } catch {}
+    try {
+      localStorage.setItem(makeRuleKey(entryId), JSON.stringify(ids))
+    } catch {}
   }
   function loadRuleIds(entryId: string): string[] | null {
     try {
       const raw = localStorage.getItem(makeRuleKey(entryId))
       return raw ? (JSON.parse(raw) as string[]) : null
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
   function clearRuleIds(entryId: string) {
-    try { localStorage.removeItem(makeRuleKey(entryId)) } catch {}
+    try {
+      localStorage.removeItem(makeRuleKey(entryId))
+    } catch {}
   }
 
   useEffect(() => {
@@ -274,9 +282,7 @@ export default function JournalPage() {
       setFirstRunOpen(true)
       return
     }
-
   }, [loading, journals, firstRunOpen])
-
 
   useEffect(() => {
     const cur = watch("side") as Side | undefined
@@ -289,57 +295,61 @@ export default function JournalPage() {
   }, [wTradeType])
 
   function openCloseModal(r: JournalRow) {
-    if (r.status !== "in_progress") return;
-    setRowToClose(r);
-    setCloseExit(r.exit_price != null ? String(r.exit_price) : "");
-    setCloseTradingFee(String(r.trading_fee ?? "")); 
-    setClosePnl(null);
-    setCloseExitError(null);
-    setCloseFeeError(null);
-    setCloseOpen(true);
+    if (r.status !== "in_progress") return
+    setRowToClose(r)
+    setCloseExit(r.exit_price != null ? String(r.exit_price) : "")
+    setCloseTradingFee(String(r.trading_fee ?? ""))
+    setClosePnl(null)
+    setCloseExitError(null)
+    setCloseFeeError(null)
+    setCloseOpen(true)
   }
 
   useEffect(() => {
-    if (!rowToClose) return;
-    const exit = parseDecimal(closeExit);
-    if (isNaN(exit)) { setClosePnl(null); return; }
+    if (!rowToClose) return
+    const exit = parseDecimal(closeExit)
+    if (isNaN(exit)) {
+      setClosePnl(null)
+      return
+    }
 
-    const tradingFeeNum = decimalOrZero(closeTradingFee);
-    const dir = (rowToClose.side === "buy" || rowToClose.side === "long") ? 1 : -1;
-    const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
-    const notional = rowToClose.trade_type === 2
-      ? (rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1))
-      : rowToClose.amount_spent;
-    const gross = dir * notional * change;
-    const net = gross - tradingFeeNum;
-    setClosePnl(Number(net.toFixed(2)));
-  }, [closeExit, closeTradingFee, rowToClose]);
+    const tradingFeeNum = decimalOrZero(closeTradingFee)
+    const dir = rowToClose.side === "buy" || rowToClose.side === "long" ? 1 : -1
+    const change = (exit - rowToClose.entry_price) / rowToClose.entry_price
+    const notional =
+      rowToClose.trade_type === 2
+        ? rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1)
+        : rowToClose.amount_spent
+    const gross = dir * notional * change
+    const net = gross - tradingFeeNum
+    setClosePnl(Number(net.toFixed(2)))
+  }, [closeExit, closeTradingFee, rowToClose])
 
   function buildRangeQS(start: string, end: string) {
-    const startDate = new Date(`${start}T00:00:00`);
-    const endDate   = new Date(`${end}T23:59:59.999`);
+    const startDate = new Date(`${start}T00:00:00`)
+    const endDate = new Date(`${end}T23:59:59.999`)
     return new URLSearchParams({
       start: startDate.toISOString(),
-      end:   endDate.toISOString(),
-    }).toString();
+      end: endDate.toISOString(),
+    }).toString()
   }
 
   function resetToLast6Months() {
-    const now = new Date();
-    const s = new Date(new Date().setMonth(now.getMonth() - 6));
-    s.setHours(0, 0, 0, 0);
-    const startYMD = s.toISOString().slice(0, 10);
-    const endYMD   = now.toISOString().slice(0, 10);
-    setStart(startYMD);
-    setEnd(endYMD);
-    void load();
+    const now = new Date()
+    const s = new Date(new Date().setMonth(now.getMonth() - 6))
+    s.setHours(0, 0, 0, 0)
+    const startYMD = s.toISOString().slice(0, 10)
+    const endYMD = now.toISOString().slice(0, 10)
+    setStart(startYMD)
+    setEnd(endYMD)
+    void load()
   }
 
   function normalizeJournal(it: JournalApiItem): JournalRow {
     const unifiedFee =
       (it.trading_fee ?? null) != null
         ? Number(it.trading_fee)
-        : (Number(it.buy_fee ?? 0) + Number(it.sell_fee ?? 0))
+        : Number(it.buy_fee ?? 0) + Number(it.sell_fee ?? 0)
 
     return {
       id: it.id,
@@ -366,116 +376,177 @@ export default function JournalPage() {
 
   const load = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      setMovedOutBanner(null);
+      setLoading(true)
+      setError(null)
+      setMovedOutBanner(null)
 
-      const qs = buildRangeQS(start, end);
+      const qs = buildRangeQS(start, end)
       const [jr, st, jn] = await Promise.all([
         fetch(`/api/journal?${qs}`, { cache: "no-store" }),
-        fetch(`/api/strategies`,   { cache: "no-store" }),
-        fetch(`/api/journals`,     { cache: "no-store" }),
-      ]);
+        fetch(`/api/strategies`, { cache: "no-store" }),
+        fetch(`/api/journals`, { cache: "no-store" }),
+      ])
 
-      if (!jr.ok) throw new Error(await jr.text());
-      if (!st.ok) throw new Error(await st.text());
+      if (!jr.ok) throw new Error(await jr.text())
+      if (!st.ok) throw new Error(await st.text())
 
-      const j: JournalIndexResponse = await jr.json();
-      setItems((j.items ?? []).map(normalizeJournal));
+      const j: JournalIndexResponse = await jr.json()
+      setItems((j.items ?? []).map(normalizeJournal))
 
       const sPayload:
-        | { items?: Array<{ id: string; name: string | null; strategy_rules?: Array<{ rule: { id: string; title: string } }> }> }
-        | Array<{ id: string; name: string | null }>
-        = await st.json();
+        | {
+            items?: Array<{
+              id: string
+              name: string | null
+              strategy_rules?: Array<{ rule: { id: string; title: string } }>
+            }>
+          }
+        | Array<{ id: string; name: string | null }> = await st.json()
 
       const arr: StrategyWithRules[] = Array.isArray(sPayload)
         ? sPayload.map((x) => {
-            const prev = strategiesRef.current.find(s => s.id === x.id);
-            return { id: x.id, name: x.name, rules: prev?.rules ?? [] };
+            const prev = strategiesRef.current.find((s) => s.id === x.id)
+            return { id: x.id, name: x.name, rules: prev?.rules ?? [] }
           })
         : (sPayload.items ?? []).map((x) => ({
             id: x.id,
             name: x.name,
             rules: (x.strategy_rules ?? []).map((sr) => ({ id: sr.rule.id, title: sr.rule.title })),
-          }));
-      setStrategies(arr);
+          }))
+      setStrategies(arr)
 
-      if (!jn.ok) throw new Error(await jn.text());
-      const jnPayload = (await jn.json()) as JournalsPayload;
-      const list = jnPayload.items ?? [];
-      setJournals(list);
-      setActiveJournalId(jnPayload.activeJournalId ?? null);
+      if (!jn.ok) throw new Error(await jn.text())
+      const jnPayload = (await jn.json()) as JournalsPayload
+      const list = jnPayload.items ?? []
+      setJournals(list)
+      setActiveJournalId(jnPayload.activeJournalId ?? null)
 
-      const name = list.find(x => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? "";
-      setActiveJournalName(name);
+      const name = list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ?? ""
+      setActiveJournalName(name)
 
-      return (j.items ?? []).map(normalizeJournal);
+      return (j.items ?? []).map(normalizeJournal)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load journal");
-      return [];
+      setError(e instanceof Error ? e.message : "Failed to load journal")
+      return []
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [start, end]);
+  }, [start, end])
 
-  const wTfNum = watch("timeframe_number");
-  const wTfUnit = watch("timeframe_unit");
-  const wExit = watch("exit_price");
-  const wEntry = watch("entry_price");
-  const wSide = watch("side");
-  const hasExit = !!(wExit && String(wExit).trim());
+  const wTfNum = watch("timeframe_number")
+  const wTfUnit = watch("timeframe_unit")
+  const wExit = watch("exit_price")
+  const wEntry = watch("entry_price")
+  const wSide = watch("side")
+  const hasExit = !!(wExit && String(wExit).trim())
 
   const derivedStatus = useMemo<Status | null>(() => {
-    const ex = parseDecimal(wExit ?? "");
-    const en = parseDecimal(wEntry ?? "");
-    if (!(ex > 0) || !(en > 0)) return null;
-    const longLike = wSide === "buy" || wSide === "long";
-    if (ex === en) return "break_even";
-    return longLike ? (ex > en ? "win" : "loss") : (ex < en ? "win" : "loss");
-  }, [wExit, wEntry, wSide]);
+    const ex = parseDecimal(wExit ?? "")
+    const en = parseDecimal(wEntry ?? "")
+    if (!(ex > 0) || !(en > 0)) return null
+    const longLike = wSide === "buy" || wSide === "long"
+    if (ex === en) return "break_even"
+    return longLike ? (ex > en ? "win" : "loss") : ex < en ? "win" : "loss"
+  }, [wExit, wEntry, wSide])
 
   useEffect(() => {
     try {
-      if (wTfNum && /^\d+$/.test(String(wTfNum)) && ["S","M","H","D","W","Y"].includes(String(wTfUnit))) {
-        localStorage.setItem("jrnl.lastTf", JSON.stringify({ num: String(wTfNum), unit: String(wTfUnit) }));
+      if (
+        wTfNum &&
+        /^\d+$/.test(String(wTfNum)) &&
+        ["S", "M", "H", "D", "W", "Y"].includes(String(wTfUnit))
+      ) {
+        localStorage.setItem(
+          "jrnl.lastTf",
+          JSON.stringify({ num: String(wTfNum), unit: String(wTfUnit) })
+        )
       }
     } catch {}
-  }, [wTfNum, wTfUnit]);
+  }, [wTfNum, wTfUnit])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // 🔗 Integração com Portfolio → abrir modal automaticamente
+  useEffect(() => {
+    if (handledFromPortfolio) return
+    if (!searchParams) return
+    if (loading) return
+
+    const from = searchParams.get("from")
+    const openModal = searchParams.get("open_spot_trade_modal") === "1"
+    if (from !== "portfolio" || !openModal) return
+
+    const assetName = searchParams.get("asset_name")?.toUpperCase() ?? ""
+
+    if (assetName) {
+      const candidates = items
+        .filter(
+          (r) =>
+            r.trade_type === 1 &&
+            r.status === "in_progress" &&
+            r.asset_name.toUpperCase() === assetName
+        )
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+
+      if (candidates.length > 0) {
+        openEdit(candidates[0])
+        setHandledFromPortfolio(true)
+        return
+      }
+
+      // fallback: cria novo trade Spot com asset já preenchida
+      openCreate()
+      setValue("trade_type", 1, { shouldDirty: false })
+      setValue("asset_name", assetName, { shouldDirty: true })
+      setHandledFromPortfolio(true)
+      return
+    }
+
+    // Sem asset_name: só abre o create Spot
+    openCreate()
+    setValue("trade_type", 1, { shouldDirty: false })
+    setHandledFromPortfolio(true)
+  }, [searchParams, loading, items, handledFromPortfolio, setValue])
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("jrnl.range") || "{}");
-      if (saved.start) setStart(saved.start);
-      if (saved.end) setEnd(saved.end);
+      const saved = JSON.parse(localStorage.getItem("jrnl.range") || "{}")
+      if (saved.start) setStart(saved.start)
+      if (saved.end) setEnd(saved.end)
     } catch {}
-  }, []);
+  }, [])
 
   useEffect(() => {
-    try { localStorage.setItem("jrnl.range", JSON.stringify({ start, end })); } catch {}
-  }, [start, end]);
+    try {
+      localStorage.setItem("jrnl.range", JSON.stringify({ start, end }))
+    } catch {}
+  }, [start, end])
 
   const rows = useMemo(() => {
     let arr = items
     const q = query.trim().toLowerCase()
     if (q) arr = arr.filter((i) => `${i.asset_name} ${i.status} ${i.side}`.toLowerCase().includes(q))
     switch (sort) {
-      case "az": return [...arr].sort((a, b) => a.asset_name.localeCompare(b.asset_name))
-      case "za": return [...arr].sort((a, b) => b.asset_name.localeCompare(a.asset_name))
-      default:   return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      case "az":
+        return [...arr].sort((a, b) => a.asset_name.localeCompare(b.asset_name))
+      case "za":
+        return [...arr].sort((a, b) => b.asset_name.localeCompare(a.asset_name))
+      default:
+        return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date))
     }
   }, [items, query, sort])
 
   function openCreate() {
-    setMode("create");
-    setEditingId(null);
-    setWizardStep(1);
+    setMode("create")
+    setEditingId(null)
+    setWizardStep(1)
 
-    validSymbolsRef.current = new Set();
-    setAssetQuery("");
-    setAssetOptions([]);
-    setShowAssetMenu(false);
+    validSymbolsRef.current = new Set()
+    setAssetQuery("")
+    setAssetOptions([])
+    setShowAssetMenu(false)
 
     reset({
       strategy_id: "",
@@ -485,29 +556,35 @@ export default function JournalPage() {
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
-    });
+    })
 
-    setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
+    setValue("side", "buy", { shouldValidate: false, shouldDirty: false })
 
-    let lastTfNum = "4";
-    let lastTfUnit: JournalForm["timeframe_unit"] = "H";
+    let lastTfNum = "4"
+    let lastTfUnit: JournalForm["timeframe_unit"] = "H"
     try {
-      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}");
+      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}")
       if (
         saved &&
         /^\d+$/.test(saved.num) &&
-        ["S","M","H","D","W","Y"].includes(saved.unit)
+        ["S", "M", "H", "D", "W", "Y"].includes(saved.unit)
       ) {
-        lastTfNum = saved.num;
-        lastTfUnit = saved.unit;
+        lastTfNum = saved.num
+        lastTfUnit = saved.unit
       }
     } catch {}
 
-    setValue("timeframe_number", lastTfNum, { shouldValidate: false, shouldDirty: false });
-    setValue("timeframe_unit", lastTfUnit,   { shouldValidate: false, shouldDirty: false });
-    setValue("trading_fee", "0", { shouldValidate: false, shouldDirty: false });
+    setValue("timeframe_number", lastTfNum, {
+      shouldValidate: false,
+      shouldDirty: false,
+    })
+    setValue("timeframe_unit", lastTfUnit, {
+      shouldValidate: false,
+      shouldDirty: false,
+    })
+    setValue("trading_fee", "0", { shouldValidate: false, shouldDirty: false })
 
-    setOpen(true);
+    setOpen(true)
   }
 
   function openEdit(row: JournalRow) {
@@ -539,29 +616,37 @@ export default function JournalPage() {
     })
     const tf = row.timeframe_code || ""
     const tfNum = tf.replace(/[A-Z]$/i, "")
-    const tfUnit = tf.slice(-1).toUpperCase() as "S"|"M"|"H"|"D"|"W"|"Y"
+    const tfUnit = tf.slice(-1).toUpperCase() as "S" | "M" | "H" | "D" | "W" | "Y"
     setValue("timeframe_number", tfNum || "1", { shouldValidate: false })
     setValue(
       "timeframe_unit",
-      (["S","M","H","D","W","Y"].includes(tfUnit) ? tfUnit : "H") as JournalForm["timeframe_unit"],
+      (["S", "M", "H", "D", "W", "Y"].includes(tfUnit) ? tfUnit : "H") as JournalForm["timeframe_unit"],
       { shouldValidate: false }
     )
-    setValue("trading_fee", String(row.trading_fee ?? 0), { shouldValidate: false, shouldDirty: false })
-    setValue("strategy_id", row.strategy_id, { shouldValidate: false, shouldDirty: false })
+    setValue("trading_fee", String(row.trading_fee ?? 0), {
+      shouldValidate: false,
+      shouldDirty: false,
+    })
+    setValue("strategy_id", row.strategy_id, {
+      shouldValidate: false,
+      shouldDirty: false,
+    })
 
     const rulesForStrategy = normalizeRules(
-      strategiesRef.current.find(s => s.id === row.strategy_id)
+      strategiesRef.current.find((s) => s.id === row.strategy_id)
     )
     setStrategyRules(rulesForStrategy)
 
     const cached = loadRuleIds(row.id)
-    const validIds = new Set(rulesForStrategy.map(r => r.id))
-    const cachedFiltered = Array.isArray(cached) ? cached.filter(id => validIds.has(id)) : []
+    const validIds = new Set(rulesForStrategy.map((r) => r.id))
+    const cachedFiltered = Array.isArray(cached) ? cached.filter((id) => validIds.has(id)) : []
 
     if (cachedFiltered.length) {
       setValue("matched_rule_ids", cachedFiltered, { shouldDirty: false })
     } else {
-      const prechecked = rulesForStrategy.slice(0, row.strategy_rule_match || 0).map(r => r.id)
+      const prechecked = rulesForStrategy
+        .slice(0, row.strategy_rule_match || 0)
+        .map((r) => r.id)
       setValue("matched_rule_ids", prechecked, { shouldDirty: false })
     }
 
@@ -574,13 +659,17 @@ export default function JournalPage() {
           const normalized = normalizeRules(data as MaybeWithRules)
           setStrategyRules(normalized)
 
-          const valid2 = new Set(normalized.map(rr => rr.id))
+          const valid2 = new Set(normalized.map((rr) => rr.id))
           const cached2 = loadRuleIds(row.id)
-          const cached2Filtered = Array.isArray(cached2) ? cached2.filter(id => valid2.has(id)) : []
+          const cached2Filtered = Array.isArray(cached2)
+            ? cached2.filter((id) => valid2.has(id))
+            : []
           if (cached2Filtered.length) {
             setValue("matched_rule_ids", cached2Filtered, { shouldDirty: false })
           } else {
-            const pre = normalized.slice(0, row.strategy_rule_match || 0).map(rr => rr.id)
+            const pre = normalized
+              .slice(0, row.strategy_rule_match || 0)
+              .map((rr) => rr.id)
             setValue("matched_rule_ids", pre, { shouldDirty: false })
           }
         } catch {}
@@ -623,7 +712,14 @@ export default function JournalPage() {
         const ok = await trigger(["status", "amount_spent", "entry_price", "trading_fee"])
         if (ok) setWizardStep(3)
       } else {
-        const ok = await trigger(["amount_spent", "entry_price", "leverage", "trading_fee", "status", "side"])
+        const ok = await trigger([
+          "amount_spent",
+          "entry_price",
+          "leverage",
+          "trading_fee",
+          "status",
+          "side",
+        ])
         if (ok) setWizardStep(3)
       }
       return
@@ -631,26 +727,36 @@ export default function JournalPage() {
   }
 
   async function submitFinal(form: JournalForm) {
-    const tradeType = Number(form.trade_type) as TradeType;
-    const ruleCount = (form.matched_rule_ids ?? []).length;
+    const tradeType = Number(form.trade_type) as TradeType
+    const ruleCount = (form.matched_rule_ids ?? []).length
 
-    let coercedSide: Side = (form.side ?? "buy") as Side;
+    let coercedSide: Side = (form.side ?? "buy") as Side
     coercedSide =
       tradeType === 1
-        ? (coercedSide === "sell" ? "sell" : "buy")
-        : (coercedSide === "short" ? "short" : "long");
+        ? coercedSide === "sell"
+          ? "sell"
+          : "buy"
+        : coercedSide === "short"
+        ? "short"
+        : "long"
 
-    const timeframe_code = `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
+    const timeframe_code = `${(form.timeframe_number ?? "").trim()}${
+      form.timeframe_unit ?? ""
+    }`.toUpperCase()
 
-    const amt = toNum(form.amount_spent);
-    const entry = toNum(form.entry_price);
-    const fee   = toNum(form.trading_fee ?? "0");
-    const exit  = (form.exit_price && form.exit_price.trim()) ? toNum(form.exit_price) : null;
-    const sl    = (form.stop_loss_price && form.stop_loss_price.trim()) ? toNum(form.stop_loss_price) : null;
+    const amt = toNum(form.amount_spent)
+    const entry = toNum(form.entry_price)
+    const fee = toNum(form.trading_fee ?? "0")
+    const exit =
+      form.exit_price && form.exit_price.trim() ? toNum(form.exit_price) : null
+    const sl =
+      form.stop_loss_price && form.stop_loss_price.trim()
+        ? toNum(form.stop_loss_price)
+        : null
 
     if (!(amt > 0) || !(entry > 0) || !(fee >= 0)) {
-      alert("Please enter valid numbers (you can use commas).");
-      return;
+      alert("Please enter valid numbers (you can use commas).")
+      return
     }
 
     const base: BasePayload = {
@@ -668,54 +774,54 @@ export default function JournalPage() {
       notes_review: form.notes_review?.trim() || null,
       timeframe_code,
       trading_fee: fee,
-    };
+    }
 
-    let payload: CreatePayload;
+    let payload: CreatePayload
 
     if (tradeType === 2) {
-      const levParsed = parseDecimal(form.leverage ?? "");
+      const levParsed = parseDecimal(form.leverage ?? "")
       if (!(levParsed > 0)) {
-        alert("Leverage must be > 0");
-        return;
+        alert("Leverage must be > 0")
+        return
       }
 
       const liqParsed =
         form.liquidation_price && form.liquidation_price.trim()
           ? parseDecimal(form.liquidation_price)
-          : NaN;
-      const liq = isNaN(liqParsed) ? null : liqParsed;
+          : NaN
+      const liq = isNaN(liqParsed) ? null : liqParsed
 
       const futures: CreateFuturesPayload["futures"] = {
         leverage: levParsed,
         liquidation_price: liq,
-      };
+      }
 
-      payload = { ...base, trade_type: 2, futures };
+      payload = { ...base, trade_type: 2, futures }
     } else {
-      payload = { ...base, trade_type: 1 };
+      payload = { ...base, trade_type: 1 }
     }
 
-    const url = mode === "create" ? "/api/journal" : `/api/journal/${editingId}`;
-    const method = mode === "create" ? "POST" : "PUT";
+    const url = mode === "create" ? "/api/journal" : `/api/journal/${editingId}`
+    const method = mode === "create" ? "POST" : "PUT"
 
     const r = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    });
-    if (!r.ok) throw new Error(await r.text());
+    })
+    if (!r.ok) throw new Error(await r.text())
 
     if (method === "PUT" && editingId) {
       type PutReturn = {
-        id: string;
-        status: Status;
-        exit_price: number | null;
-        trading_fee: number;
-      };
-      const saved: PutReturn = await r.json();
+        id: string
+        status: Status
+        exit_price: number | null
+        trading_fee: number
+      }
+      const saved: PutReturn = await r.json()
 
-      setItems(prev =>
-        prev.map(it =>
+      setItems((prev) =>
+        prev.map((it) =>
           it.id === editingId
             ? {
                 ...it,
@@ -728,22 +834,22 @@ export default function JournalPage() {
               }
             : it
         )
-      );
+      )
     } else {
-      await r.json().catch(() => undefined);
+      await r.json().catch(() => undefined)
     }
 
-    const savedYMD = (form.trade_datetime || "").slice(0, 10);
+    const savedYMD = (form.trade_datetime || "").slice(0, 10)
 
     if (savedYMD < start || savedYMD > end) {
-      setStart(savedYMD);
-      setEnd(savedYMD);
-      await load();
+      setStart(savedYMD)
+      setEnd(savedYMD)
+      await load()
     } else {
-      await load();
+      await load()
     }
 
-    setMovedOutBanner(null);
+    setMovedOutBanner(null)
   }
 
   const onSubmit = async (form: JournalForm) => {
@@ -762,46 +868,50 @@ export default function JournalPage() {
     try {
       setAssetError(null)
       if (q.trim().length < 1) {
-        setAssetOptions([]); setShowAssetMenu(false)
+        setAssetOptions([])
+        setShowAssetMenu(false)
         return
       }
       const r = await fetch(`/api/assets/coins?q=${encodeURIComponent(q)}`)
       if (!r.ok) throw new Error("Lookup failed")
       const { items } = (await r.json()) as { items: AssetOption[] }
       setAssetOptions(items)
-      validSymbolsRef.current = new Set(items.map(i => i.symbol.toUpperCase()))
+      validSymbolsRef.current = new Set(items.map((i) => i.symbol.toUpperCase()))
       setShowAssetMenu(items.length > 0)
     } catch (e) {
       setAssetError("Could not load assets")
-      setAssetOptions([]); setShowAssetMenu(false)
+      setAssetOptions([])
+      setShowAssetMenu(false)
     }
   }
 
-  const totalTrades = rows.length;
-  const finished = rows.filter(r => r.status !== "in_progress");
+  const totalTrades = rows.length
+  const finished = rows.filter((r) => r.status !== "in_progress")
   const winRate = finished.length
-    ? Math.round((finished.filter(i => i.status === "win").length * 100) / finished.length)
-    : 0;
+    ? Math.round((finished.filter((i) => i.status === "win").length * 100) / finished.length)
+    : 0
 
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0)
 
   const [strategyRules, setStrategyRules] = useState<Rule[]>([])
 
   const strategiesRef = useRef<StrategyWithRules[]>([])
-  useEffect(() => { strategiesRef.current = strategies }, [strategies])
+  useEffect(() => {
+    strategiesRef.current = strategies
+  }, [strategies])
 
   function normalizeRules(payload: MaybeWithRules): Rule[] {
     if (!payload) return []
 
     if (hasRules(payload) && payload.rules) {
-      return payload.rules.map(r => ({ id: r.id, title: r.title }))
+      return payload.rules.map((r) => ({ id: r.id, title: r.title }))
     }
 
     if (hasStrategyRules(payload) && payload.strategy_rules) {
       return payload.strategy_rules
-        .map(sr => sr.rule)
+        .map((sr) => sr.rule)
         .filter((r): r is Rule => !!r)
-        .map(r => ({ id: r.id, title: r.title }))
+        .map((r) => ({ id: r.id, title: r.title }))
     }
 
     return []
@@ -813,7 +923,7 @@ export default function JournalPage() {
       if (!wStrategyId) return
 
       const fromList = normalizeRules(
-        strategiesRef.current.find(s => s.id === wStrategyId)
+        strategiesRef.current.find((s) => s.id === wStrategyId)
       )
       if (fromList.length) {
         if (!abort) setStrategyRules(fromList)
@@ -830,9 +940,10 @@ export default function JournalPage() {
       }
     }
     void loadRules()
-    return () => { abort = true }
+    return () => {
+      abort = true
+    }
   }, [wStrategyId, open])
-
 
   return (
     <div className="grid gap-6">
@@ -854,14 +965,22 @@ export default function JournalPage() {
           </a>
           <button
             onClick={() => setExportOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50">
+            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
+          >
             📄 Export
           </button>
-          <button onClick={openCreate} className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50">＋</button>
+          <button
+            onClick={openCreate}
+            className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            ＋
+          </button>
         </div>
       </div>
       {movedOutBanner && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{movedOutBanner}</div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {movedOutBanner}
+        </div>
       )}
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -871,7 +990,9 @@ export default function JournalPage() {
               <div className="text-sm text-gray-600">Total Trades</div>
               <div className="mt-2 text-2xl font-semibold">{totalTrades}</div>
             </div>
-            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">👥</div>
+            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">
+              👥
+            </div>
           </div>
         </Card>
         <Card>
@@ -880,16 +1001,22 @@ export default function JournalPage() {
               <div className="text-sm text-gray-600">Win Rate</div>
               <div className="mt-2 text-2xl font-semibold">{winRate}%</div>
             </div>
-            <div className="right-0 top-0  h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">👁️</div>
+            <div className="right-0 top-0  h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">
+              👁️
+            </div>
           </div>
         </Card>
         <Card>
           <div className="flex justify-between">
             <div className="flex flex-col">
               <div className="text-sm text-gray-600">Earnings</div>
-              <div className="mt-2 text-2xl font-semibold">{earnings ? `$${earnings.toFixed(2)}` : "$0.00"}</div>
+              <div className="mt-2 text-2xl font-semibold">
+                {earnings ? `$${earnings.toFixed(2)}` : "$0.00"}
+              </div>
             </div>
-            <div className="right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-orange-500 text-white">$</div>
+            <div className="right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-orange-500 text-white">
+              $
+            </div>
           </div>
         </Card>
       </div>
@@ -939,7 +1066,12 @@ export default function JournalPage() {
                 placeholder="Type and hit enter ..."
                 className="flex-1 outline-none bg-transparent text-gray-700 placeholder:text-gray-400"
               />
-              <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600">✖</button>
+              <button
+                onClick={() => setShowSearch(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✖
+              </button>
             </div>
           </div>
         )}
@@ -947,29 +1079,87 @@ export default function JournalPage() {
         <div className="px-6 pt-5 pb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-800">Trades</h3>
           <div className="flex items-center gap-3 relative">
-            <button onClick={() => setShowSearch((s) => !s)} className="p-2 rounded-full hover:bg-gray-100">🔍</button>
+            <button
+              onClick={() => setShowSearch((s) => !s)}
+              className="p-2 rounded-full hover:bg-gray-100"
+            >
+              🔍
+            </button>
             <div className="relative">
-              <button onClick={() => { setShowFilter((f) => !f); setShowMenu(false) }} className="p-2 rounded-full hover:bg-gray-100">🧰</button>
+              <button
+                onClick={() => {
+                  setShowFilter((f) => !f)
+                  setShowMenu(false)
+                }}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                🧰
+              </button>
               {showFilter && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20" onMouseLeave={() => setShowFilter(false)}>
-                  <MenuItem label="Newest" onClick={() => { setSort("new"); setShowFilter(false) }} icon="🧾" />
-                  <MenuItem label="From A-Z" onClick={() => { setSort("az"); setShowFilter(false) }} icon="🔤" />
-                  <MenuItem label="From Z-A" onClick={() => { setSort("za"); setShowFilter(false) }} icon="🔠" />
+                <div
+                  className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
+                  onMouseLeave={() => setShowFilter(false)}
+                >
+                  <MenuItem
+                    label="Newest"
+                    onClick={() => {
+                      setSort("new")
+                      setShowFilter(false)
+                    }}
+                    icon="🧾"
+                  />
+                  <MenuItem
+                    label="From A-Z"
+                    onClick={() => {
+                      setSort("az")
+                      setShowFilter(false)
+                    }}
+                    icon="🔤"
+                  />
+                  <MenuItem
+                    label="From Z-A"
+                    onClick={() => {
+                      setSort("za")
+                      setShowFilter(false)
+                    }}
+                    icon="🔠"
+                  />
                 </div>
               )}
             </div>
             <div className="relative">
-              <button onClick={() => { setShowMenu((m) => !m); setShowFilter(false) }} className="p-2 rounded-full hover:bg-gray-100">⋯</button>
+              <button
+                onClick={() => {
+                  setShowMenu((m) => !m)
+                  setShowFilter(false)
+                }}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                ⋯
+              </button>
               {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20" onMouseLeave={() => setShowMenu(false)}>
-                  <MenuItem label="Refresh" onClick={() => { void load(); setShowMenu(false) }} />
-                  <MenuItem label="Manage Widgets" onClick={() => setShowMenu(false)} />
+                <div
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
+                  onMouseLeave={() => setShowMenu(false)}
+                >
+                  <MenuItem
+                    label="Refresh"
+                    onClick={() => {
+                      void load()
+                      setShowMenu(false)
+                    }}
+                  />
+                  <MenuItem
+                    label="Manage Widgets"
+                    onClick={() => setShowMenu(false)}
+                  />
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        {/* Desktop table */}
         <div className="px-6 pb-2 overflow-x-auto hidden md:block">
           {loading ? (
             <div className="py-10 text-center text-sm text-gray-500">Loading…</div>
@@ -993,19 +1183,27 @@ export default function JournalPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
+                {rows.map((r) => (
                   <Tr key={r.id}>
                     <Td className="whitespace-nowrap w-28 md:w-36">{r.asset_name}</Td>
-                    <Td className="whitespace-nowrap w-20 md:w-24">{r.trade_type === 2 ? "Futures" : "Spot"}</Td>
+                    <Td className="whitespace-nowrap w-20 md:w-24">
+                      {r.trade_type === 2 ? "Futures" : "Spot"}
+                    </Td>
                     <Td className="whitespace-nowrap w-20 md:w-24">{r.side}</Td>
 
                     <Td className="text-right font-mono w-28">{fmt4(r.entry_price)}</Td>
-                    <Td className="text-right font-mono w-28">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
+                    <Td className="text-right font-mono w-28">
+                      {r.exit_price != null ? fmt4(r.exit_price) : "—"}
+                    </Td>
 
                     <Td className="text-right font-mono w-36">{money2(r.amount_spent)}</Td>
-                    <Td className="text-right font-mono w-28">{r.pnl != null ? money2(r.pnl) : "—"}</Td>
+                    <Td className="text-right font-mono w-28">
+                      {r.pnl != null ? money2(r.pnl) : "—"}
+                    </Td>
 
-                    <Td className="hidden md:table-cell">{new Date(r.date).toLocaleString()}</Td>
+                    <Td className="hidden md:table-cell">
+                      {new Date(r.date).toLocaleString()}
+                    </Td>
                     <Td className="text-center w-16">{r.timeframe_code}</Td>
 
                     <Td className="w-40">
@@ -1013,18 +1211,33 @@ export default function JournalPage() {
                         <button
                           title="Close Trade"
                           onClick={() => openCloseModal(r)}
-                          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700">
+                          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700"
+                        >
                           Close Trade
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
+                        <span className="text-xs text-gray-600">
+                          {r.status.replace("_", " ")}
+                        </span>
                       )}
                     </Td>
 
                     <Td className="w-12">
                       <div className="flex gap-3 justify-end">
-                        <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
-                        <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
+                        <button
+                          title="Edit"
+                          onClick={() => openEdit(r)}
+                          className="text-gray-600 hover:text-gray-800"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          title="Delete"
+                          onClick={() => askDelete(r.id)}
+                          className="text-orange-600 hover:text-orange-700"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </Td>
                   </Tr>
@@ -1034,6 +1247,7 @@ export default function JournalPage() {
           )}
         </div>
 
+        {/* Mobile cards */}
         <div className="px-6 pb-4 md:hidden">
           {loading ? (
             <div className="py-8 text-center text-sm text-gray-500">Loading…</div>
@@ -1041,14 +1255,21 @@ export default function JournalPage() {
             <div className="py-8 text-center text-sm text-red-600">{error}</div>
           ) : (
             <div className="grid gap-3">
-              {rows.map(r => (
-                <div key={r.id} className="rounded-xl border bg-white p-4 shadow-sm">
+              {rows.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-xl border bg-white p-4 shadow-sm"
+                >
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">
                       {r.asset_name}{" "}
-                      <span className="text-xs text-gray-500">({r.trade_type === 2 ? "Futures" : "Spot"})</span>
+                      <span className="text-xs text-gray-500">
+                        ({r.trade_type === 2 ? "Futures" : "Spot"})
+                      </span>
                     </div>
-                    <div className="text-xs px-2 py-1 rounded-full bg-gray-100">{r.timeframe_code}</div>
+                    <div className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                      {r.timeframe_code}
+                    </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -1066,7 +1287,9 @@ export default function JournalPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-gray-500 text-xs">Exit</div>
-                      <div className="font-mono">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</div>
+                      <div className="font-mono">
+                        {r.exit_price != null ? fmt4(r.exit_price) : "—"}
+                      </div>
                     </div>
                     <div>
                       <div className="text-gray-500 text-xs">Amount Spent</div>
@@ -1074,7 +1297,9 @@ export default function JournalPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-gray-500 text-xs">PnL</div>
-                      <div className="font-mono">{r.pnl != null ? money2(r.pnl) : "—"}</div>
+                      <div className="font-mono">
+                        {r.pnl != null ? money2(r.pnl) : "—"}
+                      </div>
                     </div>
                   </div>
 
@@ -1083,15 +1308,30 @@ export default function JournalPage() {
                       <button
                         title="Close Trade"
                         onClick={() => openCloseModal(r)}
-                        className="px-3 py-2 rounded bg-red-600 text-white text-xs hover:bg-red-700">
+                        className="px-3 py-2 rounded bg-red-600 text-white text-xs hover:bg-red-700"
+                      >
                         Close Trade
                       </button>
                     ) : (
-                      <span className="text-xs text-gray-600">{r.status.replace("_", " ")}</span>
+                      <span className="text-xs text-gray-600">
+                        {r.status.replace("_", " ")}
+                      </span>
                     )}
                     <div className="flex gap-3">
-                      <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
-                      <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
+                      <button
+                        title="Edit"
+                        onClick={() => openEdit(r)}
+                        className="text-gray-600 hover:text-gray-800"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        title="Delete"
+                        onClick={() => askDelete(r.id)}
+                        className="text-orange-600 hover:text-orange-700"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1101,6 +1341,7 @@ export default function JournalPage() {
         </div>
       </Card>
 
+      {/* Trade modal */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -1118,13 +1359,25 @@ export default function JournalPage() {
               )}
             </div>
             <div className="flex items-center gap-3">
-              <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
+              <button
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </button>
               {wizardStep < 3 ? (
-                <button className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90" onClick={() => void validateAndNext()}>
+                <button
+                  className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90"
+                  onClick={() => void validateAndNext()}
+                >
                   Next
                 </button>
               ) : (
-                <button onClick={handleSubmit(onSubmit)} disabled={isSubmitting} className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
+                <button
+                  onClick={handleSubmit(onSubmit)}
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+                >
                   {mode === "create" ? "Add Trade" : "Save Changes"}
                 </button>
               )}
@@ -1133,7 +1386,7 @@ export default function JournalPage() {
         }
       >
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <form className="grid gap-4" onSubmit={() =>{}}>
+          <form className="grid gap-4" onSubmit={() => {}}>
             {wizardStep === 1 && (
               <>
                 <div>
@@ -1151,7 +1404,11 @@ export default function JournalPage() {
                       </option>
                     ))}
                   </select>
-                  {errors.strategy_id && <p className="mt-1 text-xs text-red-600">{String(errors.strategy_id.message)}</p>}
+                  {errors.strategy_id && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.strategy_id.message)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1162,7 +1419,8 @@ export default function JournalPage() {
                     {...register("asset_name", {
                       required: "Asset is required",
                       validate: (v) =>
-                        validSymbolsRef.current.has((v ?? "").toUpperCase()) || "Pick an asset from the list",
+                        validSymbolsRef.current.has((v ?? "").toUpperCase()) ||
+                        "Pick an asset from the list",
                     })}
                     value={assetQuery}
                     onChange={(e) => {
@@ -1170,7 +1428,9 @@ export default function JournalPage() {
                       setAssetQuery(q)
                       setValue("asset_name", q, { shouldValidate: true })
                       if (assetTimer.current) clearTimeout(assetTimer.current)
-                      assetTimer.current = setTimeout(() => { void fetchAssets(q) }, 300)
+                      assetTimer.current = setTimeout(() => {
+                        void fetchAssets(q)
+                      }, 300)
                     }}
                     onFocus={() => {
                       if (assetOptions.length > 0) setShowAssetMenu(true)
@@ -1196,12 +1456,20 @@ export default function JournalPage() {
                         </button>
                       ))}
                       {assetOptions.length === 0 && (
-                        <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          No results
+                        </div>
                       )}
                     </div>
                   )}
-                  {assetError && <p className="mt-1 text-xs text-amber-700">{assetError}</p>}
-                  {errors.asset_name && <p className="mt-1 text-xs text-red-600">{String(errors.asset_name.message)}</p>}
+                  {assetError && (
+                    <p className="mt-1 text-xs text-amber-700">{assetError}</p>
+                  )}
+                  {errors.asset_name && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.asset_name.message)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1215,7 +1483,11 @@ export default function JournalPage() {
                     <option value={1}>Spot</option>
                     <option value={2}>Futures</option>
                   </select>
-                  {errors.trade_type && <p className="mt-1 text-xs text-red-600">{String(errors.trade_type.message)}</p>}
+                  {errors.trade_type && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.trade_type.message)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1229,12 +1501,19 @@ export default function JournalPage() {
                       validate: (v) => {
                         const d = new Date(v)
                         const now = new Date()
-                        return d.getTime() <= now.getTime() + 2 * 60 * 1000 || "Date/time cannot be in the future"
-                      }
+                        return (
+                          d.getTime() <= now.getTime() + 2 * 60 * 1000 ||
+                          "Date/time cannot be in the future"
+                        )
+                      },
                     })}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
-                  {errors.trade_datetime && <p className="mt-1 text-xs text-red-600">{String(errors.trade_datetime.message)}</p>}
+                  {errors.trade_datetime && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.trade_datetime.message)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1245,175 +1524,139 @@ export default function JournalPage() {
                     <input
                       {...register("timeframe_number", {
                         required: "Timeframe number is required",
-                        validate: (v) => /^\d+$/.test(String(v ?? "")) || "Only digits",
+                        validate: (v) =>
+                          /^\d+$/.test(String(v ?? "")) || "Only digits",
                       })}
                       placeholder="e.g. 1"
                       className="w-full rounded-xl border border-gray-200 px-3 py-2"
                     />
                     <select
-                      {...register("timeframe_unit", { required: "Unit is required" })}
+                      {...register("timeframe_unit", {
+                        required: "Unit is required",
+                      })}
                       className="rounded-xl border border-gray-200 px-3 py-2"
                     >
-                      {["S","M","H","D","W","Y"].map((u) => (
-                        <option key={u} value={u}>{u}</option>
+                      {["S", "M", "H", "D", "W", "Y"].map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
                       ))}
                     </select>
                   </div>
-                  {errors.timeframe_number && <p className="mt-1 text-xs text-red-600">{String(errors.timeframe_number.message)}</p>}
-                  {errors.timeframe_unit && <p className="mt-1 text-xs text-red-600">{String(errors.timeframe_unit.message)}</p>}
+                  {errors.timeframe_number && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.timeframe_number.message)}
+                    </p>
+                  )}
+                  {errors.timeframe_unit && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {String(errors.timeframe_unit.message)}
+                    </p>
+                  )}
                 </div>
               </>
             )}
 
-          {wizardStep === 2 && (
-            <>
-              {wTradeType === 1 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm mb-1">Status</div>
-                      <select
-                        {...register("status", { required: "Status is required" })}
-                        onChange={(e) => {
-                          const val = e.target.value as Status;
-                          setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                        }}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      >
-                        <option value="in_progress">In Progress</option>
-                        <option value="win">Win</option>
-                        <option value="loss">Loss</option>
-                        <option value="break_even">Break-Even</option>
-                      </select>
+            {wizardStep === 2 && (
+              <>
+                {wTradeType === 1 ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">Status</div>
+                        <select
+                          {...register("status", { required: "Status is required" })}
+                          onChange={(e) => {
+                            const val = e.target.value as Status
+                            setValue("status", val, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        >
+                          <option value="in_progress">In Progress</option>
+                          <option value="win">Win</option>
+                          <option value="loss">Loss</option>
+                          <option value="break_even">Break-Even</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="text-sm mb-1">
+                          Trading Fee <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="trading_fee"
+                          control={control}
+                          placeholder="0"
+                          decimalPlaces={3}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Trading fee is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") >= 0 ||
+                              "Must be ≥ 0",
+                          }}
+                        />
+                        {errors.trading_fee && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.trading_fee.message)}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <div className="text-sm mb-1">
-                        Trading Fee <span className="text-red-600">*</span>
+                        Amount Spent <span className="text-red-600">*</span>
                       </div>
                       <MoneyField<JournalForm>
-                        name="trading_fee"
-                        control={control}
-                        placeholder="0"
-                        decimalPlaces={3}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        rules={{
-                          required: "Trading fee is required",
-                          validate: (v) => parseDecimal((v ?? "").toString() || "0") >= 0 || "Must be ≥ 0",
-                        }}
-                      />
-                      {errors.trading_fee && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm mb-1">
-                      Amount Spent <span className="text-red-600">*</span>
-                    </div>
-                    <MoneyField<JournalForm>
-                      name="amount_spent"
-                      control={control}
-                      decimalPlaces={3}
-                      placeholder="e.g. 500.00"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      rules={{
-                        required: "Amount spent is required",
-                        validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
-                      }}
-                    />
-                    {errors.amount_spent && <p className="mt-1 text-xs text-red-600">{String(errors.amount_spent.message)}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:col-span-full gap-4">
-                    <div>
-                      <div className="text-sm mb-1">
-                        Entry Price <span className="text-red-600">*</span>
-                      </div>
-                      <MoneyField<JournalForm>
-                        name="entry_price"
+                        name="amount_spent"
                         control={control}
                         decimalPlaces={3}
-                        placeholder="e.g. 27654.32"
+                        placeholder="e.g. 500.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{
-                          required: "Entry price is required",
-                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                          required: "Amount spent is required",
+                          validate: (v) =>
+                            parseDecimal((v ?? "").toString() || "0") > 0 ||
+                            "Must be > 0",
                         }}
                       />
-                      {errors.entry_price && <p className="mt-1 text-xs text-red-600">{String(errors.entry_price.message)}</p>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm mb-1">Exit Price</div>
-                    <MoneyField<JournalForm>
-                      name="exit_price"
-                      control={control}
-                      decimalPlaces={3}
-                      placeholder="e.g. 28000.00"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-sm mb-1">Stop Loss Price</div>
-                    <MoneyField<JournalForm>
-                      name="stop_loss_price"
-                      control={control}
-                      decimalPlaces={3}
-                      placeholder="e.g. 25000.00"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <div className="text-sm mb-1">
-                      Amount Spent <span className="text-red-600">*</span>
-                    </div>
-                    <MoneyField<JournalForm>
-                      name="amount_spent"
-                      control={control}
-                      decimalPlaces={3}
-                      placeholder="e.g. 1000.00"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      rules={{
-                        required: "Amount spent is required",
-                        validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
-                      }}
-                    />
-                    {errors.amount_spent && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {String(errors.amount_spent.message)}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm mb-1">
-                        Entry Price <span className="text-red-600">*</span>
-                      </div>
-                      <MoneyField<JournalForm>
-                        name="entry_price"
-                        control={control}
-                        decimalPlaces={3}
-                        placeholder="e.g. 27654.32"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        rules={{
-                          required: "Entry price is required",
-                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
-                        }}
-                      />
-                      {errors.entry_price && (
+                      {errors.amount_spent && (
                         <p className="mt-1 text-xs text-red-600">
-                          {String(errors.entry_price.message)}
+                          {String(errors.amount_spent.message)}
                         </p>
                       )}
                     </div>
+
+                    <div className="grid grid-cols-1 md:col-span-full gap-4">
+                      <div>
+                        <div className="text-sm mb-1">
+                          Entry Price <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="entry_price"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="e.g. 27654.32"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Entry price is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") > 0 ||
+                              "Must be > 0",
+                          }}
+                        />
+                        {errors.entry_price && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.entry_price.message)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     <div>
                       <div className="text-sm mb-1">Exit Price</div>
                       <MoneyField<JournalForm>
@@ -1424,7 +1667,8 @@ export default function JournalPage() {
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
                     </div>
-                    <div className="md:col-span-full">
+
+                    <div>
                       <div className="text-sm mb-1">Stop Loss Price</div>
                       <MoneyField<JournalForm>
                         name="stop_loss_price"
@@ -1434,102 +1678,185 @@ export default function JournalPage() {
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-full">
-                      <div className="text-sm mb-1">
-                        Trading Fee <span className="text-red-600">*</span>
-                      </div>
-                      <MoneyField<JournalForm>
-                        name="trading_fee"
-                        control={control}
-                        decimalPlaces={3}
-                        placeholder="0"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        rules={{
-                          required: "Trading fee is required",
-                          validate: (v) => parseDecimal((v ?? "").toString() || "0") >= 0 || "Must be ≥ 0",
-                        }}
-                      />
-                      {errors.trading_fee && (
-                        <p className="mt-1 text-xs text-red-600">{String(errors.trading_fee.message)}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  </>
+                ) : (
+                  <>
                     <div>
                       <div className="text-sm mb-1">
-                        Leverage <span className="text-red-600">*</span>
+                        Amount Spent <span className="text-red-600">*</span>
                       </div>
-                      <DecimalField<JournalForm>
-                        name="leverage"
+                      <MoneyField<JournalForm>
+                        name="amount_spent"
                         control={control}
-                        placeholder="e.g. 10"
-                        maxDecimals={2}
+                        decimalPlaces={3}
+                        placeholder="e.g. 1000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{
-                          required: "Leverage is required",
-                          validate: (v) => parseDecimal((v ?? "").toString() || "0") > 0 || "Must be > 0",
+                          required: "Amount spent is required",
+                          validate: (v) =>
+                            parseDecimal((v ?? "").toString() || "0") > 0 ||
+                            "Must be > 0",
                         }}
                       />
-                      {errors.leverage && (
+                      {errors.amount_spent && (
                         <p className="mt-1 text-xs text-red-600">
-                          {String(errors.leverage.message)}
+                          {String(errors.amount_spent.message)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">
+                          Entry Price <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="entry_price"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="e.g. 27654.32"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Entry price is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") > 0 ||
+                              "Must be > 0",
+                          }}
+                        />
+                        {errors.entry_price && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.entry_price.message)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm mb-1">Exit Price</div>
+                        <MoneyField<JournalForm>
+                          name="exit_price"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="e.g. 28000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
+                      <div className="md:col-span-full">
+                        <div className="text-sm mb-1">Stop Loss Price</div>
+                        <MoneyField<JournalForm>
+                          name="stop_loss_price"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="e.g. 25000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-full">
+                        <div className="text-sm mb-1">
+                          Trading Fee <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="trading_fee"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="0"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Trading fee is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") >= 0 ||
+                              "Must be ≥ 0",
+                          }}
+                        />
+                        {errors.trading_fee && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.trading_fee.message)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">
+                          Leverage <span className="text-red-600">*</span>
+                        </div>
+                        <DecimalField<JournalForm>
+                          name="leverage"
+                          control={control}
+                          placeholder="e.g. 10"
+                          maxDecimals={2}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Leverage is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") > 0 ||
+                              "Must be > 0",
+                          }}
+                        />
+                        {errors.leverage && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.leverage.message)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm mb-1">Liquidation Price</div>
+                        <MoneyField<JournalForm>
+                          name="liquidation_price"
+                          control={control}
+                          decimalPlaces={3}
+                          placeholder="e.g. 10000.32"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-sm mb-1">Status</div>
+                      <select
+                        {...register("status", { required: "Status is required" })}
+                        onChange={(e) => {
+                          const val = e.target.value as Status
+                          setValue("status", val, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      >
+                        <option value="in_progress">In Progress</option>
+                        <option value="win">Win</option>
+                        <option value="loss">Loss</option>
+                        <option value="break_even">Break-Even</option>
+                      </select>
+                      {errors.status && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.status.message)}
                         </p>
                       )}
                     </div>
                     <div>
-                      <div className="text-sm mb-1">Liquidation Price</div>
-                      <MoneyField<JournalForm>
-                        name="liquidation_price"
-                        control={control}
-                        decimalPlaces={3}
-                        placeholder="e.g. 10000.32"
+                      <div className="text-sm mb-1">Side</div>
+                      <select
+                        {...register("side", { required: "Side is required" })}
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
+                      >
+                        <option value="long">Long</option>
+                        <option value="short">Short</option>
+                      </select>
+                      {errors.side && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {String(errors.side.message)}
+                        </p>
+                      )}
                     </div>
-                  </div>
+                  </>
+                )}
+              </>
+            )}
 
-                  <div>
-                    <div className="text-sm mb-1">Status</div>
-                    <select
-                      {...register("status", { required: "Status is required" })}
-                      onChange={(e) => {
-                        const val = e.target.value as Status;
-                        setValue("status", val, { shouldDirty: true, shouldValidate: true });
-                      }}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    >
-                      <option value="in_progress">In Progress</option>
-                      <option value="win">Win</option>
-                      <option value="loss">Loss</option>
-                      <option value="break_even">Break-Even</option>
-                    </select>
-                    {errors.status && (
-                      <p className="mt-1 text-xs text-red-600">{String(errors.status.message)}</p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm mb-1">Side</div>
-                    <select
-                      {...register("side", { required: "Side is required" })}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    >
-                      <option value="long">Long</option>
-                      <option value="short">Short</option>
-                    </select>
-                    {errors.side && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {String(errors.side.message)}
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
-            </>
-          )}
             {wizardStep === 3 && (
               <>
                 <div>
@@ -1539,26 +1866,45 @@ export default function JournalPage() {
                   <div className="grid gap-2">
                     {strategyRules.length ? (
                       strategyRules.map((r) => (
-                        <label key={r.id} className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
+                        <label
+                          key={r.id}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            value={r.id}
+                            {...register("matched_rule_ids")}
+                          />
                           <span>{r.title}</span>
                         </label>
                       ))
                     ) : (
-                      <div className="text-xs text-gray-500">No rules for selected strategy.</div>
+                      <div className="text-xs text-gray-500">
+                        No rules for selected strategy.
+                      </div>
                     )}
                   </div>
                 </div>
 
                 <div>
                   <div className="text-sm mb-1">Notes (Optional)</div>
-                  <textarea {...register("notes_entry")} rows={3} placeholder="Write any notes…" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                  <textarea
+                    {...register("notes_entry")}
+                    rows={3}
+                    placeholder="Write any notes…"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  />
                 </div>
 
                 {(wStatus === "loss" || wStatus === "break_even") && (
                   <div>
                     <div className="text-sm mb-1">Post Loss Review (Optional)</div>
-                    <textarea {...register("notes_review")} rows={3} placeholder="Reflect on what went wrong…" className="w-full rounded-xl border border-gray-200 px-3 py-2" />
+                    <textarea
+                      {...register("notes_review")}
+                      rows={3}
+                      placeholder="Reflect on what went wrong…"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
                   </div>
                 )}
               </>
@@ -1567,6 +1913,7 @@ export default function JournalPage() {
         </div>
       </Modal>
 
+      {/* Export modal */}
       <Modal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
@@ -1582,21 +1929,27 @@ export default function JournalPage() {
           </div>
         }
       >
-        <div className="text-sm text-gray-700">
-          This feature is coming soon.
-        </div>
+        <div className="text-sm text-gray-700">This feature is coming soon.</div>
       </Modal>
 
+      {/* Delete confirm */}
       <Modal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="Delete entry?"
         footer={
           <div className="flex items-center justify-end gap-3">
-            <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setConfirmOpen(false)}>
+            <button
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              onClick={() => setConfirmOpen(false)}
+            >
               Cancel
             </button>
-            <button onClick={confirmDelete} disabled={deleting} className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
+            <button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
               Delete
             </button>
           </div>
@@ -1605,35 +1958,51 @@ export default function JournalPage() {
         <div className="text-sm text-gray-600">This action cannot be undone.</div>
       </Modal>
 
+      {/* Quick Close modal */}
       <Modal
         open={closeOpen}
         onClose={() => setCloseOpen(false)}
         title="Quick Close"
         footer={
           <div className="flex justify-end gap-3">
-            <button className="rounded bg-gray-100 px-4 py-2 text-sm" onClick={() => setCloseOpen(false)}>
+            <button
+              className="rounded bg-gray-100 px-4 py-2 text-sm"
+              onClick={() => setCloseOpen(false)}
+            >
               Cancel
             </button>
             <button
               onClick={async () => {
-                if (!rowToClose) return;
-                setCloseExitError(null);
-                setCloseFeeError(null);
+                if (!rowToClose) return
+                setCloseExitError(null)
+                setCloseFeeError(null)
 
-                const exitNum = parseDecimal(closeExit);
-                if (!(exitNum > 0)) { setCloseExitError("Exit price is required"); return; }
+                const exitNum = parseDecimal(closeExit)
+                if (!(exitNum > 0)) {
+                  setCloseExitError("Exit price is required")
+                  return
+                }
 
-                const tradingFeeNum = decimalOrZero(closeTradingFee);
-                if (!(tradingFeeNum >= 0)) { setCloseFeeError("Trading fee must be ≥ 0"); return; }
+                const tradingFeeNum = decimalOrZero(closeTradingFee)
+                if (!(tradingFeeNum >= 0)) {
+                  setCloseFeeError("Trading fee must be ≥ 0")
+                  return
+                }
 
                 try {
-                  setClosing(true);
+                  setClosing(true)
                   const computedStatus: Status = (() => {
-                    if (exitNum === rowToClose.entry_price) return "break_even";
-                    const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
-                    return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
-                      ? "win" : "loss";
-                  })();
+                    if (exitNum === rowToClose.entry_price) return "break_even"
+                    const longLike =
+                      rowToClose.side === "buy" || rowToClose.side === "long"
+                    return longLike
+                      ? exitNum > rowToClose.entry_price
+                        ? "win"
+                        : "loss"
+                      : exitNum < rowToClose.entry_price
+                      ? "win"
+                      : "loss"
+                  })()
 
                   const baseClose: BasePayload = {
                     strategy_id: rowToClose.strategy_id,
@@ -1650,43 +2019,60 @@ export default function JournalPage() {
                     notes_review: rowToClose.notes_review ?? null,
                     timeframe_code: rowToClose.timeframe_code,
                     trading_fee: tradingFeeNum,
-                  };
+                  }
 
                   const payloadClose: CreatePayload =
                     rowToClose.trade_type === 2
-                      ? { ...baseClose, trade_type: 2, futures: { leverage: rowToClose.leverage ?? 1, liquidation_price: rowToClose.liquidation_price ?? null } }
-                      : { ...baseClose, trade_type: 1 };
+                      ? {
+                          ...baseClose,
+                          trade_type: 2,
+                          futures: {
+                            leverage: rowToClose.leverage ?? 1,
+                            liquidation_price: rowToClose.liquidation_price ?? null,
+                          },
+                        }
+                      : { ...baseClose, trade_type: 1 }
 
                   const r = await fetch(`/api/journal/${rowToClose.id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payloadClose),
-                  });
-                  const saved = await r.json();
+                  })
+                  const saved = await r.json()
 
-                  setItems(prev => prev.map(it =>
-                    it.id === rowToClose.id
-                      ? { ...it, status: saved.status ?? it.status, exit_price: saved.exit_price ?? it.exit_price, trading_fee: typeof saved.trading_fee === "number" ? saved.trading_fee : it.trading_fee }
-                      : it
-                  ));
-                  setCloseOpen(false);
-                  await load();
+                  setItems((prev) =>
+                    prev.map((it) =>
+                      it.id === rowToClose.id
+                        ? {
+                            ...it,
+                            status: saved.status ?? it.status,
+                            exit_price: saved.exit_price ?? it.exit_price,
+                            trading_fee:
+                              typeof saved.trading_fee === "number"
+                                ? saved.trading_fee
+                                : it.trading_fee,
+                          }
+                        : it
+                    )
+                  )
+                  setCloseOpen(false)
+                  await load()
                 } catch (e) {
-                  alert(e instanceof Error ? e.message : "Failed to close");
+                  alert(e instanceof Error ? e.message : "Failed to close")
                 } finally {
-                  setClosing(false);
+                  setClosing(false)
                 }
               }}
               disabled={closing}
-              className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50">
-               Close Trade
+              className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              Close Trade
             </button>
           </div>
         }
       >
         {rowToClose && (
           <div className="grid gap-3 pr-1">
-
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <div className="text-xs text-gray-500">Entry</div>
@@ -1697,22 +2083,30 @@ export default function JournalPage() {
                 <input
                   value={closeExit}
                   onChange={(e) => {
-                    setCloseExit(toDisplay(e.target.value, 8));
-                    setCloseExitError(null);
+                    setCloseExit(toDisplay(e.target.value, 8))
+                    setCloseExitError(null)
                   }}
                   inputMode="decimal"
                   pattern="[0-9.,]*"
-                  onBeforeInput={(e: React.FormEvent<HTMLInputElement> & { nativeEvent: InputEvent }) => {
-                    const ch = e.nativeEvent.data ?? "";
-                    if (ch && !/^[0-9.,\s]+$/.test(ch)) e.preventDefault();
+                  onBeforeInput={(
+                    e: React.FormEvent<HTMLInputElement> & { nativeEvent: InputEvent }
+                  ) => {
+                    const ch = e.nativeEvent.data ?? ""
+                    if (ch && !/^[0-9.,\s]+$/.test(ch)) e.preventDefault()
                   }}
-                  className={`w-full rounded-xl border px-3 py-2 ${closeExitError ? "border-red-500" : "border-gray-200"}`}
+                  className={`w-full rounded-xl border px-3 py-2 ${
+                    closeExitError ? "border-red-500" : "border-gray-200"
+                  }`}
                 />
-                {closeExitError && <div className="mt-1 text-xs text-red-600">{closeExitError}</div>}
+                {closeExitError && (
+                  <div className="mt-1 text-xs text-red-600">{closeExitError}</div>
+                )}
               </div>
               <div>
                 <div className="text-xs text-gray-500">PnL (net)</div>
-                <div className="font-mono">{closePnl != null ? money2(closePnl) : "—"}</div>
+                <div className="font-mono">
+                  {closePnl != null ? money2(closePnl) : "—"}
+                </div>
               </div>
             </div>
 
@@ -1725,21 +2119,26 @@ export default function JournalPage() {
                 <MoneyInputStandalone
                   valueRaw={closeTradingFee}
                   onChangeRaw={(v) => {
-                    setCloseTradingFee(v);
-                    setCloseFeeError(null);
+                    setCloseTradingFee(v)
+                    setCloseFeeError(null)
                   }}
                   placeholder="0"
-                  className={`w-full rounded-xl border px-3 py-2 ${closeFeeError ? "border-red-500" : "border-gray-200"}`}
+                  className={`w-full rounded-xl border px-3 py-2 ${
+                    closeFeeError ? "border-red-500" : "border-gray-200"
+                  }`}
                   maxDecimals={2}
                 />
 
-                {closeFeeError && <div className="mt-1 text-xs text-red-600">{closeFeeError}</div>}
+                {closeFeeError && (
+                  <div className="mt-1 text-xs text-red-600">{closeFeeError}</div>
+                )}
               </div>
             </div>
           </div>
         )}
       </Modal>
 
+      {/* First journal modal */}
       <Modal
         open={firstRunOpen}
         onClose={() => setFirstRunOpen(false)}
@@ -1792,7 +2191,9 @@ export default function JournalPage() {
                   await load()
                   setFirstRunOpen(false)
                 } catch (e) {
-                  setFirstRunError(e instanceof Error ? e.message : "Failed to save")
+                  setFirstRunError(
+                    e instanceof Error ? e.message : "Failed to save"
+                  )
                 } finally {
                   setFirstRunSaving(false)
                 }
@@ -1807,7 +2208,8 @@ export default function JournalPage() {
       >
         <div className="grid gap-2">
           <p className="text-sm text-gray-600">
-            Choose a name for your first journal. You can manage journals later in “Manage Journals”.
+            Choose a name for your first journal. You can manage journals later in
+            “Manage Journals”.
           </p>
           <input
             value={firstRunName}
@@ -1824,17 +2226,34 @@ export default function JournalPage() {
 
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
         <span>© 2025 Stakk AI. All rights reserved.</span>
-        <a href="#" className="hover:underline">Support</a>
-        <a href="#" className="hover:underline">Terms</a>
-        <a href="#" className="hover:underline">Privacy</a>
+        <a href="#" className="hover:underline">
+          Support
+        </a>
+        <a href="#" className="hover:underline">
+          Terms
+        </a>
+        <a href="#" className="hover:underline">
+          Privacy
+        </a>
       </footer>
     </div>
   )
 }
 
-function MenuItem({ label, onClick, icon }: { label: string; onClick: () => void; icon?: string }) {
+function MenuItem({
+  label,
+  onClick,
+  icon,
+}: {
+  label: string
+  onClick: () => void
+  icon?: string
+}) {
   return (
-    <button onClick={onClick} className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-xl flex items-center gap-3">
+    <button
+      onClick={onClick}
+      className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-xl flex items-center gap-3"
+    >
       {icon && <span>{icon}</span>}
       <span className="text-sm">{label}</span>
     </button>

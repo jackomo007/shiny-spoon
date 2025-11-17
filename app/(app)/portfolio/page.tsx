@@ -161,7 +161,11 @@ export default function PortfolioPage() {
                     <Th>Entry Price</Th>
                     <Th>Value</Th>
                     <Th>% Port.</Th>
-                    <Th className="text-right">Actions</Th>
+                    <Th className="w-40">
+                      <div className="flex justify-end pr-1">
+                        Actions
+                      </div>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -178,13 +182,15 @@ export default function PortfolioPage() {
                       <Td>{usd(i.priceUsd)}</Td>
                       <Td>{usd(i.valueUsd)}</Td>
                       <Td>{i.percent.toFixed(2)}%</Td>
-                      <Td className="text-right">
-                        <button
-                          className="px-3 py-1 rounded-lg bg-gray-900 text-white"
-                          onClick={() => handleEditAsset(i)}
-                        >
-                          Edit in Journal
-                        </button>
+                      <Td className="w-40">
+                        <div className="flex justify-center">
+                          <button
+                            className="inline-flex items-center h-9 px-4 rounded-xl bg-gray-900 text-white text-sm"
+                            onClick={() => handleEditAsset(i)}
+                          >
+                            Edit in Journal
+                          </button>
+                        </div>
                       </Td>
                     </Tr>
                   ))}
