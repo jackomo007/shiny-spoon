@@ -329,10 +329,17 @@ export default function JournalPage() {
     const now = new Date();
     const s = new Date(new Date().setMonth(now.getMonth() - 6));
     s.setHours(0, 0, 0, 0);
+
     const startYMD = s.toISOString().slice(0, 10);
     const endYMD   = now.toISOString().slice(0, 10);
+
     setStart(startYMD);
     setEnd(endYMD);
+
+    try {
+      localStorage.removeItem("jrnl.range");
+    } catch {}
+
     void load();
   }
 
@@ -479,10 +486,6 @@ export default function JournalPage() {
       if (saved.end) setEnd(saved.end);
     } catch {}
   }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem("jrnl.range", JSON.stringify({ start, end })); } catch {}
-  }, [start, end]);
 
   const rows = useMemo(() => {
     let arr = items
@@ -942,11 +945,15 @@ export default function JournalPage() {
 
           <button
             className="rounded-xl bg-white px-3 py-2 text-sm border"
-            onClick={() => void load()}
+            onClick={() => {
+              try {
+                localStorage.setItem("jrnl.range", JSON.stringify({ start, end }));
+              } catch {}
+              void load();
+            }}
           >
             Apply
           </button>
-
           <button
             className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
             onClick={resetToLast6Months}
