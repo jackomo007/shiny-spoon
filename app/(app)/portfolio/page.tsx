@@ -5,6 +5,9 @@ import Card from "@/components/ui/Card"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
 import { PieChart, Pie, Legend, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import { useRouter } from "next/navigation"
+import Modal from "@/components/ui/Modal"
+import { MoneyInputStandalone } from "@/components/form/MaskedFields"
+import type React from "react"
 
 type Item = {
   symbol: string
@@ -16,11 +19,13 @@ type Item = {
 
 type PortfolioRes = {
   totalValueUsd: number
+  cashUsd: number
   items: Item[]
 }
 
-function usd(n: number) {
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD" })
+function usd(n: number | null | undefined) {
+  const value = typeof n === "number" && !Number.isNaN(n) ? n : 0
+  return value.toLocaleString(undefined, { style: "currency", currency: "USD" })
 }
 
 const colorFor = (name: string) => {
@@ -37,6 +42,8 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  const [cashModal, setCashModal] = useState<null | { mode: "add" | "edit"; currentAmount?: number }>(null)
 
   const load = async () => {
     setLoading(true)
@@ -58,13 +65,36 @@ export default function PortfolioPage() {
     void load()
   }, [])
 
+  const rows: Item[] = useMemo(() => {
+    if (!data) return []
+
+    const base = data.items ?? []
+    const hasCashRow = base.some((i) => i.symbol === "CASH")
+    const cash = data.cashUsd ?? 0
+
+    if (hasCashRow || cash <= 0) return base
+
+    const total = data.totalValueUsd || 0
+    const percent = total > 0 ? (cash / total) * 100 : 0
+
+    const cashItem: Item = {
+      symbol: "CASH",
+      amount: cash,
+      priceUsd: 1,
+      valueUsd: cash,
+      percent,
+    }
+
+    return [...base, cashItem]
+  }, [data])
+
   const pieData = useMemo(
     () =>
-      (data?.items ?? []).map((i) => ({
+      rows.map((i) => ({
         name: i.symbol,
         percent: Number(i.percent.toFixed(6)),
       })),
-    [data]
+    [rows]
   )
 
   const handleAddAsset = () => {
@@ -75,7 +105,16 @@ export default function PortfolioPage() {
     router.push(`/journal?${qs.toString()}`)
   }
 
+  const handleAddCash = () => {
+    setCashModal({ mode: "add" })
+  }
+
   const handleEditAsset = (item: Item) => {
+    if (item.symbol === "CASH") {
+      setCashModal({ mode: "edit", currentAmount: item.amount })
+      return
+    }
+
     const qs = new URLSearchParams({
       from: "portfolio",
       asset_name: item.symbol,
@@ -101,6 +140,13 @@ export default function PortfolioPage() {
           >
             + Add Asset
           </button>
+
+          <button
+            className="px-3 py-2 rounded-xl bg-emerald-600 text-white"
+            onClick={handleAddCash}
+          >
+            + Add Cash
+          </button>
         </div>
       </div>
 
@@ -109,7 +155,7 @@ export default function PortfolioPage() {
           <div className="h-[360px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
         ) : error ? (
           <div className="p-6 text-red-600">{error}</div>
-        ) : !data || data.items.length === 0 ? (
+        ) : !data || rows.length === 0 ? (
           <div className="p-6 text-sm text-gray-600">
             You don&apos;t have any open spot trades yet.
             <button
@@ -124,6 +170,9 @@ export default function PortfolioPage() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <div className="text-lg font-semibold">
                 Total Portfolio Value: {usd(data.totalValueUsd)}
+              </div>
+              <div className="text-sm text-gray-600">
+                Cash: <span className="font-medium">{usd(data.cashUsd)}</span>
               </div>
             </div>
 
@@ -169,7 +218,7 @@ export default function PortfolioPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map((i) => (
+                  {rows.map((i) => (
                     <Tr key={i.symbol}>
                       <Td className="font-medium">
                         <span
@@ -183,12 +232,12 @@ export default function PortfolioPage() {
                       <Td>{usd(i.valueUsd)}</Td>
                       <Td>{i.percent.toFixed(2)}%</Td>
                       <Td className="w-40">
-                        <div className="flex justify-center">
+                         <div className="flex justify-center">
                           <button
                             className="inline-flex items-center h-9 px-4 rounded-xl bg-gray-900 text-white text-sm"
                             onClick={() => handleEditAsset(i)}
                           >
-                            Edit in Journal
+                            {i.symbol === "CASH" ? "Edit" : "Edit in Journal"}
                           </button>
                         </div>
                       </Td>
@@ -201,9 +250,103 @@ export default function PortfolioPage() {
         )}
       </Card>
 
+      {cashModal && (
+        <CashModal
+          mode={cashModal.mode}
+          currentAmount={cashModal.currentAmount}
+          onClose={() => setCashModal(null)}
+          onDone={async () => {
+            setCashModal(null)
+            await load()
+          }}
+        />
+      )}
+
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
         <span>© 2025 Maverick AI. All rights reserved.</span>
       </footer>
     </div>
+  )
+}
+
+
+function CashModal(props: {
+  mode: "add" | "edit"
+  currentAmount?: number
+  onClose: () => void
+  onDone: () => Promise<void>
+}) {
+  const [amountRaw, setAmountRaw] = useState<string>(
+    props.mode === "edit" && props.currentAmount != null
+      ? props.currentAmount.toString()
+      : ""
+  )
+  const [busy, setBusy] = useState(false)
+
+  const amountNum = amountRaw === "" ? 0 : Number(amountRaw)
+  const title = props.mode === "add" ? "Add Cash" : "Edit Cash"
+
+  const canSave = amountNum > 0 && !busy
+
+  return (
+    <Modal
+      open
+      onClose={props.onClose}
+      title={title}
+      footer={
+        <div className="flex items-center justify-end gap-3">
+          <button
+            className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+            onClick={props.onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
+            disabled={!canSave}
+            onClick={async () => {
+              try {
+                setBusy(true)
+
+                const res = await fetch("/api/portfolio/cash", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    amountUsd: amountNum,
+                  }),
+                })
+
+                if (!res.ok) {
+                  const j = await res.json().catch(() => ({} as { error?: string }))
+                  throw new Error(j?.error || "Operation failed")
+                }
+
+                await props.onDone()
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "Failed"
+                // eslint-disable-next-line no-alert
+                alert(msg)
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Save
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3">
+        <label className="grid gap-1">
+          <span className="text-xs text-gray-500">Amount (USD)</span>
+          <MoneyInputStandalone
+            valueRaw={amountRaw}
+            onChangeRaw={setAmountRaw}
+            placeholder="0"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+          />
+        </label>
+      </div>
+    </Modal>
   )
 }

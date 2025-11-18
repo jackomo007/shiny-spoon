@@ -24,10 +24,12 @@ export async function GET() {
     }
     const accountId = session.accountId
 
-    const positions = (await PortfolioRepo.getPositions(accountId)) as Record<
-      string,
-      PosRow | undefined
-    >
+    const [positions, cashUsd] = await Promise.all([
+      PortfolioRepo.getPositions(accountId) as Promise<
+        Record<string, PosRow | undefined>
+      >,
+      PortfolioRepo.getCashBalance(accountId),
+    ])
 
     const symbols = Object.keys(positions).filter((s) => s !== "CASH")
     const prices = await PriceService.getPrices(symbols)
@@ -59,17 +61,20 @@ export async function GET() {
       valueUsd: number
     }[]
 
-    const total = rawItems.reduce((s, i) => s + i.valueUsd, 0)
+    const spotTotal = rawItems.reduce((s, i) => s + i.valueUsd, 0)
 
     const items = rawItems
       .map((i) => ({
         ...i,
-        percent: total > 0 ? (i.valueUsd / total) * 100 : 0,
+        percent: spotTotal > 0 ? (i.valueUsd / spotTotal) * 100 : 0,
       }))
       .sort((a, b) => b.valueUsd - a.valueUsd)
 
+    const totalValueUsd = spotTotal + cashUsd
+
     return NextResponse.json({
-      totalValueUsd: total,
+      totalValueUsd,
+      cashUsd,
       items,
     })
   } catch (e: unknown) {
