@@ -1210,7 +1210,7 @@ export default function JournalPage() {
                     onFocus={() => {
                       if (assetOptions.length > 0) setShowAssetMenu(true)
                     }}
-                    placeholder="e.g. BTC"
+                    placeholder="e.g. BTCUSDT"
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
                   {showAssetMenu && (

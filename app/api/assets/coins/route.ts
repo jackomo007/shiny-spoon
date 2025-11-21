@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 const Q = z.object({ q: z.string().trim().min(1) });
 
-const QUOTES = ["USDT", "USDC", "USD", "BTC", "ETH"];
+const QUOTES = ["USDT", "USDC", "USD", "BTCUSDT", "ETH"];
 const PAIR_RE = new RegExp(`^([A-Z0-9]{2,})(${QUOTES.join("|")})$`, "i");
 
 type Item = { id: string; symbol: string; name: string };

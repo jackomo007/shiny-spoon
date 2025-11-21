@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 const COINS = [
-  { symbol: "BTC", name: "Bitcoin" },
+  { symbol: "BTCUSDT", name: "Bitcoin" },
   { symbol: "ETH", name: "Ethereum" },
   { symbol: "SOL", name: "Solana" },
   { symbol: "BNB", name: "BNB" },

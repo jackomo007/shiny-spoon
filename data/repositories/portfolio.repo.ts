@@ -11,6 +11,7 @@ export type PositionsMap = Record<
   string,
   {
     qty: number
+    avgEntryPriceUsd?: number
     lastPrice?: number
     initCount?: number
     journalCount?: number
@@ -19,6 +20,39 @@ export type PositionsMap = Record<
     sources?: string[]
   }
 >
+
+type Trade = {
+  symbol: string
+  side: "buy" | "sell"
+  qty: number
+  priceUsd: number
+  executedAt: Date
+}
+
+function calcPositionAndEntryPrice(trades: Trade[]) {
+  let positionSize = 0
+  let avgPrice = 0
+
+  const sorted = [...trades].sort(
+    (a, b) => +a.executedAt - +b.executedAt
+  )
+
+  for (const t of sorted) {
+    if (t.side === "buy") {
+      const newSize = positionSize + t.qty
+      avgPrice = (positionSize * avgPrice + t.qty * t.priceUsd) / newSize
+      positionSize = newSize
+    } else {
+      positionSize -= t.qty
+      if (positionSize < 0) positionSize = 0
+    }
+  }
+
+  return {
+    positionSize,              
+    entryPrice: positionSize > 0 ? avgPrice : 0,
+  }
+}
 
 async function ensureDefaultJournalId(accountId: string) {
   const existing = await prisma.journal.findFirst({
@@ -82,7 +116,53 @@ export const PortfolioRepo = {
       map[symbol].qty += signed
     }
 
-    const symbols = Object.keys(map).filter((s) => s !== "CASH")
+    const symbols = Object.keys(map).filter((s) => s !== "CASH");
+
+    if (symbols.length) {
+      const allTrades = await prisma.journal_entry.findMany({
+        where: {
+          account_id: accountId,
+          asset_name: { in: symbols },
+          spot_trade: { some: {} },
+        },
+        select: {
+          asset_name: true,
+          side: true,
+          amount: true,
+          entry_price: true,
+          trade_datetime: true,
+        },
+      });
+
+      const tradesBySymbol: Record<string, Trade[]> = {};
+
+      for (const row of allTrades) {
+        const symbol = row.asset_name;
+        if (!tradesBySymbol[symbol]) {
+          tradesBySymbol[symbol] = [];
+        }
+        tradesBySymbol[symbol].push({
+          symbol,
+          side: row.side === "buy" ? "buy" : "sell",
+          qty: Number(row.amount ?? 0),
+          priceUsd: Number(row.entry_price ?? 0),
+          executedAt: row.trade_datetime,
+        });
+      }
+
+      for (const [symbol, trades] of Object.entries(tradesBySymbol)) {
+        const { positionSize, entryPrice } = calcPositionAndEntryPrice(trades);
+
+        if (!map[symbol]) {
+          map[symbol] = { qty: positionSize };
+        } else {
+          map[symbol].qty = positionSize;
+        }
+
+        map[symbol].avgEntryPriceUsd = entryPrice;
+      }
+    }
+
     if (symbols.length) {
       const lastBy = await prisma.journal_entry.findMany({
         where: {

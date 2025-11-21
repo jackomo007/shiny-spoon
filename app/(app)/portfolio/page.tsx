@@ -69,23 +69,27 @@ export default function PortfolioPage() {
     if (!data) return []
 
     const base = data.items ?? []
-    const hasCashRow = base.some((i) => i.symbol === "CASH")
-    const cash = data.cashUsd ?? 0
+    const cashVal = data.cashUsd ?? 0
+    const total = data.totalValueUsd ?? 0
 
-    if (hasCashRow || cash <= 0) return base
+    const existingCash = base.find((i) => i.symbol === "CASH") ?? null
+    const others = base.filter((i) => i.symbol !== "CASH")
 
-    const total = data.totalValueUsd || 0
-    const percent = total > 0 ? (cash / total) * 100 : 0
-
-    const cashItem: Item = {
-      symbol: "CASH",
-      amount: cash,
-      priceUsd: 1,
-      valueUsd: cash,
-      percent,
+    let cashItem: Item | null = null
+    if (existingCash) {
+      cashItem = existingCash
+    } else if (cashVal > 0) {
+      const percent = total > 0 ? (cashVal / total) * 100 : 0
+      cashItem = {
+        symbol: "CASH",
+        amount: cashVal,
+        priceUsd: 1,
+        valueUsd: cashVal,
+        percent,
+      }
     }
 
-    return [...base, cashItem]
+    return cashItem ? [cashItem, ...others] : others
   }, [data])
 
   const pieData = useMemo(
@@ -141,12 +145,14 @@ export default function PortfolioPage() {
             + Add Asset
           </button>
 
-          <button
-            className="px-3 py-2 rounded-xl bg-emerald-600 text-white"
-            onClick={handleAddCash}
-          >
-            + Add Cash
-          </button>
+          {!rows.some((r) => r.symbol === "CASH") && (
+            <button
+              className="px-3 py-2 rounded-xl bg-emerald-600 text-white"
+              onClick={handleAddCash}
+            >
+              + Add Cash
+            </button>
+          )}
         </div>
       </div>
 
@@ -286,7 +292,7 @@ function CashModal(props: {
   const amountNum = amountRaw === "" ? 0 : Number(amountRaw)
   const title = props.mode === "add" ? "Add Cash" : "Edit Cash"
 
-  const canSave = amountNum > 0 && !busy
+  const canSave = !busy
 
   return (
     <Modal
