@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { PortfolioRepo } from "@/data/repositories/portfolio.repo"
-import { PriceService } from "@/lib/price-service"
 
-type PosRow = {
-  qty: number
-  lastPrice?: number | null
-  avgEntryPriceUsd?: number | null
-  hasJournal?: boolean
-  hasOnlyInitRows?: boolean
-  sources?: string[]
-  journalCount?: number
-  initCount?: number
+type Item = {
+  symbol: string
+  amount: number
+  priceUsd: number
+  valueUsd: number
+  percent: number
 }
 
 export const dynamic = "force-dynamic"
@@ -25,58 +22,64 @@ export async function GET() {
     }
     const accountId = session.accountId
 
-    const [positions, cashUsd] = await Promise.all([
-      PortfolioRepo.getPositions(accountId) as Promise<
-        Record<string, PosRow | undefined>
-      >,
+    const [openBuys, cashUsd] = await Promise.all([
+      prisma.journal_entry.findMany({
+        where: {
+          account_id: accountId,
+          spot_trade: { some: {} },
+          status: "in_progress",
+          side: "buy",
+          asset_name: { not: "CASH" },
+        },
+        select: {
+          asset_name: true,
+          amount: true,
+          entry_price: true,
+        },
+      }),
       PortfolioRepo.getCashBalance(accountId),
     ])
 
-    const symbols = Object.keys(positions).filter((s) => s !== "CASH")
-    const prices = await PriceService.getPrices(symbols)
+    const grouped: Record<
+      string,
+      { qty: number; costBasis: number }
+    > = {}
 
-    const EPS = 1e-8;
+    for (const row of openBuys) {
+      const sym = row.asset_name
+      const qty = Number(row.amount ?? 0)
+      const price = Number(row.entry_price ?? 0)
 
-    const rawItems = symbols
-      .map((symbol) => {
-        const row: PosRow = positions[symbol] ?? { qty: 0 };
-        const qty = Number(row.qty ?? 0);
+      if (!grouped[sym]) {
+        grouped[sym] = { qty: 0, costBasis: 0 }
+      }
 
-        if (Math.abs(qty) <= EPS) return null;
+      grouped[sym].qty += qty
+      grouped[sym].costBasis += qty * price
+    }
 
-        const entryPrice = Number(row.avgEntryPriceUsd ?? row.lastPrice ?? 0);
+    const symbols = Object.keys(grouped)
 
-        const marketPrice = Number.isFinite(prices[symbol])
-          ? Number(prices[symbol])
-          : entryPrice;
+    const spotTotal = symbols.reduce(
+      (sum, sym) => sum + grouped[sym].costBasis,
+      0
+    )
 
-        const value = qty * marketPrice;
+    const items: Item[] = symbols
+      .map((sym) => {
+        const g = grouped[sym]
+        const amount = g.qty
+        const valueUsd = g.costBasis
+        const priceUsd = amount > 0 ? valueUsd / amount : 0
 
         return {
-          symbol,
-          amount: qty,
-          priceUsd: entryPrice,
-          valueUsd: value,
-        };
+          symbol: sym,
+          amount,
+          priceUsd,
+          valueUsd,
+          percent: spotTotal > 0 ? (valueUsd / spotTotal) * 100 : 0,
+        }
       })
-      .filter(
-        (
-          i
-        ): i is {
-          symbol: string;
-          amount: number;
-          priceUsd: number;
-          valueUsd: number;
-        } => i !== null
-      );
-
-    const spotTotal = rawItems.reduce((s, i) => s + i.valueUsd, 0)
-
-    const items = rawItems
-      .map((i) => ({
-        ...i,
-        percent: spotTotal > 0 ? (i.valueUsd / spotTotal) * 100 : 0,
-      }))
       .sort((a, b) => b.valueUsd - a.valueUsd)
 
     const totalValueUsd = spotTotal + cashUsd
