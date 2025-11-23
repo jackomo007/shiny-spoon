@@ -113,10 +113,33 @@ const fmt4 = (n: number | null | undefined) => {
 function parseDecimal(input: string | number | null | undefined): number {
   if (input == null) return NaN;
   let s = String(input).trim().replace(/\s/g, "");
+  if (!s) return NaN;
 
-  s = s.replace(/(\d),(?=\d{3}\b)/g, "$1");
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
 
-  s = s.replace(/,/g, ".");
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    const decimalSep = lastComma > lastDot ? "," : ".";
+    const thousandSep = decimalSep === "," ? "." : ",";
+
+    const reThousand = new RegExp("\\" + thousandSep, "g");
+    s = s.replace(reThousand, "");
+
+    const reDecimal = new RegExp("\\" + decimalSep, "g");
+    s = s.replace(reDecimal, ".");
+  } else if (hasComma) {
+    if (/^\d{1,3}(,\d{3})+(,\d+)?$/.test(s)) {
+      s = s.replace(/,/g, "");
+    } else {
+      s = s.replace(/,/g, ".");
+    }
+  } else if (hasDot) {
+    if (/^\d{1,3}(\.\d{3})+(\.\d+)?$/.test(s)) {
+      s = s.replace(/\./g, "");
+    }
+  }
 
   return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
 }
@@ -1663,12 +1686,18 @@ export default function JournalPage() {
 
                 try {
                   setClosing(true);
-                  const computedStatus: Status = (() => {
-                    if (exitNum === rowToClose.entry_price) return "break_even";
-                    const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
-                    return (longLike ? (exitNum > rowToClose.entry_price) : (exitNum < rowToClose.entry_price))
-                      ? "win" : "loss";
-                  })();
+                  const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
+                  const change = (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
+                  const notional = rowToClose.trade_type === 2
+                    ? (rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1))
+                    : rowToClose.amount_spent;
+
+                  const gross = (longLike ? 1 : -1) * notional * change;
+                  const net = gross - tradingFeeNum;
+                  const netRounded = Number(net.toFixed(2));
+
+                  const computedStatus: Status =
+                    Math.abs(netRounded) < 0.01 ? "break_even" : netRounded > 0 ? "win" : "loss";
 
                   const baseClose: BasePayload = {
                     strategy_id: rowToClose.strategy_id,
