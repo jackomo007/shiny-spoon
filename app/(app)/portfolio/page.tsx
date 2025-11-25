@@ -213,7 +213,7 @@ export default function PortfolioPage() {
                   <tr>
                     <Th>Asset</Th>
                     <Th>Asset Amount</Th>
-                    <Th>Entry Price</Th>
+                    <Th>Average Entry Price</Th>
                     <Th>Value</Th>
                     <Th>% Port.</Th>
                     <Th className="w-40">
