@@ -243,7 +243,7 @@ export default function PortfolioPage() {
                             className="inline-flex items-center h-9 px-4 rounded-xl bg-gray-900 text-white text-sm"
                             onClick={() => handleEditAsset(i)}
                           >
-                            {i.symbol === "CASH" ? "Edit" : "Edit in Journal"}
+                            {i.symbol === "CASH" ? "Edit Cash" : "Edit in Journal"}
                           </button>
                         </div>
                       </Td>
