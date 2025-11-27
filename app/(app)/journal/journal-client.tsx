@@ -1392,7 +1392,7 @@ export default function JournalPage() {
                       <MoneyField<JournalForm>
                         name="entry_price"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 27654.32"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{
@@ -1409,7 +1409,7 @@ export default function JournalPage() {
                     <MoneyField<JournalForm>
                       name="exit_price"
                       control={control}
-                      decimalPlaces={3}
+                      decimalPlaces={8}
                       placeholder="e.g. 28000.00"
                       className="w-full rounded-xl border border-gray-200 px-3 py-2"
                     />
@@ -1420,7 +1420,7 @@ export default function JournalPage() {
                     <MoneyField<JournalForm>
                       name="stop_loss_price"
                       control={control}
-                      decimalPlaces={3}
+                      decimalPlaces={8}
                       placeholder="e.g. 25000.00"
                       className="w-full rounded-xl border border-gray-200 px-3 py-2"
                     />
@@ -1458,7 +1458,7 @@ export default function JournalPage() {
                       <MoneyField<JournalForm>
                         name="entry_price"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 27654.32"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{
@@ -1477,7 +1477,7 @@ export default function JournalPage() {
                       <MoneyField<JournalForm>
                         name="exit_price"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 28000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
@@ -1487,7 +1487,7 @@ export default function JournalPage() {
                       <MoneyField<JournalForm>
                         name="stop_loss_price"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 25000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
