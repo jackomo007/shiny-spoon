@@ -8,7 +8,7 @@ import Modal from "@/components/ui/Modal"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
 import { MoneyInputStandalone, MoneyField, DecimalField } from "@/components/form/MaskedFields";
 
-import { toDisplay } from "@/utils/numberMask"
+import { toDisplayUS, toRawNeutral } from "@/utils/numberMask"
 
 type TradeType = 1 | 2
 type Status = "in_progress" | "win" | "loss" | "break_even"
@@ -1758,22 +1758,24 @@ export default function JournalPage() {
               </div>
               <div>
                 <div className="text-xs text-gray-500">Exit</div>
-                <input
-                  value={closeExit}
-                  onChange={(e) => {
-                    setCloseExit(toDisplay(e.target.value, 8));
-                    setCloseExitError(null);
-                  }}
-                  inputMode="decimal"
-                  pattern="[0-9.,]*"
-                  onBeforeInput={(e: React.FormEvent<HTMLInputElement> & { nativeEvent: InputEvent }) => {
-                    const ch = e.nativeEvent.data ?? "";
-                    if (ch && !/^[0-9.,\s]+$/.test(ch)) e.preventDefault();
-                  }}
-                  className={`w-full rounded-xl border px-3 py-2 ${closeExitError ? "border-red-500" : "border-gray-200"}`}
-                />
-                {closeExitError && <div className="mt-1 text-xs text-red-600">{closeExitError}</div>}
-              </div>
+                 <MoneyInputStandalone
+                    valueRaw={closeExit}
+                    onChangeRaw={(v) => {
+                      setCloseExit(v);
+                      setCloseExitError(null);
+                    }}
+                    placeholder="0"
+                    maxDecimals={8}
+                    className={`w-full rounded-xl border px-3 py-2 ${
+                      closeExitError ? "border-red-500" : "border-gray-200"
+                    }`}
+                  />
+
+                  {closeExitError && (
+                    <div className="mt-1 text-xs text-red-600">{closeExitError}</div>
+                  )}
+                  {closeExitError && <div className="mt-1 text-xs text-red-600">{closeExitError}</div>}
+                </div>
               <div>
                 <div className="text-xs text-gray-500">PnL (net)</div>
                 <div className="font-mono">{closePnl != null ? money2(closePnl) : "—"}</div>

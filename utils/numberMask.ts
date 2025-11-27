@@ -1,52 +1,84 @@
-export function sanitizeInput(raw: string): string {
-  return raw.replace(/\s+/g, "").replace(/[^0-9.,]/g, "");
+export function sanitizeInput(s: string): string {
+  if (!s) return "";
+  return s.replace(/[^\d.,]/g, "");
 }
 
-export function normalizeDecimal(s: string): string {
+export function normalizeDecimalFlexible(s: string): string {
   let x = sanitizeInput(s);
   if (!x) return "";
 
   x = x.replace(/,/g, "");
 
-  const firstDot = x.indexOf(".");
-  if (firstDot !== -1) {
-    const intPart = x.slice(0, firstDot);
-    const decimalPart = x.slice(firstDot + 1).replace(/\./g, "");
-    return decimalPart ? `${intPart}.${decimalPart}` : intPart;
+  const parts = x.split(".");
+
+  if (parts.length > 2) {
+    const intPart = parts.shift() || "";
+    const decPart = parts.join("");
+    return intPart + "." + decPart;
   }
 
   return x;
 }
 
-export function limitDecimals(x: string, max = 2): string {
-  const [i, d] = x.split(".");
-  if (!d) return i;
-  return `${i}.${d.slice(0, max)}`;
-}
-
-export function stripLeadingZerosInt(i: string): string {
-  const trimmed = i.replace(/^0+(?=\d)/, "");
-  return trimmed === "" ? "0" : trimmed;
-}
-
-export function addGrouping(intPart: string): string {
-  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-export function toDisplay(raw: string, maxDecimals: number): string {
+export function limitDecimals(raw: string, maxDecimals: number): string {
   if (!raw) return "";
-  const normalized = limitDecimals(normalizeDecimal(raw), maxDecimals);
-  const [i, d] = normalized.split(".");
-  const intPart = addGrouping(stripLeadingZerosInt(i || "0"));
-  return d != null ? `${intPart}.${d}` : intPart;
+
+  const [int, dec = ""] = raw.split(".");
+  const trimmed = dec.slice(0, maxDecimals);
+
+  return trimmed ? `${int}.${trimmed}` : int;
 }
 
-export function toRaw(display: string, maxDecimals: number): string {
-  if (!display) return "";
-  const normalized = limitDecimals(normalizeDecimal(display), maxDecimals);
-  return normalized;
+export function toDisplayUS(input: string, maxDecimals = 8): string {
+  if (!input) return "";
+
+  const normalized = normalizeDecimalFlexible(input);
+  let [intPart, dec = ""] = normalized.split(".");
+
+  intPart = intPart.replace(/^0+(?=\d)/, "") || "0";
+
+  dec = dec.slice(0, maxDecimals);
+
+  const withGrouping = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  return dec ? `${withGrouping}.${dec}` : withGrouping;
 }
 
-export function isValidNumberString(v: string): boolean {
-  return v === "" || /^(\d+(\.\d+)?)$/.test(v);
+export function toRawNeutral(display: string, maxDecimals = 8): string {
+  const sanitized = sanitizeInput(display);
+  if (!sanitized) return "";
+
+  const noCommas = sanitized.replace(/,/g, "");
+  const endsWithDot = noCommas.endsWith(".");
+  const parts = noCommas.split(".");
+
+  if (endsWithDot && parts.length === 2 && parts[1] === "") {
+    const intRaw = parts[0];
+
+    const intNorm =
+      intRaw === "" ? "0" : intRaw.replace(/^0+(?=\d)/, "") || "0";
+
+    return intNorm + ".";
+  }
+
+  const normalized = normalizeDecimalFlexible(noCommas);
+  return limitDecimals(normalized, maxDecimals);
 }
+
+export function isValidNeutral(v: string): boolean {
+  if (v === "" || v === ".") return true;
+
+  const norm = normalizeDecimalFlexible(v);
+
+  if (norm.endsWith(".")) {
+    return /^\d+$/.test(norm.slice(0, -1));
+  }
+
+  return /^(\d+(\.\d+)?)$/.test(norm);
+}
+
+export function toDisplay(input: string, maxDecimals = 8): string {
+  return toDisplayUS(input, maxDecimals);
+}
+
+export default toDisplayUS;
