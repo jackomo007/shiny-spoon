@@ -252,7 +252,7 @@ export default function DashboardShell({ children }: Props) {
 
           <ul className="mt-6 grid gap-2">
             <NavItem href="/dashboard" label="Home" icon="🏠" />
-            {isAdmin && <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />}
+            <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
             {isAdmin && <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />}
             {/* <li>
               <button
