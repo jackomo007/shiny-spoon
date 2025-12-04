@@ -1034,18 +1034,18 @@ export default function JournalPage() {
           ) : error ? (
             <div className="py-10 text-center text-sm text-red-600">{error}</div>
           ) : (
-            <Table className="min-w-[900px] md:min-w-full">
+            <Table className="min-w-[900px] md:min-w-full text-xs [&_td]:py-1 [&_th]:py-1">
               <thead>
                 <tr>
                   <Th className="whitespace-nowrap w-28 md:w-36">Asset</Th>
                   <Th className="whitespace-nowrap w-20 md:w-24">Type</Th>
-                  <Th className="whitespace-nowrap w-20 md:w-24">Side</Th>
-                  <Th className="whitespace-nowrap text-right w-28">Entry</Th>
-                  <Th className="whitespace-nowrap text-right w-28">Exit</Th>
-                  <Th className="whitespace-nowrap text-right w-36">Amount Spent</Th>
-                  <Th className="whitespace-nowrap text-right w-28">PnL</Th>
+                  <Th className="whitespace-nowrap w-28">Entry</Th>
+                  <Th className="whitespace-nowrap w-28">Exit</Th>
+                  <Th className="whitespace-nowrap w-36">Amount<br/>Spent</Th>
+                  <Th className="whitespace-nowrap w-32">Quantity</Th>
+                  <Th className="whitespace-nowrap w-28">PnL</Th>
                   <Th className="whitespace-nowrap hidden md:table-cell w-56">Date</Th>
-                  <Th className="whitespace-nowrap w-16 text-center">TF</Th>
+                  <Th className="whitespace-nowrap w-16">TF</Th>
                   <Th className="whitespace-nowrap w-40">Status / Action</Th>
                   <Th className="w-12"></Th>
                 </tr>
@@ -1054,17 +1054,29 @@ export default function JournalPage() {
                 {rows.map(r => (
                   <Tr key={r.id}>
                     <Td className="whitespace-nowrap w-28 md:w-36">{r.asset_name}</Td>
-                    <Td className="whitespace-nowrap w-20 md:w-24">{r.trade_type === 2 ? "Futures" : "Spot"}</Td>
-                    <Td className="whitespace-nowrap w-20 md:w-24">{r.side}</Td>
+                    <Td className="whitespace-nowrap w-20 md:w-24">
+                      {r.trade_type === 2 ? "Futures" : "Spot"} ({r.side})
+                    </Td>
 
-                    <Td className="text-right font-mono w-28">{fmt4(r.entry_price)}</Td>
-                    <Td className="text-right font-mono w-28">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
+                    <Td className="font-mono w-28">${fmt4(r.entry_price)}</Td>
+                    <Td className="font-mono w-28">${r.exit_price != null ? fmt4(r.exit_price) : "—"}</Td>
 
-                    <Td className="text-right font-mono w-36">{money2(r.amount_spent)}</Td>
-                    <Td className="text-right font-mono w-28">{r.pnl != null ? money2(r.pnl) : "—"}</Td>
+                    <Td className="font-mono w-36">{money2(r.amount_spent)}</Td>
 
-                    <Td className="hidden md:table-cell">{new Date(r.date).toLocaleString()}</Td>
-                    <Td className="text-center w-16">{r.timeframe_code}</Td>
+                    <Td className="font-mono w-32">
+                      {r.entry_price > 0 ? fmt4(r.amount_spent * r.entry_price) : "—"}
+                    </Td>
+
+                    <Td className="font-mono w-28">
+                      {r.pnl != null ? money2(r.pnl) : "—"}
+                    </Td>
+
+                    <Td className="hidden md:table-cell leading-tight">
+                      {new Date(r.date).toLocaleDateString()},
+                      <br />
+                      {new Date(r.date).toLocaleTimeString()}
+                    </Td>
+                    <Td className="w-16">{r.timeframe_code}</Td>
 
                     <Td className="w-40">
                       {r.status === "in_progress" ? (
@@ -1080,7 +1092,7 @@ export default function JournalPage() {
                     </Td>
 
                     <Td className="w-12">
-                      <div className="flex gap-3 justify-end">
+                      <div className="flex gap-3">
                         <button title="Edit" onClick={() => openEdit(r)} className="text-gray-600 hover:text-gray-800">✏️</button>
                         <button title="Delete" onClick={() => askDelete(r.id)} className="text-orange-600 hover:text-orange-700">🗑️</button>
                       </div>
@@ -1126,14 +1138,24 @@ export default function JournalPage() {
                       <div className="text-gray-500 text-xs">Exit</div>
                       <div className="font-mono">{r.exit_price != null ? fmt4(r.exit_price) : "—"}</div>
                     </div>
-                    <div>
-                      <div className="text-gray-500 text-xs">Amount Spent</div>
-                      <div className="font-mono">{money2(r.amount_spent)}</div>
+                   <div>
+                    <div className="text-gray-500 text-xs">Amount Spent</div>
+                    <div className="font-mono">{money2(r.amount_spent)}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-gray-500 text-xs">Quantity</div>
+                    <div className="font-mono">
+                      {r.entry_price > 0 ? fmt4(r.amount_spent / r.entry_price) : "—"}
                     </div>
-                    <div className="text-right">
-                      <div className="text-gray-500 text-xs">PnL</div>
-                      <div className="font-mono">{r.pnl != null ? money2(r.pnl) : "—"}</div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-gray-500 text-xs">PnL</div>
+                    <div className="font-mono">
+                      {r.pnl != null ? money2(r.pnl) : "—"}
                     </div>
+                  </div>
                   </div>
 
                   <div className="mt-4 flex items-center justify-between">
