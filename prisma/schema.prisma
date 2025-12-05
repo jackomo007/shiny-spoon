@@ -33,6 +33,7 @@ model account {
   journal_entries    journal_entry[]
   strategies         strategy[]
   pre_trade_analyses trade_pre_analysis[]
+  tags               tag[]
 
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
@@ -107,15 +108,39 @@ model journal_entry {
   buy_fee             Decimal              @default(0.00000000) @db.Decimal(18, 8)
   sell_fee            Decimal              @default(0.00000000) @db.Decimal(18, 8)
   timeframe_code      String               @default("1D") @db.VarChar(8)
-  trading_fee         Float                @default(0)      
+  trading_fee         Float                @default(0)
   futures_trade       futures_trade[]
   account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
   journal             journal              @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
   spot_trade          spot_trade[]
+  tags                journal_entry_tag[]
 
   @@index([strategy_id], map: "fk_journal_entry_strategy")
   @@index([account_id], map: "fk_journal_entry_account")
   @@index([journal_id], map: "fk_journal_entry_journal")
+}
+
+model tag {
+  id         String   @id @default(uuid()) @db.Char(36)
+  account_id String   @db.Char(36)
+  name       String   @db.VarChar(100)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  account account             @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_tag_account")
+  entries journal_entry_tag[]
+
+  @@unique([account_id, name], map: "uniq_tag_account_name")
+  @@index([account_id], map: "idx_tag_account")
+}
+
+model journal_entry_tag {
+  journal_entry_id String
+  tag_id           String
+
+  journal_entry journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  tag           tag           @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@id([journal_entry_id, tag_id])
 }
 
 model spot_trade {
@@ -265,23 +290,22 @@ model app_prompt {
 }
 
 model ai_usage {
-  id              String   @id @default(uuid()) @db.Char(36)
+  id              String        @id @default(uuid()) @db.Char(36)
   kind            ai_usage_kind
-  model_used      String   @db.VarChar(100)
-  input_tokens    Int      @default(0)
-  output_tokens   Int      @default(0)
-  cost_usd        Decimal  @default(0.000000) @db.Decimal(12, 6)
+  model_used      String        @db.VarChar(100)
+  input_tokens    Int           @default(0)
+  output_tokens   Int           @default(0)
+  cost_usd        Decimal       @default(0.000000) @db.Decimal(12, 6)
   account_id      Int?
-  tracker_id      String?  @db.Char(36)
-  pre_analysis_id String?  @db.Char(36)
-  meta            String?  @db.LongText
-  created_at      DateTime @default(now()) @db.DateTime(0)
+  tracker_id      String?       @db.Char(36)
+  pre_analysis_id String?       @db.Char(36)
+  meta            String?       @db.LongText
+  created_at      DateTime      @default(now()) @db.DateTime(0)
 
   @@index([kind], map: "idx_ai_usage_kind")
   @@index([created_at], map: "idx_ai_usage_created_at")
   @@index([account_id], map: "idx_ai_usage_account")
 }
-
 
 model portfolio_trade {
   id             String   @id @default(uuid()) @db.Char(36)

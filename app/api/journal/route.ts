@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
@@ -35,6 +34,7 @@ const BaseSchema = z.object({
     liquidation_price: z.number().positive().optional().nullable(),
   }).optional(),
   source: z.enum(["portfolio"]).optional(),
+  tags: z.array(z.string().min(1)).optional().default([]),
 })
 .superRefine((v, ctx) => {
   if (v.amount_spent == null && v.amount == null) {
@@ -61,15 +61,30 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const end = url.searchParams.get("end") ? new Date(url.searchParams.get("end")!) : new Date()
-  const start = url.searchParams.get("start") ? new Date(url.searchParams.get("start")!) : new Date(new Date().setMonth(end.getMonth() - 6))
+  const start = url.searchParams.get("start")
+    ? new Date(url.searchParams.get("start")!)
+    : new Date(new Date().setMonth(end.getMonth() - 6))
+
   start.setHours(0, 0, 0, 0)
   end.setHours(23, 59, 59, 999)
 
   const journalId = await getActiveJournalId(userId)
 
   const rows = await prisma.journal_entry.findMany({
-    where: { account_id: accountId, journal_id: journalId, trade_datetime: { gte: start, lte: end } },
-    include: { spot_trade: true, futures_trade: true },
+    where: {
+      account_id: accountId,
+      journal_id: journalId,
+      trade_datetime: { gte: start, lte: end },
+    },
+    include: {
+      spot_trade: true,
+      futures_trade: true,
+      tags: {
+        include: {
+          tag: true,
+        },
+      },
+    },
     orderBy: { trade_datetime: "desc" },
     take: 1000,
   })
@@ -107,8 +122,12 @@ export async function GET(req: Request) {
       notes_review: r.notes_review ?? null,
       pnl,
       leverage,
-      liquidation_price: r.futures_trade[0]?.liquidation_price != null ? Number(r.futures_trade[0].liquidation_price) : null,
+      liquidation_price:
+        r.futures_trade[0]?.liquidation_price != null
+          ? Number(r.futures_trade[0].liquidation_price)
+          : null,
       stop_loss_price: r.stop_loss_price != null ? Number(r.stop_loss_price) : null,
+      tags: r.tags.map((jt) => jt.tag.name),
     }
   })
 
@@ -124,8 +143,19 @@ export async function POST(req: Request) {
   const data = parsed.data
 
   if (!(await isValidAssetName(data.asset_name))) {
-    return NextResponse.json({ error: "Invalid asset symbol (use e.g. BTCUSDT or a verified symbol)" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Invalid asset symbol (use e.g. BTCUSDT or a verified symbol)" },
+      { status: 400 },
+    )
   }
+
+  const tagNames = Array.from(
+    new Set(
+      (data.tags ?? [])
+        .map((t) => t.trim())
+        .filter(Boolean),
+    ),
+  )
 
   const userId = Number(session.user.id)
   const accountId = await getActiveAccountId(userId)
@@ -133,7 +163,7 @@ export async function POST(req: Request) {
 
   const journalId = await getActiveJournalId(userId)
   const tradeType = data.trade_type
-  const strategyId = data.strategy_id ?? await getDefaultStrategyId(accountId)
+  const strategyId = data.strategy_id ?? (await getDefaultStrategyId(accountId))
 
   const okStrategy = await prisma.strategy.findFirst({
     where: { id: strategyId, account_id: accountId },
@@ -165,7 +195,8 @@ export async function POST(req: Request) {
         amount_spent: data.amount_spent,
         amount: amountQty,
         strategy_id: strategyId,
-        notes_entry: data.source === "portfolio" ? `[JE:PORTFOLIO]` : (data.notes_entry ?? null),
+        notes_entry:
+          data.source === "portfolio" ? `[JE:PORTFOLIO]` : data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: Number(data.buy_fee ?? 0),
@@ -194,11 +225,52 @@ export async function POST(req: Request) {
       })
     }
 
+    if (tagNames.length) {
+      const existingTags = await tx.tag.findMany({
+        where: {
+          account_id: accountId,
+          name: { in: tagNames },
+        },
+      })
+
+      const existingByName = new Map(existingTags.map((t) => [t.name, t]))
+      const missingNames = tagNames.filter((name) => !existingByName.has(name))
+
+      if (missingNames.length) {
+        await tx.tag.createMany({
+          data: missingNames.map((name) => ({
+            name,
+            account_id: accountId,
+          })),
+          skipDuplicates: true,
+        })
+      }
+
+      const allTags = await tx.tag.findMany({
+        where: {
+          account_id: accountId,
+          name: { in: tagNames },
+        },
+        select: { id: true },
+      })
+
+      await tx.journal_entry_tag.createMany({
+        data: allTags.map((t) => ({
+          journal_entry_id: je.id,
+          tag_id: t.id,
+        })),
+        skipDuplicates: true,
+      })
+    }
+
     if (data.source === "portfolio") {
       const when = new Date(data.trade_datetime)
       const price = Number(data.entry_price)
       const qty = amountQty
-      const fee = Number(data.buy_fee ?? 0) + Number(data.sell_fee ?? 0) + Number(data.trading_fee ?? 0)
+      const fee =
+        Number(data.buy_fee ?? 0) +
+        Number(data.sell_fee ?? 0) +
+        Number(data.trading_fee ?? 0)
 
       let kind: "buy" | "sell" | "cash_in" | "cash_out" | "init" = "buy"
       if (data.asset_name.toUpperCase() === "CASH") {
@@ -208,11 +280,15 @@ export async function POST(req: Request) {
       }
 
       const cashDelta =
-        kind === "sell" ? (price * qty - fee)
-        : kind === "buy"  ? -(price * qty + fee)
-        : kind === "cash_in" ? Number(data.amount_spent)
-        : kind === "cash_out" ? -Number(data.amount_spent)
-        : 0
+        kind === "sell"
+          ? price * qty - fee
+          : kind === "buy"
+          ? -(price * qty + fee)
+          : kind === "cash_in"
+          ? Number(data.amount_spent)
+          : kind === "cash_out"
+          ? -Number(data.amount_spent)
+          : 0
 
       await tx.portfolio_trade.create({
         data: {

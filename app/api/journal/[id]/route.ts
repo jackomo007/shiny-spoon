@@ -36,6 +36,7 @@ const BaseSchema = z
         liquidation_price: z.number().positive().optional().nullable(),
       })
       .optional(),
+    tags: z.array(z.string().min(1)).optional().default([]),
   })
   .superRefine((v, ctx) => {
     if (v.amount_spent == null && v.amount == null) {
@@ -210,25 +211,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       ? (existing.exit_price as number | null)
       : data.exit_price ?? null
 
-  const result = computePnlAndStatus({
-    tradeType,
-    side: data.side,
-    entryPrice: data.entry_price,
-    exitPrice: exitToPersist,
-    amountSpent: data.amount_spent,
-    leverage: data.futures?.leverage,
-    buyFee: data.buy_fee,
-    sellFee: data.sell_fee,
-    tradingFee: data.trading_fee,
-  })
-
-  const statusFromPnl = result.status
-
-  const statusToPersist: Status =
-    exitToPersist == null ? (data.status as Status) : statusFromPnl
+ const statusToPersist: Status = data.status as Status
 
   const sellFeeToPersist: Prisma.Decimal | undefined =
     data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined
+
+  const tagNames = Array.from(
+    new Set(
+      (data.tags ?? [])
+        .map((t) => t.trim())
+        .filter(Boolean),
+    ),
+  )
 
   const updated = await prisma.$transaction(async (tx) => {
     const u = await tx.journal_entry.update({
@@ -290,6 +284,47 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
     }
 
+    await tx.journal_entry_tag.deleteMany({
+      where: { journal_entry_id: id },
+    })
+
+    if (tagNames.length) {
+      const existingTags = await tx.tag.findMany({
+        where: {
+          account_id: accountId,
+          name: { in: tagNames },
+        },
+      })
+
+      const existingByName = new Map(existingTags.map((t) => [t.name, t]))
+      const missingNames = tagNames.filter((name) => !existingByName.has(name))
+
+      if (missingNames.length) {
+        await tx.tag.createMany({
+          data: missingNames.map((name) => ({
+            name,
+            account_id: accountId,
+          })),
+          skipDuplicates: true,
+        })
+      }
+
+      const allTags = await tx.tag.findMany({
+        where: {
+          account_id: accountId,
+          name: { in: tagNames },
+        },
+        select: { id: true },
+      })
+
+      await tx.journal_entry_tag.createMany({
+        data: allTags.map((t) => ({
+          journal_entry_id: id,
+          tag_id: t.id,
+        })),
+        skipDuplicates: true,
+      })
+    }
     return u
   })
 
@@ -317,6 +352,10 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
     where: { id, account_id: accountId },
   })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  await prisma.journal_entry_tag.deleteMany({
+    where: { journal_entry_id: id },
+  })
 
   await prisma.journal_entry.delete({ where: { id } })
   return NextResponse.json({ ok: true })

@@ -44,6 +44,7 @@ export type JournalRow = {
   strategy_rule_match: number;
   notes_entry: string | null;
   notes_review: string | null;
+  tags?: string[];
 };
 
 type StrategyOption = { id: string; name: string | null };
@@ -74,10 +75,16 @@ type JournalForm = {
   matched_rule_ids?: string[];
   notes_entry?: string;
   notes_review?: string;
+
+  tags?: string[];
 };
 
 type AssetOption = { id: string; symbol: string; name: string };
 type JournalSummary = { id: string; name: string; created_at: string };
+type Tag = {
+  id: string;
+  name: string;
+};
 type JournalsPayload = {
   items?: JournalSummary[];
   activeJournalId?: string | null;
@@ -97,7 +104,9 @@ type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
   trading_fee?: number | null;
   buy_fee?: number | null;
   sell_fee?: number | null;
+  tags?: string[];
 };
+
 type JournalIndexResponse = { items: JournalApiItem[] };
 
 function hasRules(x: unknown): x is HasRules {
@@ -197,6 +206,7 @@ type BasePayload = {
   notes_review: string | null;
   timeframe_code: string;
   trading_fee: number;
+  tags?: string[];
 };
 
 type CreateSpotPayload = BasePayload & { trade_type: 1 };
@@ -248,6 +258,10 @@ export default function JournalPage() {
   const validSymbolsRef = useRef<Set<string>>(new Set());
   const assetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [newTagName, setNewTagName] = useState("");
 
   const {
     register,
@@ -270,6 +284,7 @@ export default function JournalPage() {
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
+      tags: [],
     },
     mode: "onTouched",
   });
@@ -277,6 +292,8 @@ export default function JournalPage() {
   const wTradeType = Number(watch("trade_type") ?? 1) as TradeType;
   const wStatus = watch("status") as Status | undefined;
   const wStrategyId = watch("strategy_id");
+  const wTags = watch("tags") ?? [];
+
   const [journals, setJournals] = useState<JournalSummary[]>([]);
   const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
@@ -320,17 +337,48 @@ export default function JournalPage() {
     } catch {}
   }
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (loading) return;
-    if (firstRunOpen) return;
+  async function loadTagsList() {
+    try {
+      setTagsLoading(true);
+      setTagsError(null);
 
-    if (journals.length === 0) {
-      setFirstRunName("");
-      setFirstRunOpen(true);
-      return;
+      const r = await fetch("/api/tags", { cache: "no-store" });
+      if (!r.ok) throw new Error(await r.text());
+
+      const data = (await r.json()) as { items?: Tag[] } | Tag[];
+      const list = Array.isArray(data) ? data : data.items ?? [];
+
+      setAvailableTags(list);
+    } catch (e) {
+      setTagsError("Could not load tags");
+      setAvailableTags([]);
+    } finally {
+      setTagsLoading(false);
     }
-  }, [loading, journals, firstRunOpen]);
+  }
+
+  useEffect(() => {
+    register("tags");
+  }, [register]);
+
+    useEffect(() => {
+    if (!open) return;
+    void loadTagsList();
+  }, [open]);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (loading) return;
+
+  if (journals.length === 0) {
+    setFirstRunName("");
+    setFirstRunOpen(true);
+    return;
+  }
+
+  setFirstRunOpen(false);
+}, [loading, journals.length]);
+
 
   useEffect(() => {
     const cur = watch("side") as Side | undefined;
@@ -431,6 +479,7 @@ export default function JournalPage() {
       notes_entry: it.notes_entry,
       notes_review: it.notes_review,
       trading_fee: Number(unifiedFee) || 0,
+      tags: it.tags ?? [],
     };
   }
 
@@ -604,6 +653,7 @@ export default function JournalPage() {
       matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
+      tags: [],
     });
 
     setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
@@ -663,6 +713,7 @@ export default function JournalPage() {
       matched_rule_ids: [],
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
+      tags: row.tags ?? [],
     });
     const tf = row.timeframe_code || "";
     const tfNum = tf.replace(/[A-Z]$/i, "");
@@ -847,6 +898,7 @@ export default function JournalPage() {
       notes_review: form.notes_review?.trim() || null,
       timeframe_code,
       trading_fee: fee,
+      tags: (form.tags ?? []).map((t) => t.trim()).filter(Boolean),
     };
 
     let payload: CreatePayload;
@@ -2053,6 +2105,116 @@ export default function JournalPage() {
             {wizardStep === 3 && (
               <>
                 <div>
+                  <div className="text-sm mb-1">Tags (Optional)</div>
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const name = newTagName.trim();
+                          if (!name) return;
+                          if (wTags.includes(name)) {
+                            setNewTagName("");
+                            return;
+                          }
+
+                          try {
+                            setTagsError(null);
+                            const r = await fetch("/api/tags", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ name }),
+                            });
+                            if (!r.ok) throw new Error(await r.text());
+                            const created = (await r.json()) as Tag;
+
+                            setAvailableTags((prev) => {
+                              if (prev.some((t) => t.id === created.id)) {
+                                return prev;
+                              }
+                              return [...prev, created];
+                            });
+
+                            const updated = [...wTags, created.name];
+                            setValue("tags", updated, {
+                              shouldDirty: true,
+                              shouldValidate: false,
+                            });
+                            setNewTagName("");
+                          } catch (err) {
+                            setTagsError("Could not create tag");
+                          }
+                        }
+                      }}
+                      placeholder="Type a tag and press Enter…"
+                      className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  {tagsError && (
+                    <p className="mt-1 text-xs text-red-600">{tagsError}</p>
+                  )}
+
+                  {wTags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {wTags.map((t: string) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            const updated = wTags.filter((x: string) => x !== t);
+                            setValue("tags", updated, {
+                              shouldDirty: true,
+                              shouldValidate: false,
+                            });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                        >
+                          <span>{t}</span>
+                          <span className="text-gray-500">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 mb-1">
+                      Existing tags
+                      {tagsLoading && " (loading…)"}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.length === 0 && !tagsLoading && (
+                        <span className="text-xs text-gray-400">
+                          No tags yet. Create one above.
+                        </span>
+                      )}
+                      {availableTags
+                        .filter((t) => !wTags.includes(t.name))
+                        .map((tag) => (
+                          <button
+                            type="button"
+                            key={tag.id}
+                            onClick={() => {
+                              const updated = [...wTags, tag.name];
+                              setValue("tags", updated, {
+                                shouldDirty: true,
+                                shouldValidate: false,
+                              });
+                            }}
+                            className="inline-flex items-center rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
+                          >
+                            {tag.name}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
                   <div className="text-sm mb-2">
                     How Many Strategy Rules Did Your Setup Follow? (Optional)
                   </div>
@@ -2104,6 +2266,7 @@ export default function JournalPage() {
                 )}
               </>
             )}
+
           </form>
         </div>
       </Modal>
@@ -2223,6 +2386,7 @@ export default function JournalPage() {
                     notes_review: rowToClose.notes_review ?? null,
                     timeframe_code: rowToClose.timeframe_code,
                     trading_fee: tradingFeeNum,
+                    tags: (rowToClose.tags ?? []).map((t) => t.trim()).filter(Boolean),
                   };
 
                   const payloadClose: CreatePayload =
