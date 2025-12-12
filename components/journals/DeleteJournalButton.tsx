@@ -25,7 +25,7 @@ export default function DeleteJournalButton({ journalId, disabled }: { journalId
     <button
       onClick={onDelete}
       disabled={disabled || loading}
-      className="rounded-xl bg-orange-600 text-white px-3 py-1.5 text-xs hover:opacity-90 disabled:opacity-50"
+      className="rounded-xl bg-orange-600 text-white px-3 py-1.5 text-xs hover:opacity-90 disabled:opacity-50 cursor-pointer"
       title={disabled ? "You cannot delete the active journal" : "Delete journal"}
     >
       {loading ? "Deleting..." : "Delete"}

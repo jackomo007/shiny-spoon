@@ -14,7 +14,7 @@ function getPrice(model: string): Price {
 }
 
 export async function recordAiUsage(opts: {
-  kind: "chart" | "trade";
+  kind: "chart" | "trade" | "structure";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -26,12 +26,11 @@ export async function recordAiUsage(opts: {
   const p = getPrice(opts.model);
   const cost = opts.inputTokens * p.inputPerTok + opts.outputTokens * p.outputPerTok;
   const metaStr =
-  opts.meta == null
-    ? null
-    : typeof opts.meta === "string"
-    ? opts.meta
-    : JSON.stringify(opts.meta);
-
+    opts.meta == null
+      ? null
+      : typeof opts.meta === "string"
+      ? opts.meta
+      : JSON.stringify(opts.meta);
 
   try {
     const row = await prisma.ai_usage.create({
@@ -60,3 +59,4 @@ export async function recordAiUsage(opts: {
 
   return cost;
 }
+

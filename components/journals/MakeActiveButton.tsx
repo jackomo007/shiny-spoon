@@ -28,7 +28,7 @@ export default function MakeActiveButton({ journalId }: { journalId: string }) {
     <button
       onClick={makeActive}
       disabled={loading}
-      className="rounded-xl bg-indigo-600 text-white px-3 py-1.5 text-xs hover:opacity-90 disabled:opacity-50"
+      className="rounded-xl bg-indigo-600 text-white px-3 py-1.5 text-xs hover:opacity-90 disabled:opacity-50 cursor-pointer"
     >
       {loading ? "Setting..." : "Make Active"}
     </button>

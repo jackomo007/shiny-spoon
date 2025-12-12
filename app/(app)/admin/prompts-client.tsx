@@ -99,7 +99,7 @@ export default function AdminPromptsClient() {
         <button
           onClick={save}
           disabled={saving || Object.keys(dirty).length === 0}
-          className="rounded-xl bg-black text-white px-4 py-2 disabled:opacity-50"
+          className="rounded-xl bg-black text-white px-4 py-2 disabled:opacity-50 cursor-pointer"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>
@@ -112,7 +112,7 @@ export default function AdminPromptsClient() {
         footer={
           <div className="flex justify-end">
             <button
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 cursor-pointer"
               onClick={() => setModalOpen(false)}
             >
               OK

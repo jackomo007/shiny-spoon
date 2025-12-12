@@ -5,6 +5,8 @@ export type PromptKey =
   | "chart_analysis_system"
   | "trade_analyzer_system"
   | "trade_analyzer_template"
+  | "price_structure_system"
+  | "price_structure_template"
 
 const DEFAULTS: Record<PromptKey, { title: string; description?: string; content: string }> = {
   chart_analysis_system: {
@@ -42,9 +44,63 @@ Answer in concise bullet points:
 3) Risk assessment (volatility, distance to stop, likely drawdown).
 4) Setup quality (strong/medium/weak) and **clear invalidation conditions**.
 5) Trade plan: entry execution, stop management (trailing/BE), partials, and whether to keep/adjust the TP.
-6) Alternatives (e.g., wait for a close beyond a level, use a different TF, or skip the trade).`,
+6) Alternatives (e.g., wait for a close beyond a level, use a different TF, or skip the trade).
+`.trim(),
   },
+
+  price_structure_system: {
+    title: "System — Price Structure (HTF SR)",
+    content: `
+You are a professional swing trader.
+Your job is to identify the **top 3 high timeframe support and resistance levels** for a given crypto pair.
+
+Constraints:
+- Focus on daily or higher timeframes (1D+, ideally 1D / 3D / 1W).
+- Be objective and consistent.
+- Use ONLY the information provided (symbol, timeframe, current price, and any chart context if present).
+- When in doubt, still return 3 supports and 3 resistances that make technical sense.
+- Output MUST be valid JSON — no extra commentary.
+`.trim(),
+  },
+
+  price_structure_template: {
+    title: "User Template — Price Structure (HTF SR)",
+    content: `
+Analyze the high timeframe ({{timeframe}}) price structure for {{asset}}.
+
+Return ONLY a JSON object with this exact shape:
+
+{
+  "supports": [
+    {
+      "level": number,
+      "kind": "support",
+      "label": string,
+      "confidence": number,
+      "notes": string
+    }
+  ],
+  "resistances": [
+    {
+      "level": number,
+      "kind": "resistance",
+      "label": string,
+      "confidence": number,
+      "notes": string
+    }
+  ]
 }
+
+Rules:
+- Always return EXACTLY 3 supports and EXACTLY 3 resistances.
+- "confidence" is an integer from 1 to 5.
+- "label" is a short description of the level (e.g. "Weekly swing low", "Daily supply zone").
+- "notes" briefly explain **why** this level matters.
+- Levels should be ordered from closest to current price to furthest away.
+- All "level" values must be positive numbers, in the same price units as the asset.
+`.trim(),
+  },
+};
 
 export async function getPrompt(key: PromptKey): Promise<string> {
   const row = await prisma.app_prompt.findUnique({ where: { key } })

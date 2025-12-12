@@ -165,14 +165,14 @@ export default function AdminUsersClient() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => openJournals(u)}
-                        className="rounded-lg border px-2 py-1 hover:bg-gray-50"
+                        className="rounded-lg border px-2 py-1 hover:bg-gray-50 cursor-pointer"
                         title="View trading journal"
                       >
                         📓 Journals
                       </button>
                       <button
                         onClick={() => openStrategies(u)}
-                        className="rounded-lg border px-2 py-1 hover:bg-gray-50"
+                        className="rounded-lg border px-2 py-1 hover:bg-gray-50 cursor-pointer"
                         title="View strategies"
                       >
                         🧭 Strategies
@@ -180,7 +180,7 @@ export default function AdminUsersClient() {
                       <button
                         onClick={() => toggleAdmin(u)}
                         disabled={toggling === String(u.id)}
-                        className="rounded-lg border px-2 py-1 hover:bg-gray-50"
+                        className="rounded-lg border px-2 py-1 hover:bg-gray-50 cursor-pointer"
                         title={u.is_admin ? "Remove admin" : "Make admin"}
                       >
                         🛡️ {u.is_admin ? "Remove admin" : "Make admin"}
@@ -188,7 +188,7 @@ export default function AdminUsersClient() {
                       <button
                         onClick={() => deleteUser(u)}
                         disabled={deleting === String(u.id)}
-                        className="rounded-lg border px-2 py-1 hover:bg-red-50 text-red-600 disabled:opacity-50"
+                        className="rounded-lg border px-2 py-1 hover:bg-red-50 text-red-600 disabled:opacity-50 cursor-pointer"
                         title="Delete user"
                       >
                         🗑️ Delete
@@ -263,7 +263,7 @@ function Modal({
         <div className="flex items-center justify-between border-b pb-2">
           <div className="font-semibold">{title}</div>
           <button
-            className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100"
+            className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100 cursor-pointer"
             onClick={onClose}
             aria-label="Close"
             title="Close"

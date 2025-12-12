@@ -132,7 +132,7 @@ export default function ProfileEditor() {
               {avatarUrl && (
                 <button
                   type="button"
-                  className="rounded-xl px-3 py-2 text-sm border"
+                  className="rounded-xl px-3 py-2 text-sm border cursor-pointer"
                   onClick={removeAvatar}
                   disabled={busy}
                 >

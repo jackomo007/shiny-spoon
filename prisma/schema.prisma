@@ -22,18 +22,20 @@ model user {
 }
 
 model account {
-  id                 String               @id @default(uuid()) @db.Char(36)
-  user_id            Int
-  type               account_type
-  name               String?              @db.VarChar(100)
-  created_at         DateTime             @default(now()) @db.DateTime(0)
-  user               user                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
+  id         String       @id @default(uuid()) @db.Char(36)
+  user_id    Int
+  type       account_type
+  name       String?      @db.VarChar(100)
+  created_at DateTime     @default(now()) @db.DateTime(0)
+
+  user               user                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
   subscriptions      chart_subscription[]
   journals           journal[]
   journal_entries    journal_entry[]
   strategies         strategy[]
   pre_trade_analyses trade_pre_analysis[]
   tags               tag[]
+  price_structures   coin_price_structure[]
 
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
@@ -323,6 +325,26 @@ model portfolio_trade {
   @@index([account_id, trade_datetime], map: "idx_pt_acc_dt")
 }
 
+model coin_price_structure {
+  id            String   @id @default(uuid()) @db.Char(36)
+  account_id    String   @db.Char(36)
+  asset_symbol  String   @db.VarChar(50)
+  exchange      String   @db.VarChar(50)
+  timeframe     String   @db.VarChar(16)
+
+  levels_json   String   @db.LongText
+  last_price    Decimal  @db.Decimal(18, 8)
+  last_price_at DateTime @db.DateTime(0)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+  updated_at    DateTime @updatedAt @db.DateTime(0)
+
+  account account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_price_structure_account")
+
+  @@index([account_id], map: "idx_price_structure_account")
+  @@unique([account_id, asset_symbol, exchange, timeframe], map: "uniq_price_structure_acc_asset_ex_tf")
+  @@map("coin_price_structure")
+}
+
 enum account_type {
   crypto
   stock
@@ -352,4 +374,5 @@ enum timeframe {
 enum ai_usage_kind {
   chart
   trade
+  structure
 }

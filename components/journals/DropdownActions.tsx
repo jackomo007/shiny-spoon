@@ -16,7 +16,7 @@ export default function DropdownActions({
     <div className="relative inline-block text-left">
       <button
         onClick={() => setOpen(!open)}
-        className="px-1 py-1 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
+        className="px-1 py-1 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300 cursor-pointer"
       >
         Actions ▼
       </button>
@@ -30,7 +30,7 @@ export default function DropdownActions({
               setOpen(false);
               openEdit(r);
             }}
-            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer"
           >
             Edit
           </button>
@@ -40,7 +40,7 @@ export default function DropdownActions({
               setOpen(false);
               askDelete(r.id);
             }}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 cursor-pointer"
           >
             Delete
           </button>

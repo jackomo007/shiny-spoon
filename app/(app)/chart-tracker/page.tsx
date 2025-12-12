@@ -129,7 +129,7 @@ export default function ChartTrackerPage() {
         <h1 className="text-xl font-semibold">Chart Tracker</h1>
         <button
           type="button"
-          className="rounded-lg px-3 py-2 border shadow"
+          className="rounded-lg px-3 py-2 border shadow cursor-pointer"
           onClick={() => setShowAdd(true)}
         >
           + Add Coin
@@ -147,7 +147,7 @@ export default function ChartTrackerPage() {
             and keep the latest 10 analyses.
           </p>
           <button
-            className="mt-4 rounded-lg bg-black text-white px-4 py-2"
+            className="mt-4 rounded-lg bg-black text-white px-4 py-2 cursor-pointer"
             onClick={() => setShowAdd(true)}
           >
             Add your first coin
@@ -171,7 +171,7 @@ export default function ChartTrackerPage() {
                 </div>
                 <button
                   type="button"
-                  className="text-sm underline"
+                  className="text-sm underline cursor-pointer"
                   onClick={() => setOpenFor(s.tracker)}
                 >
                   View analyses
@@ -181,7 +181,7 @@ export default function ChartTrackerPage() {
               <div className="mt-3 flex items-center justify-between">
                 <button
                   type="button"
-                  className="text-xs text-red-500"
+                  className="text-xs text-red-500 cursor-pointer"
                   onClick={() => askRemoveCoin(s.tracker.id)}
                 >
                   Remove coin
@@ -218,7 +218,7 @@ export default function ChartTrackerPage() {
         footer={
           <div className="flex items-center justify-end gap-3">
             <button
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
+              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 cursor-pointer"
               onClick={() => setConfirmOpen(false)}
             >
               Cancel
@@ -226,7 +226,7 @@ export default function ChartTrackerPage() {
             <button
               onClick={confirmRemoveCoin}
               disabled={deleting}
-              className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+              className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50 cursor-pointer"
             >
               {deleting ? "Removing…" : "Remove"}
             </button>
@@ -280,7 +280,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            className="px-3 py-2 rounded-lg border"
+            className="px-3 py-2 rounded-lg border cursor-pointer"
             onClick={onClose}
           >
             Cancel
@@ -288,7 +288,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
 
           <button
             type="button"
-            className="px-3 py-2 rounded-lg border bg-black text-white disabled:opacity-50"
+            className="px-3 py-2 rounded-lg border bg-black text-white disabled:opacity-50 cursor-pointer"
             disabled={!canSave}
             onClick={async () => {
               try {
@@ -349,7 +349,7 @@ function AnalysesModal({
           </h3>
           <button
             type="button"
-            className="px-3 py-1 rounded border"
+            className="px-3 py-1 rounded border cursor-pointer"
             onClick={onClose}
           >
             Close
@@ -392,7 +392,7 @@ function AnalysesModal({
 
                 <div className="mt-4">
                   <button
-                    className="text-sm underline"
+                    className="text-sm underline cursor-pointer"
                     onClick={async () => {
                       await onRefetch();
                       try {

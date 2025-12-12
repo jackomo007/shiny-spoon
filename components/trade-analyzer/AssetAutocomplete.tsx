@@ -78,7 +78,7 @@ export default function AssetAutocomplete({
             items.map((it) => (
               <button
                 key={it.symbol}
-                className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                className="block w-full text-left px-3 py-2 hover:bg-gray-50 cursor-pointer"
                 onClick={() => {
                   onChange(it.symbol);
                   setQ(it.symbol);

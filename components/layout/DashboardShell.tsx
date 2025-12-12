@@ -1,65 +1,65 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import Image from "next/image"
-import { useEffect, useState } from "react"
-import { signOut } from "next-auth/react"
-import { useSession } from "next-auth/react"
-import { usePathname } from "next/navigation"
-import AccountSwitcher from "@/components/account/AccountSwitcher"
+import Link from "next/link";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
+import AccountSwitcher from "@/components/account/AccountSwitcher";
 
-type Props = { children: React.ReactNode }
+type Props = { children: React.ReactNode };
 
 function initials(from: string): string {
-  const base = (from || "").trim()
-  if (!base) return "U"
-  const parts = base.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  const one = parts[0]
-  if (one.includes("@")) return one.split("@")[0].slice(0, 2).toUpperCase()
-  return one.slice(0, 2).toUpperCase()
+  const base = (from || "").trim();
+  if (!base) return "U";
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  const one = parts[0];
+  if (one.includes("@")) return one.split("@")[0].slice(0, 2).toUpperCase();
+  return one.slice(0, 2).toUpperCase();
 }
 
 export default function DashboardShell({ children }: Props) {
-  const { data } = useSession()
+  const { data } = useSession();
   const displayName =
     data?.user?.name ??
     (data?.user?.email ? data.user.email.split("@")[0] : undefined) ??
-    "Trader"
+    "Trader";
 
-  const avatarText = initials(displayName)
-  const isAdmin = !!data?.user?.isAdmin
+  const avatarText = initials(displayName);
+  const isAdmin = !!data?.user?.isAdmin;
 
-  const [openProfile, setOpenProfile] = useState(false)
-  const [accOpen, setAccOpen] = useState(false)
-  const [courseOpen, setCourseOpen] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [openProfile, setOpenProfile] = useState(false);
+  const [accOpen, setAccOpen] = useState(false);
+  const [courseOpen, setCourseOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   const openComingSoon = (e?: React.MouseEvent) => {
-    e?.preventDefault()
-    setCourseOpen(true)
-  }
+    e?.preventDefault();
+    setCourseOpen(true);
+  };
 
   useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
+    setMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileOpen(false)
+      if (e.key === "Escape") setMobileOpen(false);
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [])
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="min-h-dvh bg-gray-50">
       <div
-       className="relative text-gray-700"
-       style={{ backgroundColor: "#f6f1ff" }}
-     >
+        className="relative text-gray-700"
+        style={{ backgroundColor: "#f6f1ff" }}
+      >
         <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6 relative">
             <Link
@@ -72,7 +72,7 @@ export default function DashboardShell({ children }: Props) {
                 className="font-extrabold leading-none tracking-tight"
                 style={{
                   fontSize: 24,
-                  color: "#0F1220", 
+                  color: "#0F1220",
                 }}
               >
                 Stakk
@@ -84,22 +84,42 @@ export default function DashboardShell({ children }: Props) {
                 className="font-extrabold leading-none tracking-tight bg-clip-text text-transparent bg-gradient-to-r"
                 style={{
                   fontSize: 24,
-                  backgroundImage: "linear-gradient(90deg, #6D28D9 0%, #A855F7 100%)",
+                  backgroundImage:
+                    "linear-gradient(90deg, #6D28D9 0%, #A855F7 100%)",
                 }}
               >
                 AI
               </span>
             </Link>
-            <nav className="hidden xl:flex gap-6 opacity-90">
+
+              <nav className="hidden xl:flex items-center gap-6 opacity-90">
               <Link href="/dashboard">Home</Link>
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
               {isAdmin && <Link href="/admin">Admin</Link>}
+
+              <Link
+                href="/add-coin"
+                className="
+                  px-4 py-1.5
+                  rounded-md
+                  bg-[#1A1A1A]
+                  text-white
+                  font-medium
+                  shadow-sm
+                  hover:bg-black
+                  hover:shadow-md
+                  transition
+                  border border-black/40
+                "
+              >
+                + Add Coin
+              </Link>
             </nav>
 
             <button
-            className="inline-flex flex-col items-center justify-center rounded-full bg-white/15 p-2 hover:bg-white/20 xl:hidden"
+              className="inline-flex flex-col items-center justify-center rounded-full bg-white/15 p-2 hover:bg-white/20 xl:hidden cursor-pointer"
               onClick={() => setMobileOpen((v) => !v)}
               aria-label="Open menu"
               aria-expanded={mobileOpen}
@@ -134,7 +154,7 @@ export default function DashboardShell({ children }: Props) {
                       <li>
                         <Link
                           href="/journal"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10"
                           onClick={() => setMobileOpen(false)}
                         >
                           Trading Journal
@@ -143,7 +163,7 @@ export default function DashboardShell({ children }: Props) {
                       <li>
                         <Link
                           href="/strategies"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/10 whitespace-nowrap"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10"
                           onClick={() => setMobileOpen(false)}
                         >
                           Strategy Creator
@@ -158,17 +178,6 @@ export default function DashboardShell({ children }: Props) {
                           Trade Analyzer
                         </Link>
                       </li>
-                      {/* <li>
-                        <button
-                          onClick={() => {
-                            setMobileOpen(false)
-                            openComingSoon()
-                          }}
-                          className="w-full text-left rounded-xl px-3 py-2 hover:bg-white/10"
-                        >
-                          Trading Course
-                        </button>
-                      </li> */}
                       {isAdmin && (
                         <li>
                           <Link
@@ -180,6 +189,21 @@ export default function DashboardShell({ children }: Props) {
                           </Link>
                         </li>
                       )}
+                      <li>
+                        <Link
+                          href="/add-coin"
+                          className="
+                            block rounded-xl px-3 py-2 
+                            bg-[#1A1A1A] 
+                            text-white
+                            shadow
+                            hover:bg-black
+                          "
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          + Add Coin
+                        </Link>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -190,7 +214,7 @@ export default function DashboardShell({ children }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setAccOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20"
+              className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20 cursor-pointer"
               title="Switch account"
             >
               <span>👥</span> Accounts
@@ -199,11 +223,17 @@ export default function DashboardShell({ children }: Props) {
             <div className="relative">
               <button
                 onClick={() => setOpenProfile((v) => !v)}
-                className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20"
+                className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20 cursor-pointer"
               >
                 <span className="h-8 w-8 rounded-full bg-white/20 grid place-items-center overflow-hidden relative">
                   {data?.user?.image ? (
-                    <Image src={data.user.image} alt="avatar" fill className="object-cover" sizes="32px" />
+                    <Image
+                      src={data.user.image}
+                      alt="avatar"
+                      fill
+                      className="object-cover"
+                      sizes="32px"
+                    />
                   ) : (
                     avatarText
                   )}
@@ -222,7 +252,7 @@ export default function DashboardShell({ children }: Props) {
                   <MenuItem href="/profile" label="My profile" emoji="🙋‍♂️" />
 
                   <button
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100"
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 cursor-pointer"
                     onClick={() => signOut({ callbackUrl: "/login" })}
                   >
                     <span className="text-lg">🚪</span> Logout
@@ -239,7 +269,13 @@ export default function DashboardShell({ children }: Props) {
           <div className="rounded-2xl bg-primary text-white p-6">
             <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-xl mb-3 overflow-hidden relative">
               {data?.user?.image ? (
-                <Image src={data.user.image} alt="avatar" fill className="object-cover" sizes="64px" />
+                <Image
+                  src={data.user.image}
+                  alt="avatar"
+                  fill
+                  className="object-cover"
+                  sizes="64px"
+                />
               ) : (
                 avatarText
               )}
@@ -253,16 +289,9 @@ export default function DashboardShell({ children }: Props) {
           <ul className="mt-6 grid gap-2">
             <NavItem href="/dashboard" label="Home" icon="🏠" />
             <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
-            {isAdmin && <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />}
-            {/* <li>
-              <button
-                onClick={openComingSoon}
-                className="w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
-              >
-                <span className="w-6 text-center">🎓</span>
-                <span>Trading Course</span>
-              </button>
-            </li> */}
+            {isAdmin && (
+              <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />
+            )}
             <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
             <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
@@ -273,7 +302,6 @@ export default function DashboardShell({ children }: Props) {
         <main>{children}</main>
       </div>
 
-      {/* Modal: Trading Course */}
       {courseOpen && (
         <div
           className="fixed inset-0 z-[70] bg-black/30 backdrop-blur-[1px] grid place-items-center"
@@ -289,7 +317,7 @@ export default function DashboardShell({ children }: Props) {
             </p>
             <div className="mt-4 text-right">
               <button
-                className="rounded-xl bg-black text-white px-4 py-2"
+                className="rounded-xl bg-black text-white px-4 py-2 cursor-pointer"
                 onClick={() => setCourseOpen(false)}
               >
                 Close
@@ -299,7 +327,7 @@ export default function DashboardShell({ children }: Props) {
         </div>
       )}
 
-      {/* Drawer: Account Switcher */}
+      {/* ACCOUNT SWITCHER */}
       {accOpen && (
         <div
           className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[1px]"
@@ -312,7 +340,7 @@ export default function DashboardShell({ children }: Props) {
             <div className="flex items-center justify-between pb-2 border-b">
               <div className="font-semibold">Switch account</div>
               <button
-                className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100"
+                className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100 cursor-pointer"
                 onClick={() => setAccOpen(false)}
                 aria-label="Close"
                 title="Close"
@@ -328,18 +356,29 @@ export default function DashboardShell({ children }: Props) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-function NavItem({ href, label, icon }: { href: string; label: string; icon: string }) {
+function NavItem({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon: string;
+}) {
   return (
     <li>
-      <Link className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100" href={href}>
+      <Link
+        className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
+        href={href}
+      >
         <span className="w-6 text-center">{icon}</span>
         <span>{label}</span>
       </Link>
     </li>
-  )
+  );
 }
 
 function MenuItem({
@@ -347,13 +386,16 @@ function MenuItem({
   label,
   emoji,
 }: {
-  href: string
-  label: string
-  emoji: string
+  href: string;
+  label: string;
+  emoji: string;
 }) {
   return (
-    <Link href={href} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100">
+    <Link
+      href={href}
+      className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100"
+    >
       <span className="text-lg">{emoji}</span> {label}
     </Link>
-  )
+  );
 }

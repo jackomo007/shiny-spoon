@@ -1,4 +1,3 @@
-// lib/ai-analyzer.ts
 import OpenAI from "openai";
 import { getPrompt } from "@/lib/app-prompts";
 import type {
@@ -101,4 +100,53 @@ export async function analyzeTradeText({
   };
 
   return { text, model: usedModel, prompt, usage };
+}
+
+export async function analyzePriceStructure({
+  asset,
+  timeframe,
+  lastPrice,
+  prompt,
+  model,
+}: {
+  asset: string;
+  timeframe: string;
+  lastPrice: number;
+  prompt: string;
+  model?: string;
+}) {
+  const systemPrompt = await getPrompt("price_structure_system");
+  const usedModel = model ?? (process.env.PRICE_STRUCTURE_MODEL ?? "gpt-4o-mini");
+
+  const res = await openai.chat.completions.create({
+    model: usedModel,
+    temperature: 0.2,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const raw = res.choices[0]?.message?.content?.trim() ?? "{}";
+
+  const usage: Usage = {
+    input: res.usage?.prompt_tokens ?? 0,
+    output: res.usage?.completion_tokens ?? 0,
+  };
+
+  let json: unknown;
+
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    json = match ? JSON.parse(match[0]) : { supports: [], resistances: [] };
+  }
+
+  return {
+    json,
+    raw,
+    model: usedModel,
+    usage,
+  };
 }
