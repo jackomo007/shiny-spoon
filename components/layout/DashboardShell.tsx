@@ -98,24 +98,6 @@ export default function DashboardShell({ children }: Props) {
               <Link href="/strategies">Strategy Creator</Link>
               <Link href="/trade-analyzer">Trade Analyzer</Link>
               {isAdmin && <Link href="/admin">Admin</Link>}
-
-              <Link
-                href="/add-coin"
-                className="
-                  px-4 py-1.5
-                  rounded-md
-                  bg-[#1A1A1A]
-                  text-white
-                  font-medium
-                  shadow-sm
-                  hover:bg-black
-                  hover:shadow-md
-                  transition
-                  border border-black/40
-                "
-              >
-                + Add Coin
-              </Link>
             </nav>
 
             <button
@@ -189,21 +171,6 @@ export default function DashboardShell({ children }: Props) {
                           </Link>
                         </li>
                       )}
-                      <li>
-                        <Link
-                          href="/add-coin"
-                          className="
-                            block rounded-xl px-3 py-2 
-                            bg-[#1A1A1A] 
-                            text-white
-                            shadow
-                            hover:bg-black
-                          "
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          + Add Coin
-                        </Link>
-                      </li>
                     </ul>
                   </div>
                 </div>
@@ -296,6 +263,7 @@ export default function DashboardShell({ children }: Props) {
             <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
             <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
             {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
+            <NavItem href="/add-coin" label="Coin Tracker" icon="🪙" />
           </ul>
         </aside>
 
