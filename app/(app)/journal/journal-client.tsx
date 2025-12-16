@@ -160,25 +160,15 @@ function parseDecimal(input: string | number | null | undefined): number {
     const decimalSep = lastComma > lastDot ? "," : ".";
     const thousandSep = decimalSep === "," ? "." : ",";
 
-    const reThousand = new RegExp("\\" + thousandSep, "g");
-    s = s.replace(reThousand, "");
-
-    const reDecimal = new RegExp("\\" + decimalSep, "g");
-    s = s.replace(reDecimal, ".");
+    s = s.replace(new RegExp("\\" + thousandSep, "g"), "");
+    s = s.replace(new RegExp("\\" + decimalSep, "g"), ".");
   } else if (hasComma) {
-    if (/^\d{1,3}(,\d{3})+(,\d+)?$/.test(s)) {
-      s = s.replace(/,/g, "");
-    } else {
-      s = s.replace(/,/g, ".");
-    }
+    s = s.replace(/,/g, "");
   } else if (hasDot) {
-    if (/^\d{1,3}(\.\d{3})+(\.\d+)?$/.test(s)) {
-      s = s.replace(/\./g, "");
-    }
   }
-
   return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
 }
+
 
 function decimalOrZero(input: string | number | null | undefined): number {
   const n = parseDecimal(input ?? "");
@@ -1095,8 +1085,8 @@ useEffect(() => {
     const formatted =
       label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
 
-    let bg = "bg-purple-500";
-    let hover = "hover:bg-purple-700";
+    let bg = "bg-green-500";
+    let hover = "hover:bg-green-700";
     let text = "text-white";
 
     if (r.status === "loss") {
@@ -1858,7 +1848,7 @@ useEffect(() => {
                       <MoneyField<JournalForm>
                         name="amount_spent"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 500.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{
@@ -1932,7 +1922,7 @@ useEffect(() => {
                       <MoneyField<JournalForm>
                         name="amount_spent"
                         control={control}
-                        decimalPlaces={3}
+                        decimalPlaces={8}
                         placeholder="e.g. 1000.00"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         rules={{

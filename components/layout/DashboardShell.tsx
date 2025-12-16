@@ -92,7 +92,7 @@ export default function DashboardShell({ children }: Props) {
               </span>
             </Link>
 
-              <nav className="hidden xl:flex items-center gap-6 opacity-90">
+            <nav className="hidden xl:flex items-center gap-6 opacity-90">
               <Link href="/dashboard">Home</Link>
               <Link href="/journal">Trading Journal</Link>
               <Link href="/strategies">Strategy Creator</Link>
@@ -231,43 +231,53 @@ export default function DashboardShell({ children }: Props) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 px-4 md:px-6 py-6">
+      <div className="mx-auto w-full max-w-7xl md:max-w-none grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] gap-6 px-4 md:px-6 py-6">
         <aside className="hidden md:block">
-          <div className="rounded-2xl bg-primary text-white p-6">
-            <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-xl mb-3 overflow-hidden relative">
-              {data?.user?.image ? (
-                <Image
-                  src={data.user.image}
-                  alt="avatar"
-                  fill
-                  className="object-cover"
-                  sizes="64px"
-                />
-              ) : (
-                avatarText
-              )}
+          <div className="sticky top-6">
+            <div className="rounded-2xl bg-primary text-white p-6">
+              <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-xl mb-3 overflow-hidden relative">
+                {data?.user?.image ? (
+                  <Image
+                    src={data.user.image}
+                    alt="avatar"
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                  />
+                ) : (
+                  avatarText
+                )}
+              </div>
+              <div className="font-semibold">{displayName}</div>
+              <span className="inline-block mt-3 text-xs bg-white/15 rounded-full px-2 py-1">
+                Free Tier
+              </span>
             </div>
-            <div className="font-semibold">{displayName}</div>
-            <span className="inline-block mt-3 text-xs bg-white/15 rounded-full px-2 py-1">
-              Free Tier
-            </span>
-          </div>
 
-          <ul className="mt-6 grid gap-2">
-            <NavItem href="/dashboard" label="Home" icon="🏠" />
-            <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
-            {isAdmin && (
-              <NavItem href="/chart-tracker" label="Chart Tracker" icon="⚙️" />
-            )}
-            <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
-            <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
-            <NavItem href="/trade-analyzer" label="Trade Analyzer" icon="📈" />
-            {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
-            <NavItem href="/add-coin" label="Coin Tracker" icon="🪙" />
-          </ul>
+            <ul className="mt-6 grid gap-2">
+              <NavItem href="/dashboard" label="Home" icon="🏠" />
+              <NavItem href="/portfolio" label="Portfolio Manager" icon="💼" />
+              {isAdmin && (
+                <NavItem
+                  href="/chart-tracker"
+                  label="Chart Tracker"
+                  icon="⚙️"
+                />
+              )}
+              <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
+              <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
+              <NavItem
+                href="/trade-analyzer"
+                label="Trade Analyzer"
+                icon="📈"
+              />
+              {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
+              <NavItem href="/add-coin" label="Coin Tracker" icon="🪙" />
+            </ul>
+          </div>
         </aside>
 
-        <main>{children}</main>
+        <main className="min-w-0">{children}</main>
       </div>
 
       {courseOpen && (
