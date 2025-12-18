@@ -12,13 +12,15 @@ import type React from "react"
 type Item = {
   symbol: string
   amount: number
-  priceUsd: number
+  avgEntryPriceUsd: number
+  currentPriceUsd: number
   valueUsd: number
   percent: number
 }
 
 type PortfolioRes = {
   totalValueUsd: number
+  totalInvestedUsd: number
   cashUsd: number
   items: Item[]
 }
@@ -77,13 +79,14 @@ export default function PortfolioPage() {
 
     let cashItem: Item | null = null
     if (existingCash) {
-      cashItem = existingCash
+      cashItem = existingCash as Item
     } else if (cashVal > 0) {
       const percent = total > 0 ? (cashVal / total) * 100 : 0
       cashItem = {
         symbol: "CASH",
         amount: cashVal,
-        priceUsd: 1,
+        avgEntryPriceUsd: 1,
+        currentPriceUsd: 1,
         valueUsd: cashVal,
         percent,
       }
@@ -174,9 +177,15 @@ export default function PortfolioPage() {
         ) : (
           <div className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <div className="text-lg font-semibold">
-                Total Portfolio Value: {usd(data.totalValueUsd)}
+              <div className="grid gap-1">
+                <div className="text-lg font-semibold">
+                  Total Portfolio Value: {usd(data.totalValueUsd)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Total Amount Invested: <span className="font-medium">{usd(data.totalInvestedUsd)}</span>
+                </div>
               </div>
+
               <div className="text-sm text-gray-600">
                 Cash: <span className="font-medium">{usd(data.cashUsd)}</span>
               </div>
@@ -214,6 +223,7 @@ export default function PortfolioPage() {
                     <Th>Asset</Th>
                     <Th>Asset Amount</Th>
                     <Th>Average Entry Price</Th>
+                    <Th>Current Price</Th>
                     <Th>Value</Th>
                     <Th>% Port.</Th>
                     <Th className="w-40">
@@ -234,11 +244,12 @@ export default function PortfolioPage() {
                         {i.symbol}
                       </Td>
                       <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
-                      <Td>{usd(i.priceUsd)}</Td>
+                      <Td>{usd(i.avgEntryPriceUsd)}</Td>
+                      <Td>{usd(i.currentPriceUsd)}</Td>
                       <Td>{usd(i.valueUsd)}</Td>
                       <Td>{i.percent.toFixed(2)}%</Td>
                       <Td className="w-40">
-                         <div className="flex justify-center">
+                        <div className="flex justify-center">
                           <button
                             className="inline-flex items-center h-9 px-4 rounded-xl bg-gray-900 text-white text-sm"
                             onClick={() => handleEditAsset(i)}
@@ -274,7 +285,6 @@ export default function PortfolioPage() {
     </div>
   )
 }
-
 
 function CashModal(props: {
   mode: "add" | "edit"

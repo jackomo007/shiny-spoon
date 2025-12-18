@@ -3,11 +3,13 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { PortfolioRepo } from "@/data/repositories/portfolio.repo"
+import { fetchTickerPrice } from "@/lib/klines"
 
 type Item = {
   symbol: string
   amount: number
-  priceUsd: number
+  avgEntryPriceUsd: number
+  currentPriceUsd: number
   valueUsd: number
   percent: number
 }
@@ -40,52 +42,75 @@ export async function GET() {
       PortfolioRepo.getCashBalance(accountId),
     ])
 
-    const grouped: Record<
-      string,
-      { qty: number; costBasis: number }
-    > = {}
+    // Group invested (cost basis) by symbol
+    const grouped: Record<string, { qty: number; investedUsd: number }> = {}
 
     for (const row of openBuys) {
-      const sym = row.asset_name
+      const sym = String(row.asset_name || "").trim().toUpperCase()
       const qty = Number(row.amount ?? 0)
-      const price = Number(row.entry_price ?? 0)
+      const entry = Number(row.entry_price ?? 0)
 
-      if (!grouped[sym]) {
-        grouped[sym] = { qty: 0, costBasis: 0 }
-      }
+      if (!sym || qty <= 0) continue
 
+      if (!grouped[sym]) grouped[sym] = { qty: 0, investedUsd: 0 }
       grouped[sym].qty += qty
-      grouped[sym].costBasis += qty * price
+      grouped[sym].investedUsd += qty * entry
     }
 
     const symbols = Object.keys(grouped)
 
-    const spotTotal = symbols.reduce(
-      (sum, sym) => sum + grouped[sym].costBasis,
-      0
+    // Current prices from Binance (pair assumed as SYMBOLUSDT)
+    const currentPriceBySymbol = new Map<string, number>()
+
+    await Promise.all(
+      symbols.map(async (sym) => {
+        const pair = sym.endsWith("USDT") ? sym : `${sym}USDT`
+        try {
+          const p = await fetchTickerPrice(pair)
+          currentPriceBySymbol.set(sym, p)
+        } catch {
+          // fallback handled below (avgEntryPriceUsd)
+        }
+      })
     )
+
+    const spotInvestedUsd = symbols.reduce((sum, sym) => sum + grouped[sym].investedUsd, 0)
+
+    const spotCurrentValueUsd = symbols.reduce((sum, sym) => {
+      const g = grouped[sym]
+      const avgEntry = g.qty > 0 ? g.investedUsd / g.qty : 0
+      const current = currentPriceBySymbol.get(sym) ?? avgEntry
+      return sum + g.qty * current
+    }, 0)
 
     const items: Item[] = symbols
       .map((sym) => {
         const g = grouped[sym]
         const amount = g.qty
-        const valueUsd = g.costBasis
-        const priceUsd = amount > 0 ? valueUsd / amount : 0
+        const avgEntryPriceUsd = amount > 0 ? g.investedUsd / amount : 0
+        const currentPriceUsd = currentPriceBySymbol.get(sym) ?? avgEntryPriceUsd
+        const valueUsd = amount * currentPriceUsd
 
         return {
           symbol: sym,
           amount,
-          priceUsd,
+          avgEntryPriceUsd,
+          currentPriceUsd,
           valueUsd,
-          percent: spotTotal > 0 ? (valueUsd / spotTotal) * 100 : 0,
+          percent: spotCurrentValueUsd > 0 ? (valueUsd / spotCurrentValueUsd) * 100 : 0,
         }
       })
       .sort((a, b) => b.valueUsd - a.valueUsd)
 
-    const totalValueUsd = spotTotal + cashUsd
+    // Total Portfolio Value = current value + cash
+    const totalValueUsd = spotCurrentValueUsd + (cashUsd ?? 0)
+
+    // Total Amount Invested = old logic (cost basis) + cash
+    const totalInvestedUsd = spotInvestedUsd + (cashUsd ?? 0)
 
     return NextResponse.json({
       totalValueUsd,
+      totalInvestedUsd,
       cashUsd,
       items,
     })
