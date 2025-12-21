@@ -14,6 +14,7 @@ type Item = {
   amount: number
   avgEntryPriceUsd: number
   currentPriceUsd: number
+  purchaseValueUsd: number
   valueUsd: number
   percent: number
 }
@@ -87,6 +88,7 @@ export default function PortfolioPage() {
         amount: cashVal,
         avgEntryPriceUsd: 1,
         currentPriceUsd: 1,
+        purchaseValueUsd: cashVal,
         valueUsd: cashVal,
         percent,
       }
@@ -224,7 +226,8 @@ export default function PortfolioPage() {
                     <Th>Asset Amount</Th>
                     <Th>Average Entry Price</Th>
                     <Th>Current Price</Th>
-                    <Th>Value</Th>
+                    <Th>Purchase Value</Th>
+                    <Th>Current Value</Th>
                     <Th>% Port.</Th>
                     <Th className="w-40">
                       <div className="flex justify-end pr-1">
@@ -246,6 +249,7 @@ export default function PortfolioPage() {
                       <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
                       <Td>{usd(i.avgEntryPriceUsd)}</Td>
                       <Td>{usd(i.currentPriceUsd)}</Td>
+                      <Td>{usd(i.purchaseValueUsd)}</Td>
                       <Td>{usd(i.valueUsd)}</Td>
                       <Td>{i.percent.toFixed(2)}%</Td>
                       <Td className="w-40">

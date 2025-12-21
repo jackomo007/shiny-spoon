@@ -10,6 +10,7 @@ type Item = {
   amount: number
   avgEntryPriceUsd: number
   currentPriceUsd: number
+  purchaseValueUsd: number
   valueUsd: number
   percent: number
 }
@@ -42,7 +43,6 @@ export async function GET() {
       PortfolioRepo.getCashBalance(accountId),
     ])
 
-    // Group invested (cost basis) by symbol
     const grouped: Record<string, { qty: number; investedUsd: number }> = {}
 
     for (const row of openBuys) {
@@ -59,7 +59,6 @@ export async function GET() {
 
     const symbols = Object.keys(grouped)
 
-    // Current prices from Binance (pair assumed as SYMBOLUSDT)
     const currentPriceBySymbol = new Map<string, number>()
 
     await Promise.all(
@@ -90,22 +89,22 @@ export async function GET() {
         const avgEntryPriceUsd = amount > 0 ? g.investedUsd / amount : 0
         const currentPriceUsd = currentPriceBySymbol.get(sym) ?? avgEntryPriceUsd
         const valueUsd = amount * currentPriceUsd
+        const purchaseValueUsd = amount * avgEntryPriceUsd
 
         return {
           symbol: sym,
           amount,
           avgEntryPriceUsd,
           currentPriceUsd,
+          purchaseValueUsd,
           valueUsd,
           percent: spotCurrentValueUsd > 0 ? (valueUsd / spotCurrentValueUsd) * 100 : 0,
         }
       })
       .sort((a, b) => b.valueUsd - a.valueUsd)
 
-    // Total Portfolio Value = current value + cash
     const totalValueUsd = spotCurrentValueUsd + (cashUsd ?? 0)
 
-    // Total Amount Invested = old logic (cost basis) + cash
     const totalInvestedUsd = spotInvestedUsd + (cashUsd ?? 0)
 
     return NextResponse.json({
