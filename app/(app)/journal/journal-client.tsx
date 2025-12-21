@@ -2095,6 +2095,48 @@ useEffect(() => {
             {wizardStep === 3 && (
               <>
                 <div>
+                  <div className="text-sm mb-2">
+                    How Many Strategy Rules Did Your Setup Follow? (Optional)
+                  </div>
+                  <div className="grid gap-2">
+                    {strategyRules.length ? (
+                      strategyRules.map((r) => (
+                        <label key={r.id} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
+                          <span>{r.title}</span>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-500">No rules for selected strategy.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm mb-1">Notes (Optional)</div>
+                  <textarea
+                    {...register("notes_entry")}
+                    rows={3}
+                    placeholder="Write any notes…"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  />
+                </div>
+
+                {(wStatus === "loss" || wStatus === "break_even") && (
+                  <div>
+                    <div className="text-sm mb-1">Post Loss Review (Optional)</div>
+                    <textarea
+                      {...register("notes_review")}
+                      rows={3}
+                      placeholder="Reflect on what went wrong…"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                  </div>
+                )}
+
+                <hr className="my-2 border-gray-200" />
+
+                <div>
                   <div className="text-sm mb-1">Tags (Optional)</div>
 
                   <div className="flex gap-2">
@@ -2123,9 +2165,7 @@ useEffect(() => {
                             const created = (await r.json()) as Tag;
 
                             setAvailableTags((prev) => {
-                              if (prev.some((t) => t.id === created.id)) {
-                                return prev;
-                              }
+                              if (prev.some((t) => t.id === created.id)) return prev;
                               return [...prev, created];
                             });
 
@@ -2135,7 +2175,7 @@ useEffect(() => {
                               shouldValidate: false,
                             });
                             setNewTagName("");
-                          } catch (err) {
+                          } catch {
                             setTagsError("Could not create tag");
                           }
                         }
@@ -2145,9 +2185,7 @@ useEffect(() => {
                     />
                   </div>
 
-                  {tagsError && (
-                    <p className="mt-1 text-xs text-red-600">{tagsError}</p>
-                  )}
+                  {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
 
                   {wTags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -2178,9 +2216,7 @@ useEffect(() => {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {availableTags.length === 0 && !tagsLoading && (
-                        <span className="text-xs text-gray-400">
-                          No tags yet. Create one above.
-                        </span>
+                        <span className="text-xs text-gray-400">No tags yet. Create one above.</span>
                       )}
                       {availableTags
                         .filter((t) => !wTags.includes(t.name))
@@ -2203,60 +2239,8 @@ useEffect(() => {
                     </div>
                   </div>
                 </div>
-
-                <div>
-                  <div className="text-sm mb-2">
-                    How Many Strategy Rules Did Your Setup Follow? (Optional)
-                  </div>
-                  <div className="grid gap-2">
-                    {strategyRules.length ? (
-                      strategyRules.map((r) => (
-                        <label
-                          key={r.id}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            value={r.id}
-                            {...register("matched_rule_ids")}
-                          />
-                          <span>{r.title}</span>
-                        </label>
-                      ))
-                    ) : (
-                      <div className="text-xs text-gray-500">
-                        No rules for selected strategy.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm mb-1">Notes (Optional)</div>
-                  <textarea
-                    {...register("notes_entry")}
-                    rows={3}
-                    placeholder="Write any notes…"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                  />
-                </div>
-
-                {(wStatus === "loss" || wStatus === "break_even") && (
-                  <div>
-                    <div className="text-sm mb-1">
-                      Post Loss Review (Optional)
-                    </div>
-                    <textarea
-                      {...register("notes_review")}
-                      rows={3}
-                      placeholder="Reflect on what went wrong…"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                  </div>
-                )}
               </>
             )}
-
           </form>
         </div>
       </Modal>
