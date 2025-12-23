@@ -12,7 +12,7 @@ type Item = {
   updated_at: string;
 };
 
-type TabId = "trade" | "chart" | "other";
+type TabId = "trade" | "chart" | "price" | "other";
 
 const TAB_DEFS: Array<{
   id: TabId;
@@ -33,6 +33,12 @@ const TAB_DEFS: Array<{
     keys: ["chart_analysis_system"],
   },
   {
+    id: "price",
+    label: "Price Structure (HTF SR)",
+    description: "System prompt used to compute HTF Support/Resistance (3 supports + 3 resistances).",
+    keys: ["price_structure_system"],
+  },
+  {
     id: "other",
     label: "Other",
     description: "Other prompts not mapped to a specific page yet.",
@@ -48,6 +54,8 @@ function prettyPromptLabel(item: Item) {
       return "User Template — Trade Analyzer";
     case "chart_analysis_system":
       return "System — Chart Analyzer";
+    case "price_structure_system":
+      return "System — Price Structure (HTF SR)";
     default:
       return item.title || item.key;
   }
@@ -76,9 +84,12 @@ export default function AdminPromptsClient() {
 
       setItems(loaded);
 
-      const hasKey = (keys: string[]) => loaded.some((it) => keys.includes(it.key));
+      const hasKey = (keys: string[]) =>
+        loaded.some((it) => keys.includes(it.key));
+
       const firstWithData =
         TAB_DEFS.find((t) => t.id !== "other" && hasKey(t.keys))?.id ?? "other";
+
       setTab(firstWithData);
     })();
 
@@ -94,11 +105,12 @@ export default function AdminPromptsClient() {
   }, []);
 
   const itemsByTab = useMemo(() => {
-    const by: Record<TabId, Item[]> = { trade: [], chart: [], other: [] };
+    const by: Record<TabId, Item[]> = { trade: [], chart: [], price: [], other: [] };
 
     for (const it of items) {
       const mapped =
-        TAB_DEFS.find((t) => t.id !== "other" && t.keys.includes(it.key))?.id ?? null;
+        TAB_DEFS.find((t) => t.id !== "other" && t.keys.includes(it.key))?.id ??
+        null;
 
       if (mapped) by[mapped].push(it);
       else by.other.push(it);
@@ -113,8 +125,18 @@ export default function AdminPromptsClient() {
       return arr.slice().sort((a, b) => idx(a.key) - idx(b.key));
     };
 
-    by.trade = sortByKeyOrder(by.trade, TAB_DEFS.find((t) => t.id === "trade")!.keys);
-    by.chart = sortByKeyOrder(by.chart, TAB_DEFS.find((t) => t.id === "chart")!.keys);
+    by.trade = sortByKeyOrder(
+      by.trade,
+      TAB_DEFS.find((t) => t.id === "trade")!.keys
+    );
+    by.chart = sortByKeyOrder(
+      by.chart,
+      TAB_DEFS.find((t) => t.id === "chart")!.keys
+    );
+    by.price = sortByKeyOrder(
+      by.price,
+      TAB_DEFS.find((t) => t.id === "price")!.keys
+    );
 
     by.other = by.other.slice().sort((a, b) => (a.key < b.key ? -1 : 1));
 
@@ -125,6 +147,7 @@ export default function AdminPromptsClient() {
     return {
       trade: itemsByTab.trade.length,
       chart: itemsByTab.chart.length,
+      price: itemsByTab.price.length,
       other: itemsByTab.other.length,
     };
   }, [itemsByTab]);
@@ -190,11 +213,17 @@ export default function AdminPromptsClient() {
                   ? tabCounts.trade
                   : t.id === "chart"
                   ? tabCounts.chart
+                  : t.id === "price"
+                  ? tabCounts.price
                   : tabCounts.other;
 
               const active = tab === t.id;
 
-              if (t.id === "other" && count === 0 && items.every((x) => knownKeySet.has(x.key))) {
+              if (
+                t.id === "other" &&
+                count === 0 &&
+                items.every((x) => knownKeySet.has(x.key))
+              ) {
                 return null;
               }
 
@@ -204,7 +233,9 @@ export default function AdminPromptsClient() {
                   onClick={() => setTab(t.id)}
                   className={[
                     "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition",
-                    active ? "bg-black text-white border-black" : "bg-white hover:bg-gray-50",
+                    active
+                      ? "bg-black text-white border-black"
+                      : "bg-white hover:bg-gray-50",
                   ].join(" ")}
                   type="button"
                 >
@@ -212,7 +243,9 @@ export default function AdminPromptsClient() {
                   <span
                     className={[
                       "inline-flex items-center rounded-full px-2 py-0.5 text-xs",
-                      active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700",
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-100 text-gray-700",
                     ].join(" ")}
                   >
                     {count}
@@ -304,7 +337,9 @@ export default function AdminPromptsClient() {
           </div>
         }
       >
-        <div className="whitespace-pre-wrap text-sm text-gray-700">{modalMessage}</div>
+        <div className="whitespace-pre-wrap text-sm text-gray-700">
+          {modalMessage}
+        </div>
       </Modal>
     </div>
   );

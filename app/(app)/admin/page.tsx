@@ -1,17 +1,17 @@
-import "server-only"
-import Link from "next/link"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import "server-only";
+import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function AdminHomePage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.isAdmin) return null
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.isAdmin) return null;
 
   const cards = [
     {
       href: "/admin/prompts",
       title: "Prompts",
-      desc: "Edit the prompts used by the AI (including Trade Analyzer).",
+      desc: "Edit the prompts used by the AI (including Trade Analyzer and Price Structure).",
       emoji: "✍️",
     },
     {
@@ -26,7 +26,7 @@ export default async function AdminHomePage() {
       desc: "OpenAI spend by prompt type (daily/weekly/monthly).",
       emoji: "💳",
     },
-  ]
+  ];
 
   return (
     <div className="mx-auto max-w-6xl p-6">
@@ -47,5 +47,5 @@ export default async function AdminHomePage() {
         ))}
       </div>
     </div>
-  )
+  );
 }
