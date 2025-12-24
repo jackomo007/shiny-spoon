@@ -105,7 +105,7 @@ export async function GET() {
 
     const totalValueUsd = spotCurrentValueUsd + (cashUsd ?? 0)
 
-    const totalInvestedUsd = spotInvestedUsd + (cashUsd ?? 0)
+    const totalInvestedUsd = spotInvestedUsd
 
     return NextResponse.json({
       totalValueUsd,
