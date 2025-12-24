@@ -272,7 +272,7 @@ export default function DashboardShell({ children }: Props) {
                 icon="📈"
               />
               {isAdmin && <NavItem href="/admin" label="Admin" icon="🛡️" />}
-              <NavItem href="/add-coin" label="Coin Tracker" icon="🪙" />
+              <NavItem href="/add-coin" label="Coin Tracker" icon="🔍" />
             </ul>
           </div>
         </aside>
