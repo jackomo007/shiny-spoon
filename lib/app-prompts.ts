@@ -64,7 +64,7 @@ Constraints:
   },
 
   price_structure_template: {
-    title: "User Template — Price Structure (HTF SR)",
+    title: "User Template — Coin Tracker",
     content: `
 Analyze the high timeframe ({{timeframe}}) price structure for {{asset}}.
 

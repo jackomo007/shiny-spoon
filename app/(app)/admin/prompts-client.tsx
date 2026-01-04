@@ -34,13 +34,13 @@ const TAB_DEFS: Array<{
   },
   {
     id: "price",
-    label: "Price Structure (HTF SR)",
+    label: "Price Structure",
     description: "System prompt used to compute HTF Support/Resistance (3 supports + 3 resistances).",
     keys: ["price_structure_system"],
   },
   {
     id: "other",
-    label: "Other",
+    label: "Coin Tracker",
     description: "Other prompts not mapped to a specific page yet.",
     keys: [],
   },
