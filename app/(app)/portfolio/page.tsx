@@ -17,6 +17,9 @@ type Item = {
   purchaseValueUsd: number
   valueUsd: number
   percent: number
+
+  currentPriceSource?: "binance" | "coingecko" | "db_cache" | "avg_entry"
+  currentPriceIsEstimated?: boolean
 }
 
 type PortfolioRes = {
@@ -91,6 +94,8 @@ export default function PortfolioPage() {
         purchaseValueUsd: cashVal,
         valueUsd: cashVal,
         percent,
+        currentPriceSource: "avg_entry",
+        currentPriceIsEstimated: false,
       }
     }
 
@@ -103,6 +108,11 @@ export default function PortfolioPage() {
         name: i.symbol,
         percent: Number(i.percent.toFixed(6)),
       })),
+    [rows]
+  )
+
+  const hasEstimatedPrices = useMemo(
+    () => rows.some((r) => r.symbol !== "CASH" && r.currentPriceIsEstimated),
     [rows]
   )
 
@@ -137,24 +147,16 @@ export default function PortfolioPage() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Portfolio Manager</h1>
-          <p className="text-sm text-gray-500">
-            View your open spot positions at a glance
-          </p>
+          <p className="text-sm text-gray-500">View your open spot positions at a glance</p>
         </div>
 
         <div className="flex gap-2">
-          <button
-            className="px-3 py-2 rounded-xl bg-gray-900 text-white"
-            onClick={handleAddAsset}
-          >
+          <button className="px-3 py-2 rounded-xl bg-gray-900 text-white" onClick={handleAddAsset}>
             + Add Asset
           </button>
 
           {!rows.some((r) => r.symbol === "CASH") && (
-            <button
-              className="px-3 py-2 rounded-xl bg-emerald-600 text-white"
-              onClick={handleAddCash}
-            >
+            <button className="px-3 py-2 rounded-xl bg-emerald-600 text-white" onClick={handleAddCash}>
               + Add Cash
             </button>
           )}
@@ -180,9 +182,7 @@ export default function PortfolioPage() {
           <div className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <div className="grid gap-1">
-                <div className="text-lg font-semibold">
-                  Total Portfolio Value: {usd(data.totalValueUsd)}
-                </div>
+                <div className="text-lg font-semibold">Total Portfolio Value: {usd(data.totalValueUsd)}</div>
                 <div className="text-sm text-gray-600">
                   Total Amount Invested: <span className="font-medium">{usd(data.totalInvestedUsd)}</span>
                 </div>
@@ -230,9 +230,7 @@ export default function PortfolioPage() {
                     <Th>Current Value</Th>
                     <Th>% Port.</Th>
                     <Th className="w-40">
-                      <div className="flex justify-end pr-1">
-                        Actions
-                      </div>
+                      <div className="flex justify-end pr-1">Actions</div>
                     </Th>
                   </tr>
                 </thead>
@@ -246,12 +244,29 @@ export default function PortfolioPage() {
                         />
                         {i.symbol}
                       </Td>
+
                       <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
                       <Td>{usd(i.avgEntryPriceUsd)}</Td>
-                      <Td>{usd(i.currentPriceUsd)}</Td>
+
+                      <Td>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{usd(i.currentPriceUsd)}</span>
+
+                          {i.currentPriceIsEstimated && i.symbol !== "CASH" && (
+                            <span
+                              className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                              title={`Estimated price (source: ${i.currentPriceSource ?? "unknown"})`}
+                            >
+                              est.
+                            </span>
+                          )}
+                        </div>
+                      </Td>
+
                       <Td>{usd(i.purchaseValueUsd)}</Td>
                       <Td>{usd(i.valueUsd)}</Td>
                       <Td>{i.percent.toFixed(2)}%</Td>
+
                       <Td className="w-40">
                         <div className="flex justify-center">
                           <button
@@ -267,6 +282,12 @@ export default function PortfolioPage() {
                 </tbody>
               </Table>
             </div>
+
+            {hasEstimatedPrices && (
+              <div className="mt-3 text-xs text-gray-500">
+                <span className="font-medium">est.</span> indicates an estimated price when a live exchange quote is unavailable.
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -297,9 +318,7 @@ function CashModal(props: {
   onDone: () => Promise<void>
 }) {
   const [amountRaw, setAmountRaw] = useState<string>(
-    props.mode === "edit" && props.currentAmount != null
-      ? props.currentAmount.toString()
-      : ""
+    props.mode === "edit" && props.currentAmount != null ? props.currentAmount.toString() : ""
   )
   const [busy, setBusy] = useState(false)
 
@@ -315,10 +334,7 @@ function CashModal(props: {
       title={title}
       footer={
         <div className="flex items-center justify-end gap-3">
-          <button
-            className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-            onClick={props.onClose}
-          >
+          <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={props.onClose}>
             Cancel
           </button>
           <button
@@ -331,9 +347,7 @@ function CashModal(props: {
                 const res = await fetch("/api/portfolio/cash", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    amountUsd: amountNum,
-                  }),
+                  body: JSON.stringify({ amountUsd: amountNum }),
                 })
 
                 if (!res.ok) {

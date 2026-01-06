@@ -21,106 +21,85 @@ const HOSTS = [
   "https://data-api.binance.vision",
 ]
 
+async function fetchFromBinance(path: string) {
+  let lastErr: unknown = null
+
+  for (const host of HOSTS) {
+    try {
+      const res = await fetch(`${host}${path}`, { cache: "no-store" })
+
+      if (res.status === 451) {
+        lastErr = new Error(`HTTP 451 (region blocked) from ${host}`)
+        continue
+      }
+
+      if (!res.ok) {
+        lastErr = new Error(`HTTP ${res.status} from ${host}`)
+        continue
+      }
+
+      return res
+    } catch (err) {
+      lastErr = err
+    }
+  }
+
+  throw new Error(`Binance request failed. Last error: ${String(lastErr)}`)
+}
+
 /**
  * Fetch historical candlestick (kline) data from Binance.
- *
- * @param symbol - Trading pair symbol (e.g., "BTCUSDT")
- * @param interval - Time interval for each candle (e.g., "1h", "1d", "1M")
- * @param limit - Number of candles to fetch (default: 150)
- * @returns Array of Candle objects
- * @throws Error if all Binance endpoints fail
  */
 export async function fetchKlines(
   symbol: string,
   interval: BinanceInterval,
   limit = 150
 ): Promise<Candle[]> {
-  const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
-  let lastErr: unknown = null
+  const path =
+    `/api/v3/klines?symbol=${encodeURIComponent(symbol)}` +
+    `&interval=${interval}&limit=${limit}`
 
-  for (const host of HOSTS) {
-    try {
-      const url = `${host}${path}`
-      const res = await fetch(url, { cache: "no-store" })
+  const res = await fetchFromBinance(path)
+  const json: unknown = await res.json()
 
-      if (res.status === 451) {
-        lastErr = new Error(`HTTP 451 (region blocked) from ${host}`)
-        continue
-      }
-      if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status} from ${host}`)
-        continue
-      }
-
-      const json: unknown = await res.json()
-      if (!Array.isArray(json)) throw new Error("Invalid klines response")
-
-      return json.map((rowUnknown) => {
-        if (!Array.isArray(rowUnknown)) throw new Error("Invalid kline row")
-        const row = rowUnknown as (string | number)[]
-        return {
-          openTime: Number(row[0]),
-          open: Number(row[1]),
-          high: Number(row[2]),
-          low: Number(row[3]),
-          close: Number(row[4]),
-          volume: Number(row[5]),
-          closeTime: Number(row[6]),
-        }
-      })
-    } catch (err) {
-      lastErr = err
-      continue
-    }
+  if (!Array.isArray(json)) {
+    throw new Error("Invalid klines response")
   }
 
-  throw new Error(
-    `Failed to fetch klines for ${symbol} ${interval}. Last error: ${String(lastErr)}`
-  )
+  return json.map((row) => {
+    if (!Array.isArray(row)) throw new Error("Invalid kline row")
+
+    return {
+      openTime: Number(row[0]),
+      open: Number(row[1]),
+      high: Number(row[2]),
+      low: Number(row[3]),
+      close: Number(row[4]),
+      volume: Number(row[5]),
+      closeTime: Number(row[6]),
+    }
+  })
 }
 
-type BinanceTickerPrice = { symbol: string; price: string }
+type BinanceTickerPrice = {
+  symbol: string
+  price: string
+}
 
 /**
- * Fetch current price from Binance ticker/price endpoint.
- *
- * @param symbol - Trading pair symbol (e.g., "BTCUSDT")
- * @returns current price as number
- * @throws Error if all Binance endpoints fail
+ * Fetch current ticker price from Binance.
+ * Throws if symbol does not exist or price is invalid.
  */
 export async function fetchTickerPrice(symbol: string): Promise<number> {
   const path = `/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`
-  let lastErr: unknown = null
+  const res = await fetchFromBinance(path)
 
-  for (const host of HOSTS) {
-    try {
-      const url = `${host}${path}`
-      const res = await fetch(url, { cache: "no-store" })
+  const json = (await res.json()) as BinanceTickerPrice
+  const price = Number(json?.price)
 
-      if (res.status === 451) {
-        lastErr = new Error(`HTTP 451 (region blocked) from ${host}`)
-        continue
-      }
-      if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status} from ${host}`)
-        continue
-      }
-
-      const json = (await res.json()) as BinanceTickerPrice
-      const price = Number(json?.price)
-
-      if (!Number.isFinite(price) || price <= 0) {
-        throw new Error("Invalid ticker price response")
-      }
-
-      return price
-    } catch (err) {
-      lastErr = err
-      continue
-    }
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(`Invalid ticker price for ${symbol}`)
   }
 
-  throw new Error(
-    `Failed to fetch ticker price for ${symbol}. Last error: ${String(lastErr)}`
-  )
+  return price
 }
