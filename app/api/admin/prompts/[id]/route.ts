@@ -9,9 +9,11 @@ const ALLOWED_KEYS = [
   "chart_analysis_system",
   "trade_analyzer_system",
   "trade_analyzer_template",
+  "price_structure_system",
 ] as const;
 
 type AllowedKey = (typeof ALLOWED_KEYS)[number];
+
 function isAllowedKey(k: string): k is AllowedKey {
   return (ALLOWED_KEYS as readonly string[]).includes(k);
 }
@@ -57,6 +59,7 @@ export async function PUT(
 
   const { id } = await ctx.params;
   const key = id;
+
   if (!isAllowedKey(key)) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }

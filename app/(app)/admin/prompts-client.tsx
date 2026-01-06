@@ -12,7 +12,7 @@ type Item = {
   updated_at: string;
 };
 
-type TabId = "trade" | "chart" | "price" | "other";
+type TabId = "trade" | "coin" | "chart" | "other";
 
 const TAB_DEFS: Array<{
   id: TabId;
@@ -27,21 +27,22 @@ const TAB_DEFS: Array<{
     keys: ["trade_analyzer_system", "trade_analyzer_template"],
   },
   {
+    id: "coin",
+    label: "Coin Tracker",
+    description:
+      "Prompts used by the Coin Tracker page (including HTF Support/Resistance).",
+    keys: ["price_structure_system"],
+  },
+  {
     id: "chart",
     label: "Chart Analyzer",
     description: "Prompts used by Chart Analyzer (system).",
     keys: ["chart_analysis_system"],
   },
   {
-    id: "price",
-    label: "Price Structure",
-    description: "System prompt used to compute HTF Support/Resistance (3 supports + 3 resistances).",
-    keys: ["price_structure_system"],
-  },
-  {
     id: "other",
-    label: "Coin Tracker",
-    description: "Other prompts not mapped to a specific page yet.",
+    label: "Other",
+    description: "Prompts not mapped to a specific page yet.",
     keys: [],
   },
 ];
@@ -55,7 +56,7 @@ function prettyPromptLabel(item: Item) {
     case "chart_analysis_system":
       return "System — Chart Analyzer";
     case "price_structure_system":
-      return "System — Price Structure (HTF SR)";
+      return "System — Coin Tracker (HTF SR)";
     default:
       return item.title || item.key;
   }
@@ -105,7 +106,12 @@ export default function AdminPromptsClient() {
   }, []);
 
   const itemsByTab = useMemo(() => {
-    const by: Record<TabId, Item[]> = { trade: [], chart: [], price: [], other: [] };
+    const by: Record<TabId, Item[]> = {
+      trade: [],
+      coin: [],
+      chart: [],
+      other: [],
+    };
 
     for (const it of items) {
       const mapped =
@@ -129,13 +135,15 @@ export default function AdminPromptsClient() {
       by.trade,
       TAB_DEFS.find((t) => t.id === "trade")!.keys
     );
+
+    by.coin = sortByKeyOrder(
+      by.coin,
+      TAB_DEFS.find((t) => t.id === "coin")!.keys
+    );
+
     by.chart = sortByKeyOrder(
       by.chart,
       TAB_DEFS.find((t) => t.id === "chart")!.keys
-    );
-    by.price = sortByKeyOrder(
-      by.price,
-      TAB_DEFS.find((t) => t.id === "price")!.keys
     );
 
     by.other = by.other.slice().sort((a, b) => (a.key < b.key ? -1 : 1));
@@ -146,8 +154,8 @@ export default function AdminPromptsClient() {
   const tabCounts = useMemo(() => {
     return {
       trade: itemsByTab.trade.length,
+      coin: itemsByTab.coin.length,
       chart: itemsByTab.chart.length,
-      price: itemsByTab.price.length,
       other: itemsByTab.other.length,
     };
   }, [itemsByTab]);
@@ -211,10 +219,10 @@ export default function AdminPromptsClient() {
               const count =
                 t.id === "trade"
                   ? tabCounts.trade
+                  : t.id === "coin"
+                  ? tabCounts.coin
                   : t.id === "chart"
                   ? tabCounts.chart
-                  : t.id === "price"
-                  ? tabCounts.price
                   : tabCounts.other;
 
               const active = tab === t.id;
@@ -222,6 +230,7 @@ export default function AdminPromptsClient() {
               if (
                 t.id === "other" &&
                 count === 0 &&
+                items.length > 0 &&
                 items.every((x) => knownKeySet.has(x.key))
               ) {
                 return null;
