@@ -108,8 +108,6 @@ export async function upsertPriceStructureForCoin(opts: {
   const assetSymbol = opts.assetSymbol.toUpperCase();
   const exchange = opts.exchange ?? "Binance";
 
-  // Não exigimos mais que esteja em verified_asset.
-  // Apenas buscamos o preço atual no provider.
   const currentPrice = await getCurrentPrice(assetSymbol);
 
   const existing = await prisma.coin_price_structure.findFirst({
@@ -131,7 +129,6 @@ export async function upsertPriceStructureForCoin(opts: {
     const closest = findClosestLevel(parsed, Number(existing.last_price));
     if (closest) {
       const hit = priceHitLevel(currentPrice, closest.level);
-      // Regra: se o preço AINDA NÃO bateu o nível mais próximo, usamos cache.
       if (!hit) {
         shouldCallAI = false;
       }
@@ -216,7 +213,6 @@ export async function upsertPriceStructureForCoin(opts: {
     };
   }
 
-  // Usar cache: apenas atualiza last_price e last_price_at
   const updated = await prisma.coin_price_structure.update({
     where: { id: existing!.id },
     data: {
