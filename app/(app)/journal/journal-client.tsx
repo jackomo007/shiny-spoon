@@ -980,28 +980,53 @@ useEffect(() => {
     }
   };
 
-  async function fetchAssets(q: string) {
-    try {
-      setAssetError(null);
-      if (q.trim().length < 1) {
-        setAssetOptions([]);
-        setShowAssetMenu(false);
-        return;
-      }
-      const r = await fetch(`/api/assets/coins?q=${encodeURIComponent(q)}`);
-      if (!r.ok) throw new Error("Lookup failed");
-      const { items } = (await r.json()) as { items: AssetOption[] };
-      setAssetOptions(items);
-      validSymbolsRef.current = new Set(
-        items.map((i) => i.symbol.toUpperCase())
-      );
-      setShowAssetMenu(items.length > 0);
-    } catch (e) {
-      setAssetError("Could not load assets");
+const STABLE_SUFFIXES = ["USDT", "USDC", "BUSD", "TUSD", "DAI", "USD"] as const;
+
+function isPureAssetSymbol(symbolRaw: string) {
+  const s = (symbolRaw ?? "").trim().toUpperCase();
+
+  if (!s) return false;
+  if (s.includes("/") || s.includes("-") || s.includes("_")) return false;
+
+  for (const suf of STABLE_SUFFIXES) {
+    if (s.length > suf.length && s.endsWith(suf)) return false;
+  }
+
+  if (!/^[A-Z0-9]{2,15}$/.test(s)) return false;
+
+  return true;
+}
+
+async function fetchAssets(q: string) {
+  try {
+    setAssetError(null);
+
+    const cleaned = q.trim();
+    if (cleaned.length < 1) {
       setAssetOptions([]);
       setShowAssetMenu(false);
+      validSymbolsRef.current = new Set();
+      return;
     }
+
+    const r = await fetch(`/api/assets/coins?q=${encodeURIComponent(cleaned)}`);
+    if (!r.ok) throw new Error("Lookup failed");
+
+    const data = (await r.json()) as { items: AssetOption[] };
+    const all = data.items ?? [];
+
+    const filtered = all.filter((i) => isPureAssetSymbol(i.symbol));
+
+    setAssetOptions(filtered);
+    validSymbolsRef.current = new Set(filtered.map((i) => i.symbol.toUpperCase()));
+    setShowAssetMenu(filtered.length > 0);
+  } catch (e) {
+    setAssetError("Could not load assets");
+    setAssetOptions([]);
+    setShowAssetMenu(false);
+    validSymbolsRef.current = new Set();
   }
+}
 
   const totalTrades = rows.length;
   const finished = rows.filter((r) => r.status !== "in_progress");
@@ -1661,7 +1686,8 @@ useEffect(() => {
                     onFocus={() => {
                       if (assetOptions.length > 0) setShowAssetMenu(true);
                     }}
-                    placeholder="e.g. BTCUSDT"
+                    placeholder="e.g. BTC"
+
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
                   {showAssetMenu && (

@@ -16,6 +16,17 @@ function pushIfMissing(items: Item[], it: Item) {
   }
 }
 
+function isPureAssetSymbol(symbolRaw: string) {
+  const s = (symbolRaw ?? "").trim().toUpperCase();
+  if (!s) return false;
+  if (!/^[A-Z0-9]{2,}$/.test(s)) return false;
+
+  const m = s.match(PAIR_RE);
+  if (m && m[1] && m[1].length >= 2) return false;
+
+  return true;
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -32,17 +43,22 @@ export async function GET(req: Request) {
 
     const fromDb = await prisma.verified_asset.findMany({
       where: {
-        OR: [{ symbol: { startsWith: base } }, { name: { contains: base } }],
+        OR: [
+          { symbol: { startsWith: base } },
+          { name: { contains: base } },
+        ],
       },
       orderBy: { symbol: "asc" },
       take: 50,
     });
 
-    const items: Item[] = fromDb.map((r) => ({
-      id: r.symbol,
-      symbol: r.symbol,
-      name: r.name ?? r.symbol,
-    }));
+    const items: Item[] = fromDb
+      .map((r) => ({
+        id: r.symbol,
+        symbol: r.symbol.toUpperCase(),
+        name: (r.name ?? r.symbol).toString(),
+      }))
+      .filter((it) => isPureAssetSymbol(it.symbol));
 
     const key = process.env.CMC_API_KEY;
     if (key && /^[A-Z0-9]{2,}$/.test(base)) {
@@ -58,11 +74,13 @@ export async function GET(req: Request) {
           data?: Array<{ id: number; name: string; symbol: string }>;
         };
 
-        const cmcItems: Item[] = (data.data ?? []).map((d) => ({
-          id: String(d.id),
-          symbol: d.symbol.toUpperCase(),
-          name: d.name,
-        }));
+        const cmcItems: Item[] = (data.data ?? [])
+          .map((d) => ({
+            id: String(d.id),
+            symbol: d.symbol.toUpperCase(),
+            name: d.name,
+          }))
+          .filter((it) => isPureAssetSymbol(it.symbol));
 
         const seen = new Set(items.map((i) => i.symbol.toUpperCase()));
         for (const it of cmcItems) {
@@ -71,18 +89,6 @@ export async function GET(req: Request) {
             seen.add(it.symbol.toUpperCase());
           }
         }
-      }
-    }
-
-    const DERIVED_QUOTES = ["USDT", "USDC"] as const;
-    if (/^[A-Z0-9]{2,}$/.test(base)) {
-      for (const q of DERIVED_QUOTES) {
-        const pair = `${base}${q}`;
-        pushIfMissing(items, {
-          id: pair,
-          symbol: pair,
-          name: `${base} / ${q}`,
-        });
       }
     }
 
