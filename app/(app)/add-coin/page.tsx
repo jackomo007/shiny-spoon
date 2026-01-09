@@ -256,7 +256,7 @@ function AddCoinModal({ onClose }: { onClose: () => void }) {
           <label className="text-sm text-gray-700">Asset</label>
           <AssetAutocomplete value={symbol} onChange={setSymbol} />
           <p className="text-xs text-gray-500">
-            Choose a symbol (e.g. BTCUSDT). We&apos;ll fetch daily price action
+            Choose a symbol (e.g. BTC). We&apos;ll fetch daily price action
             and generate high timeframe supports &amp; resistances.
           </p>
         </div>

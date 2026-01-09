@@ -144,7 +144,7 @@ export async function POST(req: Request) {
 
   if (!(await isValidAssetName(data.asset_name))) {
     return NextResponse.json(
-      { error: "Invalid asset symbol (use e.g. BTCUSDT or a verified symbol)" },
+      { error: "Invalid asset symbol (use e.g. BTC or a verified symbol)" },
       { status: 400 },
     )
   }
