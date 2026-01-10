@@ -9,15 +9,6 @@ export async function getDefaultStrategyId(accountId: string): Promise<string> {
   return s.id
 }
 
-export async function isValidAssetName(sym: string): Promise<boolean> {
-  const s = (sym || "").toUpperCase().trim()
-  if (!s) return false
-  const looksLikePair = /^[A-Z0-9]{5,15}$/.test(s) && /(USDT|USDC|USD|BTC|ETH)$/.test(s)
-  if (looksLikePair) return true
-  const found = await prisma.verified_asset.findUnique({ where: { symbol: s } })
-  return !!found
-}
-
 export function qtyFrom(params: { amountSpent: number; entryPrice: number; tradeType: number; leverage?: number }): number {
   const { amountSpent, entryPrice, tradeType, leverage } = params
   if (entryPrice <= 0) return 0

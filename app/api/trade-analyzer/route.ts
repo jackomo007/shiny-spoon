@@ -28,13 +28,6 @@ export async function POST(req: Request) {
 
     const accountIdNum = Number(session.accountId);
     const assetSymbol = data.asset.toUpperCase();
-    const assetRow = await prisma.verified_asset.findFirst({ where: { symbol: assetSymbol } });
-    if (!assetRow) {
-      return NextResponse.json(
-        { error: "Asset not verified. Please select one from the list." },
-        { status: 400 }
-      );
-    }
 
     let strategy:
       | {

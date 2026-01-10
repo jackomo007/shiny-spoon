@@ -9,8 +9,7 @@
       "lint": "eslint . --ext .ts,.tsx --fix",
       "prepare": "husky install",
       "seed": "tsx prisma/seed.ts",
-      "postinstall": "prisma generate",
-      "seed:assets": "node scripts/seed-verified-assets.mjs"
+      "postinstall": "prisma generate"
     },
     "dependencies": {
       "@aws-sdk/client-s3": "^3.899.0",

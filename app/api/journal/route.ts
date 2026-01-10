@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId } from "@/lib/journal"
-import { getDefaultStrategyId, isValidAssetName, qtyFrom, calcPnl } from "@/lib/trade-helpers"
+import { getDefaultStrategyId, qtyFrom, calcPnl } from "@/lib/trade-helpers"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
 const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/
@@ -141,13 +141,6 @@ export async function POST(req: Request) {
   const parsed = BaseSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   const data = parsed.data
-
-  if (!(await isValidAssetName(data.asset_name))) {
-    return NextResponse.json(
-      { error: "Invalid asset symbol (use e.g. BTC or a verified symbol)" },
-      { status: 400 },
-    )
-  }
 
   const tagNames = Array.from(
     new Set(
