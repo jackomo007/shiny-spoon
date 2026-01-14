@@ -92,13 +92,14 @@ export default function DashboardShell({ children }: Props) {
               </span>
             </Link>
 
-            <nav className="hidden xl:flex items-center gap-6 opacity-90">
-              <Link href="/dashboard">Home</Link>
-              <Link href="/journal">Trading Journal</Link>
-              <Link href="/strategies">Strategy Creator</Link>
-              <Link href="/trade-analyzer">Trade Analyzer</Link>
-              {isAdmin && <Link href="/admin">Admin</Link>}
-            </nav>
+          <nav className="hidden xl:flex items-center gap-6 opacity-90">
+            <Link href="/dashboard">Home</Link>
+            <Link href="/journal">Trading Journal</Link>
+            <Link href="/strategies">Strategy Creator</Link>
+            <Link href="/exit-strategy">Exit Strategy</Link>
+            <Link href="/trade-analyzer">Trade Analyzer</Link>
+            {isAdmin && <Link href="/admin">Admin</Link>}
+          </nav>
 
             <button
               className="inline-flex flex-col items-center justify-center rounded-full bg-white/15 p-2 hover:bg-white/20 xl:hidden cursor-pointer"
@@ -149,6 +150,15 @@ export default function DashboardShell({ children }: Props) {
                           onClick={() => setMobileOpen(false)}
                         >
                           Strategy Creator
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/exit-strategy"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/10"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Exit Strategy
                         </Link>
                       </li>
                       <li>
@@ -266,6 +276,7 @@ export default function DashboardShell({ children }: Props) {
               )} */}
               <NavItem href="/journal" label="Trading Journal" icon="🗒️" />
               <NavItem href="/strategies" label="Strategy Creator" icon="🧭" />
+                <NavItem href="/exit-strategy" label="Exit Strategy" icon="🚪" />
               <NavItem
                 href="/trade-analyzer"
                 label="Trade Analyzer"
