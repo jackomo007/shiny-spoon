@@ -78,11 +78,14 @@ export default function ExitStrategyPage() {
 
   const [addError, setAddError] = useState<string | null>(null)
 
-  // NEW: simulate state
   const [simLoading, setSimLoading] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
   const [simRows, setSimRows] = useState<ExitStrategyStepRow[] | null>(null)
   const [simMeta, setSimMeta] = useState<{ qtyOpen: number; entryPriceUsd: number } | null>(null)
+
+  const [viewSimLoading, setViewSimLoading] = useState(false)
+  const [viewSimError, setViewSimError] = useState<string | null>(null)
+  const [viewSimRows, setViewSimRows] = useState<ExitStrategyStepRow[] | null>(null)
 
   const canShowPctFields = useMemo(() => strategyType === "percentage", [strategyType])
 
@@ -114,7 +117,6 @@ export default function ExitStrategyPage() {
     void load()
   }, [])
 
-  // NEW: reset add modal state when close
   useEffect(() => {
     if (!addOpen) {
       setAddError(null)
@@ -131,6 +133,10 @@ export default function ExitStrategyPage() {
     setDetailsOpen(true)
     setError(null)
 
+    setViewSimLoading(false)
+    setViewSimError(null)
+    setViewSimRows(null)
+
     try {
       const res = await fetch(`/api/exit-strategies/${encodeURIComponent(id)}`, { cache: "no-store" })
       if (!res.ok) {
@@ -139,8 +145,38 @@ export default function ExitStrategyPage() {
       }
       const json = (await res.json()) as { data: Details }
       setDetails(json.data)
+
+      setViewSimLoading(true)
+      setViewSimError(null)
+      setViewSimRows(null)
+
+      try {
+        const simRes = await fetch("/api/exit-strategies/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            coinSymbol: json.data.summary.coinSymbol,
+            sellPercent: json.data.summary.sellPercent,
+            gainPercent: json.data.summary.gainPercent,
+            maxSteps: 10,
+          }),
+        })
+
+        if (!simRes.ok) {
+          const j = (await simRes.json().catch(() => ({} as { error?: string }))) as { error?: string }
+          throw new Error(j.error || `HTTP ${simRes.status}`)
+        }
+
+        const simJson = (await simRes.json()) as { data: { rows: ExitStrategyStepRow[] } }
+        setViewSimRows(simJson.data.rows)
+      } catch (simErr) {
+        setViewSimError(simErr instanceof Error ? simErr.message : "Failed to simulate")
+      } finally {
+        setViewSimLoading(false)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load details")
+      setViewSimLoading(false)
     }
   }
 
@@ -173,7 +209,6 @@ export default function ExitStrategyPage() {
     }
   }
 
-  // NEW: simulate endpoint call (preview plan before save)
   const simulatePlan = async () => {
     setSimLoading(true)
     setSimError(null)
@@ -181,7 +216,6 @@ export default function ExitStrategyPage() {
     setSimMeta(null)
 
     try {
-      // Note: endpoint needs to exist: POST /api/exit-strategies/simulate
       const res = await fetch("/api/exit-strategies/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -348,6 +382,7 @@ export default function ExitStrategyPage() {
       {addOpen && (
         <Modal
           open
+          widthClass="max-w-5xl"
           onClose={() => setAddOpen(false)}
           title="Add Exit Strategy"
           footer={
@@ -430,7 +465,6 @@ export default function ExitStrategyPage() {
               </>
             )}
 
-            {/* NEW: Simulate output (as in the mockup) */}
             {simError && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{simError}</div>
             )}
@@ -522,6 +556,10 @@ export default function ExitStrategyPage() {
             setDetailsOpen(false)
             setSelectedId(null)
             setDetails(null)
+
+            setViewSimLoading(false)
+            setViewSimError(null)
+            setViewSimRows(null)
           }}
           title={details?.summary ? `${details.summary.coinSymbol} – Scale-Out Plan` : "Loading…"}
           footer={
@@ -532,6 +570,10 @@ export default function ExitStrategyPage() {
                   setDetailsOpen(false)
                   setSelectedId(null)
                   setDetails(null)
+
+                  setViewSimLoading(false)
+                  setViewSimError(null)
+                  setViewSimRows(null)
                 }}
                 type="button"
               >
@@ -569,6 +611,47 @@ export default function ExitStrategyPage() {
                   <div className="text-xs text-gray-500">Open Qty</div>
                   <div className="font-semibold">{num(details.summary.qtyOpen, 8).replace(/\.?0+$/, "")}</div>
                 </div>
+              </div>
+
+              {/* NEW: Simulated Scale-Out Plan section in View */}
+              <div className="rounded-xl border bg-white overflow-x-auto">
+                <div className="px-4 py-3 border-b bg-gray-50">
+                  <div className="text-sm font-semibold">Simulated Scale-Out Plan</div>
+                  <div className="text-xs text-gray-500">Preview of planned steps (independent of executions).</div>
+                </div>
+
+                {viewSimError && (
+                  <div className="m-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {viewSimError}
+                  </div>
+                )}
+
+                {viewSimLoading ? (
+                  <div className="p-4 text-sm text-gray-600">Loading simulation…</div>
+                ) : !viewSimRows ? (
+                  <div className="p-4 text-sm text-gray-600">No simulation available.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="border-b bg-gray-50">
+                      <tr className="text-left text-gray-600">
+                        <th className="px-4 py-3">Gain</th>
+                        <th className="px-4 py-3">Target Price</th>
+                        <th className="px-4 py-3">Qty Sold</th>
+                        <th className="px-4 py-3">Remaining</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewSimRows.map((r) => (
+                        <tr key={r.gainPercent} className="border-b last:border-b-0">
+                          <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
+                          <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
+                          <td className="px-4 py-3">{num(r.plannedQtyToSell, 8).replace(/\.?0+$/, "")}</td>
+                          <td className="px-4 py-3">{num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
               <div className="rounded-xl border bg-white overflow-x-auto">
