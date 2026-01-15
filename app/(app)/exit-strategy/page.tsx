@@ -78,6 +78,12 @@ export default function ExitStrategyPage() {
 
   const [addError, setAddError] = useState<string | null>(null)
 
+  // NEW: simulate state
+  const [simLoading, setSimLoading] = useState(false)
+  const [simError, setSimError] = useState<string | null>(null)
+  const [simRows, setSimRows] = useState<ExitStrategyStepRow[] | null>(null)
+  const [simMeta, setSimMeta] = useState<{ qtyOpen: number; entryPriceUsd: number } | null>(null)
+
   const canShowPctFields = useMemo(() => strategyType === "percentage", [strategyType])
 
   const handleCoinChange = (v: string) => {
@@ -108,8 +114,15 @@ export default function ExitStrategyPage() {
     void load()
   }, [])
 
+  // NEW: reset add modal state when close
   useEffect(() => {
-    if (!addOpen) setAddError(null)
+    if (!addOpen) {
+      setAddError(null)
+      setSimError(null)
+      setSimRows(null)
+      setSimMeta(null)
+      setSimLoading(false)
+    }
   }, [addOpen])
 
   const openDetails = async (id: string) => {
@@ -160,6 +173,48 @@ export default function ExitStrategyPage() {
     }
   }
 
+  // NEW: simulate endpoint call (preview plan before save)
+  const simulatePlan = async () => {
+    setSimLoading(true)
+    setSimError(null)
+    setSimRows(null)
+    setSimMeta(null)
+
+    try {
+      // Note: endpoint needs to exist: POST /api/exit-strategies/simulate
+      const res = await fetch("/api/exit-strategies/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coinSymbol,
+          sellPercent,
+          gainPercent,
+          maxSteps: 5,
+        }),
+      })
+
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+
+      const json = (await res.json()) as {
+        data: {
+          qtyOpen: number
+          entryPriceUsd: number
+          rows: ExitStrategyStepRow[]
+        }
+      }
+
+      setSimMeta({ qtyOpen: json.data.qtyOpen, entryPriceUsd: json.data.entryPriceUsd })
+      setSimRows(json.data.rows)
+    } catch (e) {
+      setSimError(e instanceof Error ? e.message : "Failed to simulate")
+    } finally {
+      setSimLoading(false)
+    }
+  }
+
   const requestDelete = (id: string, label: string) => {
     setConfirmDelete({ id, label })
   }
@@ -207,11 +262,7 @@ export default function ExitStrategyPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">{error}</div>}
 
       <div className="rounded-2xl border bg-white p-6">
         <div className="text-lg font-semibold mb-4">Your Strategies</div>
@@ -270,7 +321,8 @@ export default function ExitStrategyPage() {
                       <div className="text-sm text-gray-700">
                         Next:{" "}
                         <span className="font-semibold text-gray-900">
-                          Sell {usd(s.usdValueToSell)} at ${Number(s.targetPriceUsd).toFixed(3)} (+{num(s.nextGainPercent, 0)}%)
+                          Sell {num(s.qtyToSell, 8).replace(/\.?0+$/, "")} {s.coinSymbol} ({usd(s.usdValueToSell)}) at $
+                          {Number(s.targetPriceUsd).toFixed(3)} (+{num(s.nextGainPercent, 0)}%)
                         </span>
                       </div>
                     </div>
@@ -301,12 +353,23 @@ export default function ExitStrategyPage() {
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
+                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => void simulatePlan()}
+                type="button"
+                disabled={simLoading || !canShowPctFields}
+                title="Preview do plano sem salvar"
+              >
+                {simLoading ? "Simulating…" : "Simulate Scale-Out Plan"}
+              </button>
+
+              <button
                 className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50"
                 onClick={() => setAddOpen(false)}
                 type="button"
               >
                 Cancel
               </button>
+
               <button
                 className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm hover:bg-purple-700"
                 onClick={() => void createStrategy()}
@@ -319,9 +382,7 @@ export default function ExitStrategyPage() {
         >
           <div className="grid gap-3">
             {addError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {addError}
-              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addError}</div>
             )}
 
             <label className="grid gap-1">
@@ -367,6 +428,54 @@ export default function ExitStrategyPage() {
                   />
                 </label>
               </>
+            )}
+
+            {/* NEW: Simulate output (as in the mockup) */}
+            {simError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{simError}</div>
+            )}
+
+            {simRows && (
+              <div className="mt-2 rounded-xl border bg-white overflow-x-auto">
+                <div className="px-4 py-3 border-b bg-gray-50">
+                  <div className="text-sm font-semibold">Simulated Scale-Out Plan</div>
+                  <div className="text-xs text-gray-500">
+                    Using your current holding/avg entry for <b>{coinSymbol}</b>
+                    {simMeta ? (
+                      <>
+                        {" "}
+                        • Entry: <b>{usd(simMeta.entryPriceUsd)}</b> • Open Qty:{" "}
+                        <b>{num(simMeta.qtyOpen, 8).replace(/\.?0+$/, "")}</b>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-gray-50">
+                    <tr className="text-left text-gray-600">
+                      <th className="px-4 py-3">Gain</th>
+                      <th className="px-4 py-3">Target Price</th>
+                      <th className="px-4 py-3">Qty Sold</th>
+                      <th className="px-4 py-3">Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simRows.map((r) => (
+                      <tr key={r.gainPercent} className="border-b last:border-b-0">
+                        <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
+                        <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
+                        <td className="px-4 py-3">
+                          {num(r.plannedQtyToSell, 8).replace(/\.?0+$/, "")} {coinSymbol}
+                        </td>
+                        <td className="px-4 py-3">
+                          {num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")} {coinSymbol}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </Modal>
