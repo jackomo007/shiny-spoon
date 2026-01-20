@@ -1,67 +1,47 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Card from "@/components/ui/Card"
-import { Table, Th, Tr, Td } from "@/components/ui/Table"
-import { PieChart, Pie, Legend, Tooltip, ResponsiveContainer, Cell } from "recharts"
-import { useRouter } from "next/navigation"
-import Modal from "@/components/ui/Modal"
-import { MoneyInputStandalone } from "@/components/form/MaskedFields"
-import type React from "react"
+import AddTransactionModal from "@/components/portfolio/AddTransactionModal"
+import PortfolioSummaryCards from "@/components/portfolio/PortfolioSummaryCards"
+import AssetsTable, { AssetRow } from "@/components/portfolio/AssetsTable"
+import TransactionsTable, { TxRow } from "@/components/portfolio/TransactionsTable"
+import HoldingsAllocationCard, { AllocationAssetRow } from "@/components/portfolio/HoldingsAllocationCard"
 
-type Item = {
-  symbol: string
-  amount: number
-  avgEntryPriceUsd: number
-  currentPriceUsd: number
-  purchaseValueUsd: number
-  valueUsd: number
-  percent: number
-
-  currentPriceSource?: "binance" | "coingecko" | "db_cache" | "avg_entry"
-  currentPriceIsEstimated?: boolean
-}
-
-type PortfolioRes = {
-  totalValueUsd: number
+type Summary = {
+  currentBalanceUsd: number
   totalInvestedUsd: number
-  cashUsd: number
-  items: Item[]
+  profit: {
+    realized: { usd: number }
+    unrealized: { usd: number }
+    total: { usd: number; pct: number }
+  }
+  portfolio24h: { pct: number; usd: number }
+  topPerformer: null | { symbol: string; name: string | null; profitUsd: number; profitPct: number | null }
 }
 
-function usd(n: number | null | undefined) {
-  const value = typeof n === "number" && !Number.isNaN(n) ? n : 0
-  return value.toLocaleString(undefined, { style: "currency", currency: "USD" })
+type PortfolioApiRes = {
+  summary: Summary
+  assets: AssetRow[]
+  transactions: TxRow[]
 }
-
-const colorFor = (name: string) => {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
-  const hue = h % 360
-  return `hsl(${hue} 70% 50%)`
-}
-
-const dotColor = (sym: string) => colorFor(sym)
 
 export default function PortfolioPage() {
-  const [data, setData] = useState<PortfolioRes | null>(null)
+  const [data, setData] = useState<PortfolioApiRes | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [modalOpen, setModalOpen] = useState(false)
 
-  const [cashModal, setCashModal] = useState<null | { mode: "add" | "edit"; currentAmount?: number }>(null)
-
-  const load = async () => {
+  async function load() {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/portfolio", { cache: "no-store" })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = (await res.json()) as PortfolioRes
-      setData(json)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load"
-      setError(message)
+      const j = (await res.json()) as PortfolioApiRes
+      setData(j)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load")
     } finally {
       setLoading(false)
     }
@@ -71,316 +51,86 @@ export default function PortfolioPage() {
     void load()
   }, [])
 
-  const rows: Item[] = useMemo(() => {
-    if (!data) return []
+  const hasAssets = (data?.assets?.length ?? 0) > 0
 
-    const base = data.items ?? []
-    const cashVal = data.cashUsd ?? 0
-    const total = data.totalValueUsd ?? 0
-
-    const existingCash = base.find((i) => i.symbol === "CASH") ?? null
-    const others = base.filter((i) => i.symbol !== "CASH")
-
-    let cashItem: Item | null = null
-    if (existingCash) {
-      cashItem = existingCash as Item
-    } else if (cashVal > 0) {
-      const percent = total > 0 ? (cashVal / total) * 100 : 0
-      cashItem = {
-        symbol: "CASH",
-        amount: cashVal,
-        avgEntryPriceUsd: 1,
-        currentPriceUsd: 1,
-        purchaseValueUsd: cashVal,
-        valueUsd: cashVal,
-        percent,
-        currentPriceSource: "avg_entry",
-        currentPriceIsEstimated: false,
-      }
-    }
-
-    return cashItem ? [cashItem, ...others] : others
-  }, [data])
-
-  const pieData = useMemo(
-    () =>
-      rows.map((i) => ({
-        name: i.symbol,
-        percent: Number(i.percent.toFixed(6)),
-      })),
-    [rows]
-  )
-
-  const hasEstimatedPrices = useMemo(
-    () => rows.some((r) => r.symbol !== "CASH" && r.currentPriceIsEstimated),
-    [rows]
-  )
-
-  const handleAddAsset = () => {
-    const qs = new URLSearchParams({
-      from: "portfolio",
-      open_spot_trade_modal: "1",
-    })
-    router.push(`/journal?${qs.toString()}`)
-  }
-
-  const handleAddCash = () => {
-    setCashModal({ mode: "add" })
-  }
-
-  const handleEditAsset = (item: Item) => {
-    if (item.symbol === "CASH") {
-      setCashModal({ mode: "edit", currentAmount: item.amount })
-      return
-    }
-
-    const qs = new URLSearchParams({
-      from: "portfolio",
-      asset_name: item.symbol,
-      open_spot_trade_modal: "1",
-    })
-    router.push(`/journal?${qs.toString()}`)
-  }
+  // Adaptador: o card de allocation só precisa (symbol, name, holdingsValueUsd)
+  const allocationAssets: AllocationAssetRow[] = (data?.assets ?? []).map((a) => ({
+    symbol: a.symbol,
+    name: a.name ?? null,
+    holdingsValueUsd: a.holdingsValueUsd,
+  }))
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Portfolio Manager</h1>
-          <p className="text-sm text-gray-500">View your open spot positions at a glance</p>
+          <h1 className="text-2xl font-semibold">Portfolio</h1>
+          <p className="text-sm text-gray-500">Separate view from Journal • Spot holdings only</p>
         </div>
 
         <div className="flex gap-2">
-          <button className="px-3 py-2 rounded-xl bg-gray-900 text-white" onClick={handleAddAsset}>
-            + Add Asset
+          <button className="px-3 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setModalOpen(true)}>
+            + Add Transaction
           </button>
-
-          {!rows.some((r) => r.symbol === "CASH") && (
-            <button className="px-3 py-2 rounded-xl bg-emerald-600 text-white" onClick={handleAddCash}>
-              + Add Cash
-            </button>
-          )}
         </div>
       </div>
 
-      <Card className="p-0">
-        {loading ? (
-          <div className="h-[360px] w-full rounded-xl bg-gray-100 animate-pulse m-6" />
-        ) : error ? (
-          <div className="p-6 text-red-600">{error}</div>
-        ) : !data || rows.length === 0 ? (
-          <div className="p-6 text-sm text-gray-600">
-            You don&apos;t have any open spot trades yet.
+      {loading ? (
+        <Card className="p-6">
+          <div className="h-6 w-48 bg-gray-100 animate-pulse rounded" />
+          <div className="h-24 bg-gray-100 animate-pulse rounded mt-4" />
+        </Card>
+      ) : error ? (
+        <Card className="p-6">
+          <div className="text-red-600">{error}</div>
+        </Card>
+      ) : !data ? (
+        <Card className="p-6">
+          <div className="text-gray-600">No data.</div>
+        </Card>
+      ) : !hasAssets ? (
+        <Card className="p-10">
+          <div className="max-w-xl">
+            <div className="text-xl font-semibold">Build your portfolio</div>
+            <div className="text-sm text-gray-600 mt-2">
+              Add your first spot transaction to start tracking Current Balance, Profit and allocations.
+            </div>
+
             <button
-              className="ml-2 inline-flex items-center rounded-xl bg-gray-900 px-3 py-1.5 text-xs font-medium text-white"
-              onClick={handleAddAsset}
+              className="mt-6 inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+              onClick={() => setModalOpen(true)}
             >
-              Add your first asset
+              + Add Asset
             </button>
+
+            <div className="mt-6 text-xs text-gray-500">
+              Only spot trades are shown here. Your Journal remains the source of truth for all trades.
+            </div>
           </div>
-        ) : (
-          <div className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <div className="grid gap-1">
-                <div className="text-lg font-semibold">Total Portfolio Value: {usd(data.totalValueUsd)}</div>
-                <div className="text-sm text-gray-600">
-                  Total Amount Invested: <span className="font-medium">{usd(data.totalInvestedUsd)}</span>
-                </div>
-              </div>
+        </Card>
+      ) : (
+        <div className="grid gap-6">
+          <PortfolioSummaryCards summary={data.summary} />
 
-              <div className="text-sm text-gray-600">
-                Cash: <span className="font-medium">{usd(data.cashUsd)}</span>
-              </div>
-            </div>
+          <HoldingsAllocationCard assets={allocationAssets} />
 
-            <div className="h-[400px] rounded-xl border bg-white mb-6">
-              <div className="px-4 pt-3 font-medium">Allocation (Open Spot Trades)</div>
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      dataKey="percent"
-                      nameKey="name"
-                      data={pieData}
-                      outerRadius={110}
-                      label
-                      stroke="#fff"
-                      strokeWidth={2}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell key={entry.name} fill={dotColor(entry.name)} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-white">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Asset</Th>
-                    <Th>Asset Amount</Th>
-                    <Th>Average Entry Price</Th>
-                    <Th>Current Price</Th>
-                    <Th>Purchase Value</Th>
-                    <Th>Current Value</Th>
-                    <Th>% Port.</Th>
-                    <Th className="w-40">
-                      <div className="flex justify-end pr-1">Actions</div>
-                    </Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((i) => (
-                    <Tr key={i.symbol}>
-                      <Td className="font-medium">
-                        <span
-                          className="inline-block mr-2 h-2.5 w-2.5 rounded-full align-middle"
-                          style={{ background: dotColor(i.symbol) }}
-                        />
-                        {i.symbol}
-                      </Td>
-
-                      <Td>{i.amount.toFixed(8).replace(/\.?0+$/, "")}</Td>
-                      <Td>{usd(i.avgEntryPriceUsd)}</Td>
-
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{usd(i.currentPriceUsd)}</span>
-
-                          {i.currentPriceIsEstimated && i.symbol !== "CASH" && (
-                            <span
-                              className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
-                              title={`Estimated price (source: ${i.currentPriceSource ?? "unknown"})`}
-                            >
-                              est.
-                            </span>
-                          )}
-                        </div>
-                      </Td>
-
-                      <Td>{usd(i.purchaseValueUsd)}</Td>
-                      <Td>{usd(i.valueUsd)}</Td>
-                      <Td>{i.percent.toFixed(2)}%</Td>
-
-                      <Td className="w-40">
-                        <div className="flex justify-center">
-                          <button
-                            className="inline-flex items-center h-9 px-4 rounded-xl bg-gray-900 text-white text-sm"
-                            onClick={() => handleEditAsset(i)}
-                          >
-                            {i.symbol === "CASH" ? "Edit Cash" : "Edit in Journal"}
-                          </button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-
-            {hasEstimatedPrices && (
-              <div className="mt-3 text-xs text-gray-500">
-                <span className="font-medium">est.</span> indicates an estimated price when a live exchange quote is unavailable.
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {cashModal && (
-        <CashModal
-          mode={cashModal.mode}
-          currentAmount={cashModal.currentAmount}
-          onClose={() => setCashModal(null)}
-          onDone={async () => {
-            setCashModal(null)
-            await load()
-          }}
-        />
+          <AssetsTable assets={data.assets} />
+          <TransactionsTable rows={data.transactions} />
+        </div>
       )}
+
+      <AddTransactionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onDone={async () => {
+          setModalOpen(false)
+          await load()
+        }}
+      />
 
       <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
         <span>© 2025 Maverick AI. All rights reserved.</span>
       </footer>
     </div>
-  )
-}
-
-function CashModal(props: {
-  mode: "add" | "edit"
-  currentAmount?: number
-  onClose: () => void
-  onDone: () => Promise<void>
-}) {
-  const [amountRaw, setAmountRaw] = useState<string>(
-    props.mode === "edit" && props.currentAmount != null ? props.currentAmount.toString() : ""
-  )
-  const [busy, setBusy] = useState(false)
-
-  const amountNum = amountRaw === "" ? 0 : Number(amountRaw)
-  const title = props.mode === "add" ? "Add Cash" : "Edit Cash"
-
-  const canSave = !busy
-
-  return (
-    <Modal
-      open
-      onClose={props.onClose}
-      title={title}
-      footer={
-        <div className="flex items-center justify-end gap-3">
-          <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={props.onClose}>
-            Cancel
-          </button>
-          <button
-            className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-            disabled={!canSave}
-            onClick={async () => {
-              try {
-                setBusy(true)
-
-                const res = await fetch("/api/portfolio/cash", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ amountUsd: amountNum }),
-                })
-
-                if (!res.ok) {
-                  const j = await res.json().catch(() => ({} as { error?: string }))
-                  throw new Error(j?.error || "Operation failed")
-                }
-
-                await props.onDone()
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : "Failed"
-                // eslint-disable-next-line no-alert
-                alert(msg)
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
-            Save
-          </button>
-        </div>
-      }
-    >
-      <div className="grid gap-3">
-        <label className="grid gap-1">
-          <span className="text-xs text-gray-500">Amount (USD)</span>
-          <MoneyInputStandalone
-            valueRaw={amountRaw}
-            onChangeRaw={setAmountRaw}
-            placeholder="0"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-          />
-        </label>
-      </div>
-    </Modal>
   )
 }

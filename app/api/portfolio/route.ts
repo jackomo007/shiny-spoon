@@ -2,275 +2,155 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { PortfolioRepo } from "@/data/repositories/portfolio.repo"
-
-type Item = {
-  symbol: string
-  amount: number
-  avgEntryPriceUsd: number
-  currentPriceUsd: number
-  purchaseValueUsd: number
-  valueUsd: number
-  percent: number
-  currentPriceSource?: "binance" | "coingecko" | "db_cache" | "avg_entry"
-  currentPriceIsEstimated?: boolean
-}
+import { cgPriceUsdByIdSafe } from "@/lib/markets/coingecko"
 
 export const dynamic = "force-dynamic"
 
-type PriceSource = "binance" | "coingecko" | "db_cache" | "avg_entry"
-type PriceResult = { price: number; source: PriceSource; isEstimated: boolean }
+type PriceSource = "coingecko" | "binance" | "avg_entry"
+type PriceResult = { priceUsd: number; source: PriceSource; isEstimated: boolean; change24hPct: number | null }
 
-const PRICE_TTL_MS = 30_000
-const NEGATIVE_TTL_MS = 60_000
-const CG_ID_TTL_MS = 24 * 60 * 60 * 1000
-
-type CachedPrice = { price: number; source: "binance" | "coingecko" | "db_cache"; ts: number }
-const PRICE_CACHE = new Map<string, CachedPrice>()
-const NEGATIVE_CACHE = new Map<string, { ts: number; reason: string }>()
-const CG_ID_CACHE = new Map<string, { id: string; ts: number }>()
-
-const COINGECKO_MAX_CONCURRENCY = 2
-let coingeckoInFlight = 0
-const coingeckoQueue: Array<() => void> = []
-
-async function withCoinGeckoSlot<T>(fn: () => Promise<T>): Promise<T> {
-  if (coingeckoInFlight >= COINGECKO_MAX_CONCURRENCY) {
-    await new Promise<void>((resolve) => coingeckoQueue.push(resolve))
-  }
-  coingeckoInFlight++
-  try {
-    return await fn()
-  } finally {
-    coingeckoInFlight--
-    const next = coingeckoQueue.shift()
-    if (next) next()
-  }
-}
-
-function isFresh(ts: number, ttl: number) {
-  return Date.now() - ts < ttl
-}
-
-
-async function fetchJson<T>(url: string, ms = 3000): Promise<T> {
-  const controller = new AbortController()
-  const id = setTimeout(() => controller.abort(), ms)
-  try {
-    const res = await fetch(url, { signal: controller.signal, cache: "no-store" })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return (await res.json()) as T
-  } finally {
-    clearTimeout(id)
-  }
-}
-
-async function getBinancePriceUsdt(pair: string): Promise<number> {
+async function getBinancePriceUsdt(symbol: string): Promise<number> {
+  const pair = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`
   const url = `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(pair)}`
-  const json = await fetchJson<{ price?: string }>(url, 2500)
-  const p = Number(json?.price)
+  const res = await fetch(url, { cache: "no-store" })
+  if (!res.ok) throw new Error(`Binance HTTP ${res.status}`)
+  const j = (await res.json()) as { price?: string }
+  const p = Number(j.price)
   if (!Number.isFinite(p) || p <= 0) throw new Error("Invalid Binance price")
   return p
 }
 
-async function getCoinGeckoId(symbol: string): Promise<string> {
-  const q = symbol.replace(/USDT$/i, "").toLowerCase()
-
-  const cached = CG_ID_CACHE.get(q)
-  if (cached && isFresh(cached.ts, CG_ID_TTL_MS)) return cached.id
-
-  return withCoinGeckoSlot(async () => {
-    const search = await fetchJson<{ coins?: { id: string; symbol: string }[] }>(
-      `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`,
-      3000
-    )
-
-    const match =
-      search?.coins?.find((c) => c.symbol?.toLowerCase() === q) ??
-      search?.coins?.[0]
-
-    if (!match?.id) throw new Error("CoinGecko id not found")
-
-    CG_ID_CACHE.set(q, { id: match.id, ts: Date.now() })
-    return match.id
-  })
-}
-
-async function getCoinGeckoPriceUsd(symbol: string): Promise<number> {
-  const id = await getCoinGeckoId(symbol)
-
-  return withCoinGeckoSlot(async () => {
-    const price = await fetchJson<Record<string, { usd?: number }>>(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`,
-      3000
-    )
-
-    const p = Number(price?.[id]?.usd)
-    if (!Number.isFinite(p) || p <= 0) throw new Error("Invalid CoinGecko price")
-    return p
-  })
-}
-
-async function getDbCachedPriceUsd(accountId: string, symbol: string): Promise<number | null> {
-  const row = await prisma.coin_price_structure.findFirst({
-    where: { account_id: accountId, asset_symbol: symbol },
-    select: { last_price: true },
-  })
-
-  const p = Number(row?.last_price)
-  return Number.isFinite(p) && p > 0 ? p : null
-}
-
-async function resolveCurrentPriceUsd(
-  accountId: string,
-  symbol: string,
-  avgEntry: number
-): Promise<PriceResult> {
-  if (symbol === "CASH") return { price: 1, source: "avg_entry", isEstimated: false }
-
-  const neg = NEGATIVE_CACHE.get(symbol)
-  if (neg && isFresh(neg.ts, NEGATIVE_TTL_MS)) {
-    const cachedDb = await getDbCachedPriceUsd(accountId, symbol)
-    if (cachedDb != null) return { price: cachedDb, source: "db_cache", isEstimated: true }
-    return { price: avgEntry, source: "avg_entry", isEstimated: true }
-  }
-
-  const cached = PRICE_CACHE.get(symbol)
-  if (cached && isFresh(cached.ts, PRICE_TTL_MS)) {
-    return { price: cached.price, source: cached.source, isEstimated: cached.source === "db_cache" }
-  }
-
-  const pair = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`
-
-  try {
-    const p = await getBinancePriceUsdt(pair)
-    PRICE_CACHE.set(symbol, { price: p, source: "binance", ts: Date.now() })
-    return { price: p, source: "binance", isEstimated: false }
-  } catch (e) {
-    console.warn(`[PRICE] Binance failed for ${pair}:`, e)
-  }
-
-  try {
-    const p = await getDbCachedPriceUsd(accountId, symbol)
-    if (p != null) {
-      PRICE_CACHE.set(symbol, { price: p, source: "db_cache", ts: Date.now() })
-      return { price: p, source: "db_cache", isEstimated: true }
+async function resolvePrice(symbol: string, coingeckoId: string | null, avgEntry: number): Promise<PriceResult> {
+  if (coingeckoId) {
+    const cg = await cgPriceUsdByIdSafe(coingeckoId)
+    if (cg.ok) {
+      return { priceUsd: cg.priceUsd, source: "coingecko", isEstimated: false, change24hPct: cg.change24hPct }
     }
-  } catch (e) {
-    console.warn(`[PRICE] DB cache failed for ${symbol}:`, e)
   }
 
   try {
-    const p = await getCoinGeckoPriceUsd(symbol)
-    PRICE_CACHE.set(symbol, { price: p, source: "coingecko", ts: Date.now() })
-    return { price: p, source: "coingecko", isEstimated: false }
-  } catch (e) {
-    console.warn(`[PRICE] CoinGecko failed for ${symbol}:`, e)
+    const p = await getBinancePriceUsdt(symbol)
+    return { priceUsd: p, source: "binance", isEstimated: false, change24hPct: null }
+  } catch {
+    // ignore
   }
 
-  NEGATIVE_CACHE.set(symbol, { ts: Date.now(), reason: "all_sources_failed" })
-  return { price: avgEntry, source: "avg_entry", isEstimated: true }
+  const p = Number(avgEntry)
+  const safe = Number.isFinite(p) && p > 0 ? p : 0
+  return { priceUsd: safe, source: "avg_entry", isEstimated: true, change24hPct: null }
 }
 
+type DbRow = {
+  id: string
+  asset_name: string
+  side: "buy" | "sell"
+  amount: unknown
+  entry_price: unknown
+  trade_datetime: Date
+}
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.accountId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    if (!session?.accountId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const accountId = session.accountId
 
-    const [openBuys, cashUsd] = await Promise.all([
-      prisma.journal_entry.findMany({
-        where: {
-          account_id: accountId,
-          spot_trade: { some: {} },
-          status: "in_progress",
-          side: "buy",
-          asset_name: { not: "CASH" },
-        },
-        select: { asset_name: true, amount: true, entry_price: true },
-      }),
-      PortfolioRepo.getCashBalance(accountId),
-    ])
+    // pega spot buys e sells
+    const rows = (await prisma.journal_entry.findMany({
+      where: {
+        account_id: accountId,
+        spot_trade: { some: {} },
+        asset_name: { not: "CASH" },
+        side: { in: ["buy", "sell"] },
+      },
+      orderBy: { trade_datetime: "desc" },
+      select: {
+        id: true,
+        asset_name: true,
+        side: true,
+        amount: true,
+        entry_price: true,
+        trade_datetime: true,
+      },
+    })) as DbRow[]
 
-    const grouped: Record<string, { qty: number; investedUsd: number }> = {}
+    // agrupa pra calcular qty e avgEntry
+    const grouped = new Map<
+      string,
+      {
+        symbol: string
+        qtyBought: number
+        investedUsd: number
+        // se você já tem coingeckoId em outra tabela, plug aqui.
+        coingeckoId: string | null
+      }
+    >()
 
-    for (const row of openBuys) {
-      const sym = String(row.asset_name || "").trim().toUpperCase()
-      const qty = Number(row.amount ?? 0)
-      const entry = Number(row.entry_price ?? 0)
+    for (const r of rows) {
+      const symbol = String(r.asset_name || "").trim().toUpperCase()
+      const qty = Number(r.amount ?? 0)
+      const price = Number(r.entry_price ?? 0)
 
-      if (!sym || qty <= 0) continue
+      if (!symbol || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) continue
 
-      if (!grouped[sym]) grouped[sym] = { qty: 0, investedUsd: 0 }
-      grouped[sym].qty += qty
-      grouped[sym].investedUsd += qty * entry
+      const g = grouped.get(symbol) ?? { symbol, qtyBought: 0, investedUsd: 0, coingeckoId: null }
+      if (r.side === "buy") {
+        g.qtyBought += qty
+        g.investedUsd += qty * price
+      }
+      grouped.set(symbol, g)
     }
 
-    const symbols = Object.keys(grouped)
+    const assets = Array.from(grouped.values())
+      .map(async (g) => {
+        const avgEntry = g.qtyBought > 0 ? g.investedUsd / g.qtyBought : 0
+        const pr = await resolvePrice(g.symbol, g.coingeckoId, avgEntry)
 
-    const priceBySymbol = new Map<string, PriceResult>()
-
-    await Promise.all(
-      symbols.map(async (sym) => {
-        const g = grouped[sym]
-        const avgEntry = g.qty > 0 ? g.investedUsd / g.qty : 0
-        const resolved = await resolveCurrentPriceUsd(accountId, sym, avgEntry)
-        priceBySymbol.set(sym, resolved)
-      })
-    )
-
-    const spotCurrentValueUsd = symbols.reduce((sum, sym) => {
-      const g = grouped[sym]
-      const p = priceBySymbol.get(sym)?.price ?? 0
-      return sum + g.qty * p
-    }, 0)
-
-    const spotInvestedUsd = symbols.reduce((sum, sym) => sum + grouped[sym].investedUsd, 0)
-
-    const items: Item[] = symbols
-      .map((sym) => {
-        const g = grouped[sym]
-        const amount = g.qty
-        const avgEntryPriceUsd = amount > 0 ? g.investedUsd / amount : 0
-
-        const r = priceBySymbol.get(sym)
-        const currentPriceUsd = r?.price ?? avgEntryPriceUsd
-
-        const valueUsd = amount * currentPriceUsd
-        const purchaseValueUsd = amount * avgEntryPriceUsd
+        const holdingsValueUsd = g.qtyBought * pr.priceUsd
+        const currentProfitUsd = holdingsValueUsd - g.investedUsd
+        const currentProfitPct = g.investedUsd > 0 ? (currentProfitUsd / g.investedUsd) * 100 : null
 
         return {
-          symbol: sym,
-          amount,
-          avgEntryPriceUsd,
-          currentPriceUsd,
-          purchaseValueUsd,
-          valueUsd,
-          percent: spotCurrentValueUsd > 0 ? (valueUsd / spotCurrentValueUsd) * 100 : 0,
-          currentPriceSource: r?.source ?? "avg_entry",
-          currentPriceIsEstimated: r?.isEstimated ?? true,
+          symbol: g.symbol,
+          name: null as string | null,
+          coingeckoId: g.coingeckoId,
+          priceUsd: pr.priceUsd,
+          change24hPct: pr.change24hPct,
+          totalInvestedUsd: g.investedUsd,
+          avgPriceUsd: avgEntry,
+          qtyHeld: g.qtyBought,
+          holdingsValueUsd,
+          currentProfitUsd,
+          currentProfitPct,
+          currentPriceSource: pr.source,
+          currentPriceIsEstimated: pr.isEstimated,
         }
       })
-      .sort((a, b) => b.valueUsd - a.valueUsd)
 
-    const totalValueUsd = spotCurrentValueUsd + (cashUsd ?? 0)
-    const totalInvestedUsd = spotInvestedUsd
+    const assetRows = (await Promise.all(assets)).sort((a, b) => b.holdingsValueUsd - a.holdingsValueUsd)
+
+    const currentBalanceUsd = assetRows.reduce((s, a) => s + a.holdingsValueUsd, 0)
+    const totalInvestedUsd = assetRows.reduce((s, a) => s + a.totalInvestedUsd, 0)
+    const unrealizedUsd = currentBalanceUsd - totalInvestedUsd
+    const totalPct = totalInvestedUsd > 0 ? (unrealizedUsd / totalInvestedUsd) * 100 : 0
 
     return NextResponse.json({
-      totalValueUsd,
-      totalInvestedUsd,
-      cashUsd,
-      items,
+      summary: {
+        currentBalanceUsd,
+        totalInvestedUsd,
+        profit: {
+          realized: { usd: 0 },
+          unrealized: { usd: unrealizedUsd },
+          total: { usd: unrealizedUsd, pct: totalPct },
+        },
+        portfolio24h: { pct: 0, usd: 0 },
+        topPerformer: null,
+      },
+      assets: assetRows,
+      transactions: [],
     })
-  } catch (e: unknown) {
-    const err = e as { code?: string }
-    if (err?.code === "P2024") {
-      return NextResponse.json({ error: "Database busy, try again." }, { status: 503 })
-    }
+  } catch (e) {
     console.error("[GET /api/portfolio] error:", e)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
