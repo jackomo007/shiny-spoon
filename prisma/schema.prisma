@@ -36,6 +36,7 @@ model account {
   pre_trade_analyses trade_pre_analysis[]
   tags               tag[]
   price_structures   coin_price_structure[]
+  exit_strategies exit_strategy[]
 
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
@@ -323,6 +324,53 @@ model portfolio_trade {
   created_at     DateTime @default(now()) @db.DateTime(0)
 
   @@index([account_id, trade_datetime], map: "idx_pt_acc_dt")
+}
+
+model exit_strategy {
+  id            String   @id @default(uuid()) @db.Char(36)
+  account_id    String   @db.Char(36)
+  coin_symbol   String   @db.VarChar(20)
+
+  strategy_type exit_strategy_type @default(percentage)
+  sell_percent  Decimal  @db.Decimal(5, 2)
+  gain_percent  Decimal  @db.Decimal(6, 2)
+
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+  updated_at    DateTime @updatedAt @db.DateTime(0)
+
+  account     account                   @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_account")
+  executions  exit_strategy_execution[]
+
+  @@index([account_id], map: "idx_exit_strategy_account")
+  @@index([account_id, coin_symbol], map: "idx_exit_strategy_account_coin")
+  @@unique([account_id, coin_symbol, strategy_type], map: "uniq_exit_strategy_account_coin_type")
+  @@map("exit_strategy")
+}
+
+model exit_strategy_execution {
+  id                String   @id @default(uuid()) @db.Char(36)
+  exit_strategy_id  String   @db.Char(36)
+
+  step_gain_percent Decimal  @db.Decimal(6, 2)
+  target_price      Decimal  @db.Decimal(18, 8)
+  executed_price    Decimal  @db.Decimal(18, 8)
+
+  quantity_sold     Decimal  @db.Decimal(18, 8)
+  proceeds          Decimal  @db.Decimal(18, 8)
+  realized_profit   Decimal  @db.Decimal(18, 8)
+
+  executed_at       DateTime @default(now()) @db.DateTime(0)
+
+  strategy exit_strategy @relation(fields: [exit_strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_execution_strategy")
+
+  @@index([exit_strategy_id], map: "idx_exit_strategy_execution_strategy")
+  @@unique([exit_strategy_id, step_gain_percent], map: "uniq_strategy_step_gain")
+  @@map("exit_strategy_execution")
+}
+
+enum exit_strategy_type {
+  percentage
 }
 
 model coin_price_structure {
