@@ -3,6 +3,7 @@
 import Card from "@/components/ui/Card"
 import { Table, Th, Tr, Td } from "@/components/ui/Table"
 import { usd, pct, qty, cls } from "@/components/portfolio/format"
+import { CoinBadge } from "@/components/portfolio/CoinBadge"
 
 export type AssetRow = {
   symbol: string
@@ -18,14 +19,13 @@ export type AssetRow = {
   currentProfitPct: number | null
 }
 
-export default function AssetsTable(props: { assets: AssetRow[] }) {
+export default function AssetsTable(props: { assets: AssetRow[]; title?: string }) {
   const rows = props.assets
 
   return (
-    <Card className="p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b">
-        <div className="font-semibold">Assets</div>
-        <div className="text-xs text-gray-500">Spot holdings only</div>
+    <Card className="p-0 rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#eef2f7]">
+        <div className="font-semibold text-[#0f172a]">{props.title ?? "Your Assets"}</div>
       </div>
 
       <div className="overflow-x-auto">
@@ -40,6 +40,7 @@ export default function AssetsTable(props: { assets: AssetRow[] }) {
               <Th>Holdings</Th>
             </tr>
           </thead>
+
           <tbody>
             {rows.map((a) => {
               const up24 = (a.change24hPct ?? 0) >= 0
@@ -48,9 +49,13 @@ export default function AssetsTable(props: { assets: AssetRow[] }) {
               return (
                 <Tr key={a.symbol}>
                   <Td className="font-medium">
-                    <div className="grid">
-                      <span>{a.symbol}</span>
-                      <span className="text-xs text-gray-500">{a.name ?? ""}</span>
+                    <div className="flex items-center gap-3">
+                      <CoinBadge symbol={a.symbol} mode="coin" />
+
+                      <div className="grid">
+                        <span className="text-[#0f172a]">{a.symbol}</span>
+                        <span className="text-xs text-gray-500">{a.name ?? ""}</span>
+                      </div>
                     </div>
                   </Td>
 
@@ -80,7 +85,9 @@ export default function AssetsTable(props: { assets: AssetRow[] }) {
                   <Td>
                     <div className="grid">
                       <span className="font-medium">{usd(a.holdingsValueUsd)}</span>
-                      <span className="text-xs text-gray-500">{qty(a.qtyHeld)} {a.symbol}</span>
+                      <span className="text-xs text-gray-500">
+                        {qty(a.qtyHeld)} {a.symbol}
+                      </span>
                     </div>
                   </Td>
                 </Tr>

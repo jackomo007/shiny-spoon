@@ -60,6 +60,28 @@ export default function AddTransactionModal(props: {
 
   const lastEdited = useRef<"amount" | "total" | null>(null)
 
+  function resetAll() {
+    setStep("pick")
+    setQuery("")
+    setResults([])
+    setSelected(null)
+
+    setSide("buy")
+    setPriceMode("market")
+    setPriceUsd(0)
+
+    setAmountRaw("")
+    setTotalRaw("")
+    setBusy(false)
+
+    lastEdited.current = null
+  }
+
+  useEffect(() => {
+    if (!props.open) resetAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open])
+
   useEffect(() => {
     if (!props.open) return
 
@@ -143,16 +165,22 @@ export default function AddTransactionModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceUsd])
 
+  const canSave = !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy
+
   return (
     <Modal
       open={props.open}
-      onClose={props.onClose}
-      title={step === "pick" ? "Add Transaction" : `Add Transaction • ${selected?.symbol ?? ""}`}
+      onClose={() => {
+        props.onClose()
+      }}
+      title={step === "pick" ? "Add Asset" : `Add Asset • ${selected?.symbol ?? ""}`}
       footer={
         <div className="flex items-center justify-end gap-3">
           <button
             className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-            onClick={props.onClose}
+            onClick={() => {
+              props.onClose()
+            }}
             disabled={busy}
           >
             Cancel
@@ -161,7 +189,7 @@ export default function AddTransactionModal(props: {
           {step === "pick" ? null : (
             <button
               className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-              disabled={busy || !selected || priceUsd <= 0 || (!amountRaw && !totalRaw)}
+              disabled={!canSave}
               onClick={async () => {
                 if (!selected) return
                 try {
@@ -197,19 +225,13 @@ export default function AddTransactionModal(props: {
 
                   if (!res.ok) {
                     const j = (await res.json().catch(() => null)) as { error?: unknown } | null
-                    const msg =
-                      typeof j?.error === "string"
-                        ? j.error
-                        : j?.error
-                          ? "Failed to add transaction"
-                          : "Failed to add transaction"
+                    const msg = typeof j?.error === "string" ? j.error : "Failed to add transaction"
                     throw new Error(msg)
                   }
 
                   await props.onDone()
                 } catch (e) {
                   const msg = e instanceof Error ? e.message : "Failed"
-                  // eslint-disable-next-line no-alert
                   alert(msg)
                 } finally {
                   setBusy(false)
@@ -244,7 +266,11 @@ export default function AddTransactionModal(props: {
                   onClick={async () => {
                     setSelected(a)
                     setStep("form")
+                    setSide("buy")
                     setPriceMode("market")
+                    setAmountRaw("")
+                    setTotalRaw("")
+                    lastEdited.current = null
                     await loadMarketPrice(a.id)
                   }}
                 >
@@ -271,7 +297,11 @@ export default function AddTransactionModal(props: {
                     onClick={async () => {
                       setSelected(a)
                       setStep("form")
+                      setSide("buy")
                       setPriceMode("market")
+                      setAmountRaw("")
+                      setTotalRaw("")
+                      lastEdited.current = null
                       await loadMarketPrice(a.id)
                     }}
                   >
@@ -376,6 +406,21 @@ export default function AddTransactionModal(props: {
           <div className="text-xs text-gray-500">
             Amount e Total se recalculam entre si. Em Market Price, o preço é buscado automaticamente e fica readonly.
           </div>
+
+          <button
+            className="text-xs text-slate-500 underline justify-self-start"
+            onClick={async () => {
+              setStep("pick")
+              setSelected(null)
+              setAmountRaw("")
+              setTotalRaw("")
+              setPriceUsd(0)
+              lastEdited.current = null
+            }}
+            type="button"
+          >
+            Back to asset selection
+          </button>
         </div>
       )}
     </Modal>

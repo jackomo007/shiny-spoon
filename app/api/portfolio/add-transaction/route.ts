@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic"
 
 const Body = z.object({
   asset: z.object({
-    id: z.string().min(1), // coingecko id
+    id: z.string().min(1),
     symbol: z.string().min(1),
     name: z.string().optional().nullable(),
   }),
   side: z.enum(["buy", "sell"]).default("buy"),
   priceMode: z.enum(["market", "custom"]).default("market"),
-  priceUsd: z.number().positive().optional(), // required if custom
+  priceUsd: z.number().positive().optional(),
   qty: z.number().positive().optional(),
   totalUsd: z.number().positive().optional(),
   feeUsd: z.number().min(0).optional(),
@@ -41,7 +41,6 @@ export async function POST(req: Request) {
       priceUsd = input.priceUsd
     }
 
-    // qty <-> total binding (aceita um dos dois)
     let qty = input.qty ?? null
     let totalUsd = input.totalUsd ?? null
 
@@ -62,7 +61,7 @@ export async function POST(req: Request) {
       priceUsd,
       feeUsd: input.feeUsd ?? 0,
       executedAt,
-      notes: "[PORTFOLIO_SPOT_TX]",
+      notes: `[PORTFOLIO_SPOT_TX] cg:${input.asset.id}`,
     })
 
     return NextResponse.json({ ok: true })

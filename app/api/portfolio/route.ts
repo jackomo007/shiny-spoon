@@ -23,9 +23,7 @@ async function getBinancePriceUsdt(symbol: string): Promise<number> {
 async function resolvePrice(symbol: string, coingeckoId: string | null, avgEntry: number): Promise<PriceResult> {
   if (coingeckoId) {
     const cg = await cgPriceUsdByIdSafe(coingeckoId)
-    if (cg.ok) {
-      return { priceUsd: cg.priceUsd, source: "coingecko", isEstimated: false, change24hPct: cg.change24hPct }
-    }
+    if (cg.ok) return { priceUsd: cg.priceUsd, source: "coingecko", isEstimated: false, change24hPct: cg.change24hPct }
   }
 
   try {
@@ -47,6 +45,8 @@ type DbRow = {
   amount: unknown
   entry_price: unknown
   trade_datetime: Date
+  buy_fee: unknown
+  sell_fee: unknown
 }
 
 export async function GET() {
@@ -56,7 +56,6 @@ export async function GET() {
 
     const accountId = session.accountId
 
-    // pega spot buys e sells
     const rows = (await prisma.journal_entry.findMany({
       where: {
         account_id: accountId,
@@ -64,7 +63,7 @@ export async function GET() {
         asset_name: { not: "CASH" },
         side: { in: ["buy", "sell"] },
       },
-      orderBy: { trade_datetime: "desc" },
+      orderBy: { trade_datetime: "asc" },
       select: {
         id: true,
         asset_name: true,
@@ -72,54 +71,133 @@ export async function GET() {
         amount: true,
         entry_price: true,
         trade_datetime: true,
+        buy_fee: true,
+        sell_fee: true,
       },
     })) as DbRow[]
 
-    // agrupa pra calcular qty e avgEntry
-    const grouped = new Map<
+    const st = new Map<
       string,
       {
         symbol: string
-        qtyBought: number
-        investedUsd: number
-        // se você já tem coingeckoId em outra tabela, plug aqui.
+        name: string | null
         coingeckoId: string | null
+
+        qtyHeld: number
+        costBasisUsd: number
+        totalInvestedUsd: number
       }
     >()
 
-    for (const r of rows) {
-      const symbol = String(r.asset_name || "").trim().toUpperCase()
-      const qty = Number(r.amount ?? 0)
-      const price = Number(r.entry_price ?? 0)
+    const txs: Array<{
+      id: string
+      side: "buy" | "sell"
+      symbol: string
+      name: string | null
+      executedAt: string
+      qty: number
+      priceUsd: number
+      totalUsd: number
+      gainLossUsd: number | null
+      gainLossPct: number | null
+    }> = []
 
-      if (!symbol || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) continue
-
-      const g = grouped.get(symbol) ?? { symbol, qtyBought: 0, investedUsd: 0, coingeckoId: null }
-      if (r.side === "buy") {
-        g.qtyBought += qty
-        g.investedUsd += qty * price
-      }
-      grouped.set(symbol, g)
+    function getState(symbol: string) {
+      const s = symbol.toUpperCase()
+      const cur =
+        st.get(s) ??
+        ({
+          symbol: s,
+          name: null,
+          coingeckoId: null,
+          qtyHeld: 0,
+          costBasisUsd: 0,
+          totalInvestedUsd: 0,
+        } as const)
+      st.set(s, { ...cur })
+      return st.get(s)!
     }
 
-    const assets = Array.from(grouped.values())
-      .map(async (g) => {
-        const avgEntry = g.qtyBought > 0 ? g.investedUsd / g.qtyBought : 0
-        const pr = await resolvePrice(g.symbol, g.coingeckoId, avgEntry)
+    for (const r of rows) {
+      const symbol = String(r.asset_name || "").trim().toUpperCase()
+      if (!symbol) continue
 
-        const holdingsValueUsd = g.qtyBought * pr.priceUsd
-        const currentProfitUsd = holdingsValueUsd - g.investedUsd
-        const currentProfitPct = g.investedUsd > 0 ? (currentProfitUsd / g.investedUsd) * 100 : null
+      const qty = Number(r.amount ?? 0)
+      const price = Number(r.entry_price ?? 0)
+      const fee = Number(r.side === "buy" ? r.buy_fee : r.sell_fee) || 0
+
+      if (!Number.isFinite(qty) || qty <= 0) continue
+      if (!Number.isFinite(price) || price <= 0) continue
+
+      const s = getState(symbol)
+      const totalUsd = qty * price
+
+      if (r.side === "buy") {
+        s.qtyHeld += qty
+        s.costBasisUsd += totalUsd + fee
+        s.totalInvestedUsd += totalUsd + fee
+
+        txs.push({
+          id: r.id,
+          side: "buy",
+          symbol,
+          name: null,
+          executedAt: r.trade_datetime.toISOString(),
+          qty,
+          priceUsd: price,
+          totalUsd: totalUsd + fee,
+          gainLossUsd: null,
+          gainLossPct: null,
+        })
+      } else {
+        const avg = s.qtyHeld > 0 ? s.costBasisUsd / s.qtyHeld : 0
+        const qtySold = qty
+
+        const gainLossUsd = (price - avg) * qtySold - fee
+        const gainLossPct = avg > 0 ? ((price - avg) / avg) * 100 : null
+
+        const reduceQty = Math.min(qtySold, s.qtyHeld)
+        s.qtyHeld -= reduceQty
+        s.costBasisUsd -= reduceQty * avg
+        if (s.qtyHeld < 0.0000000001) {
+          s.qtyHeld = 0
+          s.costBasisUsd = 0
+        }
+
+        txs.push({
+          id: r.id,
+          side: "sell",
+          symbol,
+          name: null,
+          executedAt: r.trade_datetime.toISOString(),
+          qty,
+          priceUsd: price,
+          totalUsd: totalUsd - fee,
+          gainLossUsd: Number.isFinite(gainLossUsd) ? gainLossUsd : null,
+          gainLossPct: gainLossPct != null && Number.isFinite(gainLossPct) ? gainLossPct : null,
+        })
+      }
+    }
+
+    const assetRows = await Promise.all(
+      Array.from(st.values()).map(async (g) => {
+        const avgEntry = g.qtyHeld > 0 ? g.costBasisUsd / g.qtyHeld : g.totalInvestedUsd > 0 ? g.totalInvestedUsd : 0
+
+        const pr = await resolvePrice(g.symbol, g.coingeckoId, g.qtyHeld > 0 ? avgEntry : 0)
+
+        const holdingsValueUsd = g.qtyHeld * pr.priceUsd
+        const currentProfitUsd = holdingsValueUsd - g.costBasisUsd
+        const currentProfitPct = g.costBasisUsd > 0 ? (currentProfitUsd / g.costBasisUsd) * 100 : null
 
         return {
           symbol: g.symbol,
-          name: null as string | null,
+          name: g.name,
           coingeckoId: g.coingeckoId,
           priceUsd: pr.priceUsd,
           change24hPct: pr.change24hPct,
-          totalInvestedUsd: g.investedUsd,
-          avgPriceUsd: avgEntry,
-          qtyHeld: g.qtyBought,
+          totalInvestedUsd: g.totalInvestedUsd,
+          avgPriceUsd: g.qtyHeld > 0 ? avgEntry : g.totalInvestedUsd > 0 ? g.totalInvestedUsd : 0,
+          qtyHeld: g.qtyHeld,
           holdingsValueUsd,
           currentProfitUsd,
           currentProfitPct,
@@ -127,13 +205,32 @@ export async function GET() {
           currentPriceIsEstimated: pr.isEstimated,
         }
       })
+    )
 
-    const assetRows = (await Promise.all(assets)).sort((a, b) => b.holdingsValueUsd - a.holdingsValueUsd)
+    const assetsSorted = assetRows.sort((a, b) => {
+      const av = a.holdingsValueUsd ?? 0
+      const bv = b.holdingsValueUsd ?? 0
+      if (bv !== av) return bv - av
+      return (b.totalInvestedUsd ?? 0) - (a.totalInvestedUsd ?? 0)
+    })
 
-    const currentBalanceUsd = assetRows.reduce((s, a) => s + a.holdingsValueUsd, 0)
-    const totalInvestedUsd = assetRows.reduce((s, a) => s + a.totalInvestedUsd, 0)
-    const unrealizedUsd = currentBalanceUsd - totalInvestedUsd
+    const currentBalanceUsd = assetsSorted.reduce((s, a) => s + (a.holdingsValueUsd ?? 0), 0)
+    const totalInvestedUsd = assetsSorted.reduce((s, a) => s + (a.totalInvestedUsd ?? 0), 0)
+
+    const unrealizedUsd = assetsSorted.reduce((s, a) => s + (a.currentProfitUsd ?? 0), 0)
     const totalPct = totalInvestedUsd > 0 ? (unrealizedUsd / totalInvestedUsd) * 100 : 0
+
+    const top =
+      assetsSorted
+        .slice()
+        .sort((a, b) => {
+          const ap = a.currentProfitPct
+          const bp = b.currentProfitPct
+          if (ap != null && bp != null) return bp - ap
+          if (ap != null && bp == null) return -1
+          if (ap == null && bp != null) return 1
+          return (b.currentProfitUsd ?? 0) - (a.currentProfitUsd ?? 0)
+        })[0] ?? null
 
     return NextResponse.json({
       summary: {
@@ -145,10 +242,12 @@ export async function GET() {
           total: { usd: unrealizedUsd, pct: totalPct },
         },
         portfolio24h: { pct: 0, usd: 0 },
-        topPerformer: null,
+        topPerformer: top
+          ? { symbol: top.symbol, name: top.name ?? null, profitUsd: top.currentProfitUsd, profitPct: top.currentProfitPct ?? null }
+          : null,
       },
-      assets: assetRows,
-      transactions: [],
+      assets: assetsSorted,
+      transactions: txs.sort((a, b) => +new Date(b.executedAt) - +new Date(a.executedAt)),
     })
   } catch (e) {
     console.error("[GET /api/portfolio] error:", e)
