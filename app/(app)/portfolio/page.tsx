@@ -99,6 +99,7 @@ export default function PortfolioPage() {
     symbol: a.symbol,
     name: a.name ?? null,
     holdingsValueUsd: a.holdingsValueUsd,
+    totalInvestedUsd: a.totalInvestedUsd,
   }))
 
   return (
