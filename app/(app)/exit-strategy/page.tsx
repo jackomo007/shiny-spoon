@@ -586,33 +586,6 @@ export default function ExitStrategyPage() {
             <div className="text-sm text-gray-600">Loading…</div>
           ) : (
             <div className="grid gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl border bg-white">
-                  <div className="text-xs text-gray-500">Entry</div>
-                  <div className="font-semibold">{usd(details.summary.entryPriceUsd)}</div>
-                </div>
-
-                <div className="p-3 rounded-xl border bg-white">
-                  <div className="text-xs text-gray-500">Current</div>
-                  <div className="font-semibold">
-                    {usd(details.summary.currentPriceUsd)}{" "}
-                    {details.summary.currentPriceIsEstimated && (
-                      <span
-                        className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
-                        title={`Estimated (${details.summary.currentPriceSource})`}
-                      >
-                        est.
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl border bg-white">
-                  <div className="text-xs text-gray-500">Open Qty</div>
-                  <div className="font-semibold">{num(details.summary.qtyOpen, 8).replace(/\.?0+$/, "")}</div>
-                </div>
-              </div>
-
               {/* NEW: Simulated Scale-Out Plan section in View */}
               <div className="rounded-xl border bg-white overflow-x-auto">
                 <div className="px-4 py-3 border-b bg-gray-50">
@@ -652,40 +625,6 @@ export default function ExitStrategyPage() {
                     </tbody>
                   </table>
                 )}
-              </div>
-
-              <div className="rounded-xl border bg-white overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b bg-gray-50">
-                    <tr className="text-left text-gray-600">
-                      <th className="px-4 py-3">Gain</th>
-                      <th className="px-4 py-3">Target Price</th>
-                      <th className="px-4 py-3">Qty Sold</th>
-                      <th className="px-4 py-3">Proceeds</th>
-                      <th className="px-4 py-3">Remaining</th>
-                      <th className="px-4 py-3">Profit</th>
-                      <th className="px-4 py-3">Cumulative Profit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.rows.map((r) => {
-                      const executed = r.executedQtyToSell != null
-                      const qty = executed ? (r.executedQtyToSell as number) : r.plannedQtyToSell
-
-                      return (
-                        <tr key={r.gainPercent} className="border-b last:border-b-0">
-                          <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
-                          <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
-                          <td className="px-4 py-3">{num(qty, 8).replace(/\.?0+$/, "")}</td>
-                          <td className="px-4 py-3">{r.proceedsUsd != null ? usd(r.proceedsUsd) : "-"}</td>
-                          <td className="px-4 py-3">{num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}</td>
-                          <td className="px-4 py-3">{r.realizedProfitUsd != null ? usd(r.realizedProfitUsd) : "-"}</td>
-                          <td className="px-4 py-3">{usd(r.cumulativeRealizedProfitUsd)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}
