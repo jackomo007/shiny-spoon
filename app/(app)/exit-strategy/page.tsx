@@ -35,10 +35,11 @@ type ExitStrategyStepRow = {
   targetPriceUsd: number
   plannedQtyToSell: number
   executedQtyToSell: number | null
-  proceedsUsd: number | null
+  proceedsUsd: number
   remainingQtyAfter: number
-  realizedProfitUsd: number | null
+  realizedProfitUsd: number
   cumulativeRealizedProfitUsd: number
+  isExecuted?: boolean
 }
 
 type Details = { summary: ExitStrategySummary; rows: ExitStrategyStepRow[] }
@@ -55,6 +56,47 @@ function num(n: number, d = 2) {
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
+}
+
+function ScaleOutPlanTable({ rows, coinSymbol }: { rows: ExitStrategyStepRow[]; coinSymbol: string }) {
+  return (
+    <div className="rounded-xl border bg-white overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-gray-50">
+          <tr className="text-left text-gray-600">
+            <th className="px-4 py-3">Gain</th>
+            <th className="px-4 py-3">Target Price</th>
+            <th className="px-4 py-3">Qty Sold</th>
+            <th className="px-4 py-3">Proceeds</th>
+            <th className="px-4 py-3">Remaining</th>
+            <th className="px-4 py-3">Profit</th>
+            <th className="px-4 py-3">Cumulative Profit</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((r) => {
+            const qtySold = r.executedQtyToSell ?? r.plannedQtyToSell
+            return (
+              <tr key={r.gainPercent} className="border-b last:border-b-0">
+                <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
+                <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
+                <td className="px-4 py-3">
+                  {num(qtySold, 8).replace(/\.?0+$/, "")}
+                </td>
+                <td className="px-4 py-3">{usd(r.proceedsUsd)}</td>
+                <td className="px-4 py-3">
+                  {num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")} 
+                </td>
+                <td className="px-4 py-3">{usd(r.realizedProfitUsd)}</td>
+                <td className="px-4 py-3">{usd(r.cumulativeRealizedProfitUsd)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 export default function ExitStrategyPage() {
@@ -81,11 +123,6 @@ export default function ExitStrategyPage() {
   const [simLoading, setSimLoading] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
   const [simRows, setSimRows] = useState<ExitStrategyStepRow[] | null>(null)
-  const [simMeta, setSimMeta] = useState<{ qtyOpen: number; entryPriceUsd: number } | null>(null)
-
-  const [viewSimLoading, setViewSimLoading] = useState(false)
-  const [viewSimError, setViewSimError] = useState<string | null>(null)
-  const [viewSimRows, setViewSimRows] = useState<ExitStrategyStepRow[] | null>(null)
 
   const canShowPctFields = useMemo(() => strategyType === "percentage", [strategyType])
 
@@ -122,7 +159,6 @@ export default function ExitStrategyPage() {
       setAddError(null)
       setSimError(null)
       setSimRows(null)
-      setSimMeta(null)
       setSimLoading(false)
     }
   }, [addOpen])
@@ -133,10 +169,6 @@ export default function ExitStrategyPage() {
     setDetailsOpen(true)
     setError(null)
 
-    setViewSimLoading(false)
-    setViewSimError(null)
-    setViewSimRows(null)
-
     try {
       const res = await fetch(`/api/exit-strategies/${encodeURIComponent(id)}`, { cache: "no-store" })
       if (!res.ok) {
@@ -145,38 +177,8 @@ export default function ExitStrategyPage() {
       }
       const json = (await res.json()) as { data: Details }
       setDetails(json.data)
-
-      setViewSimLoading(true)
-      setViewSimError(null)
-      setViewSimRows(null)
-
-      try {
-        const simRes = await fetch("/api/exit-strategies/simulate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            coinSymbol: json.data.summary.coinSymbol,
-            sellPercent: json.data.summary.sellPercent,
-            gainPercent: json.data.summary.gainPercent,
-            maxSteps: 10,
-          }),
-        })
-
-        if (!simRes.ok) {
-          const j = (await simRes.json().catch(() => ({} as { error?: string }))) as { error?: string }
-          throw new Error(j.error || `HTTP ${simRes.status}`)
-        }
-
-        const simJson = (await simRes.json()) as { data: { rows: ExitStrategyStepRow[] } }
-        setViewSimRows(simJson.data.rows)
-      } catch (simErr) {
-        setViewSimError(simErr instanceof Error ? simErr.message : "Failed to simulate")
-      } finally {
-        setViewSimLoading(false)
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load details")
-      setViewSimLoading(false)
     }
   }
 
@@ -213,7 +215,6 @@ export default function ExitStrategyPage() {
     setSimLoading(true)
     setSimError(null)
     setSimRows(null)
-    setSimMeta(null)
 
     try {
       const res = await fetch("/api/exit-strategies/simulate", {
@@ -223,7 +224,7 @@ export default function ExitStrategyPage() {
           coinSymbol,
           sellPercent,
           gainPercent,
-          maxSteps: 5,
+          maxSteps: 10,
         }),
       })
 
@@ -232,15 +233,7 @@ export default function ExitStrategyPage() {
         throw new Error(j.error || `HTTP ${res.status}`)
       }
 
-      const json = (await res.json()) as {
-        data: {
-          qtyOpen: number
-          entryPriceUsd: number
-          rows: ExitStrategyStepRow[]
-        }
-      }
-
-      setSimMeta({ qtyOpen: json.data.qtyOpen, entryPriceUsd: json.data.entryPriceUsd })
+      const json = (await res.json()) as { data: { rows: ExitStrategyStepRow[] } }
       setSimRows(json.data.rows)
     } catch (e) {
       setSimError(e instanceof Error ? e.message : "Failed to simulate")
@@ -470,45 +463,8 @@ export default function ExitStrategyPage() {
             )}
 
             {simRows && (
-              <div className="mt-2 rounded-xl border bg-white overflow-x-auto">
-                <div className="px-4 py-3 border-b bg-gray-50">
-                  <div className="text-sm font-semibold">Simulated Scale-Out Plan</div>
-                  <div className="text-xs text-gray-500">
-                    Using your current holding/avg entry for <b>{coinSymbol}</b>
-                    {simMeta ? (
-                      <>
-                        {" "}
-                        • Entry: <b>{usd(simMeta.entryPriceUsd)}</b> • Open Qty:{" "}
-                        <b>{num(simMeta.qtyOpen, 8).replace(/\.?0+$/, "")}</b>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-
-                <table className="w-full text-sm">
-                  <thead className="border-b bg-gray-50">
-                    <tr className="text-left text-gray-600">
-                      <th className="px-4 py-3">Gain</th>
-                      <th className="px-4 py-3">Target Price</th>
-                      <th className="px-4 py-3">Qty Sold</th>
-                      <th className="px-4 py-3">Remaining</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {simRows.map((r) => (
-                      <tr key={r.gainPercent} className="border-b last:border-b-0">
-                        <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
-                        <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
-                        <td className="px-4 py-3">
-                          {num(r.plannedQtyToSell, 8).replace(/\.?0+$/, "")} {coinSymbol}
-                        </td>
-                        <td className="px-4 py-3">
-                          {num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")} {coinSymbol}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-2">
+                <ScaleOutPlanTable rows={simRows} coinSymbol={coinSymbol} />
               </div>
             )}
           </div>
@@ -556,10 +512,6 @@ export default function ExitStrategyPage() {
             setDetailsOpen(false)
             setSelectedId(null)
             setDetails(null)
-
-            setViewSimLoading(false)
-            setViewSimError(null)
-            setViewSimRows(null)
           }}
           title={details?.summary ? `${details.summary.coinSymbol} – Scale-Out Plan` : "Loading…"}
           footer={
@@ -570,10 +522,6 @@ export default function ExitStrategyPage() {
                   setDetailsOpen(false)
                   setSelectedId(null)
                   setDetails(null)
-
-                  setViewSimLoading(false)
-                  setViewSimError(null)
-                  setViewSimRows(null)
                 }}
                 type="button"
               >
@@ -586,46 +534,7 @@ export default function ExitStrategyPage() {
             <div className="text-sm text-gray-600">Loading…</div>
           ) : (
             <div className="grid gap-4">
-              {/* NEW: Simulated Scale-Out Plan section in View */}
-              <div className="rounded-xl border bg-white overflow-x-auto">
-                <div className="px-4 py-3 border-b bg-gray-50">
-                  <div className="text-sm font-semibold">Simulated Scale-Out Plan</div>
-                  <div className="text-xs text-gray-500">Preview of planned steps (independent of executions).</div>
-                </div>
-
-                {viewSimError && (
-                  <div className="m-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {viewSimError}
-                  </div>
-                )}
-
-                {viewSimLoading ? (
-                  <div className="p-4 text-sm text-gray-600">Loading simulation…</div>
-                ) : !viewSimRows ? (
-                  <div className="p-4 text-sm text-gray-600">No simulation available.</div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead className="border-b bg-gray-50">
-                      <tr className="text-left text-gray-600">
-                        <th className="px-4 py-3">Gain</th>
-                        <th className="px-4 py-3">Target Price</th>
-                        <th className="px-4 py-3">Qty Sold</th>
-                        <th className="px-4 py-3">Remaining</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewSimRows.map((r) => (
-                        <tr key={r.gainPercent} className="border-b last:border-b-0">
-                          <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
-                          <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
-                          <td className="px-4 py-3">{num(r.plannedQtyToSell, 8).replace(/\.?0+$/, "")}</td>
-                          <td className="px-4 py-3">{num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              <ScaleOutPlanTable rows={details.rows} coinSymbol={details.summary.coinSymbol} />
             </div>
           )}
         </Modal>

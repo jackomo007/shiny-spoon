@@ -31,10 +31,11 @@ export type ExitStrategyStepRow = {
   targetPriceUsd: number
   plannedQtyToSell: number
   executedQtyToSell: number | null
-  proceedsUsd: number | null
+  proceedsUsd: number
   remainingQtyAfter: number
-  realizedProfitUsd: number | null
+  realizedProfitUsd: number
   cumulativeRealizedProfitUsd: number
+  isExecuted?: boolean
 }
 
 function round(n: number, digits: number): number {
@@ -86,7 +87,6 @@ export async function buildExitStrategySummary(accountId: string, strategyId: st
   const priceRes = await resolveCurrentPriceUsd(accountId, coin, entryPriceUsd)
   const currentPriceUsd = priceRes.price
 
-  // qty to sell (sell% do qty atual aberto)
   const qtyToSell = qtyOpen > 0 ? qtyOpen * (sellPercent / 100) : 0
   const usdValueToSell = qtyToSell * targetPriceUsd
 
@@ -137,8 +137,8 @@ export async function buildExitStrategyDetails(
 
   const coin = s.coin_symbol.toUpperCase()
   const holding = await getOpenSpotHolding(accountId, coin)
-  const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0
 
+  const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0
   let remaining = holding?.qty ?? 0
 
   const sellPct = Number(s.sell_percent) / 100
@@ -150,13 +150,14 @@ export async function buildExitStrategyDetails(
     select: {
       step_gain_percent: true,
       target_price: true,
+      executed_price: true,
       quantity_sold: true,
       proceeds: true,
       realized_profit: true,
     },
   })
 
-  const execByGain = new Map<number, typeof executions[number]>()
+  const execByGain = new Map<number, (typeof executions)[number]>()
   for (const e of executions) execByGain.set(round(Number(e.step_gain_percent), 2), e)
 
   const rows: ExitStrategyStepRow[] = []
@@ -167,26 +168,32 @@ export async function buildExitStrategyDetails(
     const target = entryPriceUsd > 0 ? entryPriceUsd * (1 + gain / 100) : 0
 
     const plannedQty = remaining > 0 ? remaining * sellPct : 0
-
     const exec = execByGain.get(gain)
+
+    const isExecuted = !!exec
     const executedQty = exec ? Number(exec.quantity_sold) : null
 
-    // para "remaining", se executado usa a qty executada; se não, usa planned
-    const qtySoldNow = exec ? Number(exec.quantity_sold) : plannedQty
+    const qtySoldNow = isExecuted ? Number(exec!.quantity_sold) : plannedQty
+
     remaining = Math.max(remaining - qtySoldNow, 0)
 
-    const profit = exec ? Number(exec.realized_profit) : null
-    if (profit != null) cumulative += profit
+    const sellPrice = isExecuted ? Number(exec!.executed_price) : target
+
+    const proceeds = isExecuted ? Number(exec!.proceeds) : qtySoldNow * sellPrice
+    const profit = isExecuted ? Number(exec!.realized_profit) : qtySoldNow * (sellPrice - entryPriceUsd)
+
+    cumulative += profit
 
     rows.push({
       gainPercent: gain,
       targetPriceUsd: round(target, 8),
       plannedQtyToSell: round(plannedQty, 8),
       executedQtyToSell: executedQty != null ? round(executedQty, 8) : null,
-      proceedsUsd: exec ? round(Number(exec.proceeds), 2) : null,
+      proceedsUsd: round(proceeds, 2),
       remainingQtyAfter: round(remaining, 8),
-      realizedProfitUsd: profit != null ? round(profit, 2) : null,
+      realizedProfitUsd: round(profit, 2),
       cumulativeRealizedProfitUsd: round(cumulative, 2),
+      isExecuted,
     })
 
     if (remaining <= 0) break

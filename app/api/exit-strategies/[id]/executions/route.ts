@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { buildExitStrategyDetails } from "@/services/exit-strategy.service"
+import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
 
 export const dynamic = "force-dynamic"
 
@@ -24,14 +25,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const accountId = session.accountId
     const data = Body.parse(await req.json())
 
-    const exists = await prisma.exit_strategy.findFirst({
+    const strategy = await prisma.exit_strategy.findFirst({
       where: { id, account_id: accountId },
-      select: { id: true },
+      select: { id: true, coin_symbol: true },
     })
-    if (!exists) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    if (!strategy) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+    const holding = await getOpenSpotHolding(accountId, strategy.coin_symbol.toUpperCase())
+    const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0
 
     const proceeds = data.quantitySold * data.executedPriceUsd
-    const realizedProfit = data.quantitySold * (data.executedPriceUsd - data.targetPriceUsd)
+    const realizedProfit = data.quantitySold * (data.executedPriceUsd - entryPriceUsd)
 
     await prisma.exit_strategy_execution.create({
       data: {

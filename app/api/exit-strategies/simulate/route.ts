@@ -29,10 +29,9 @@ export async function POST(req: Request) {
     const coin = body.coinSymbol.trim().toUpperCase()
     const sellPct = body.sellPercent / 100
     const gainStep = body.gainPercent
-    const maxSteps = body.maxSteps ?? 5
+    const maxSteps = body.maxSteps ?? 10
 
     const holding = await getOpenSpotHolding(accountId, coin)
-
     const qtyOpen = holding?.qty ?? 0
     const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0
 
@@ -44,32 +43,34 @@ export async function POST(req: Request) {
       targetPriceUsd: number
       plannedQtyToSell: number
       executedQtyToSell: null
-      proceedsUsd: null
+      proceedsUsd: number
       remainingQtyAfter: number
-      realizedProfitUsd: null
+      realizedProfitUsd: number
       cumulativeRealizedProfitUsd: number
+      isExecuted: false
     }> = []
 
     for (let i = 1; i <= maxSteps; i++) {
       const gain = round(gainStep * i, 2)
       const target = entryPriceUsd > 0 ? entryPriceUsd * (1 + gain / 100) : 0
 
-      const plannedQty = remaining > 0 ? remaining * sellPct : 0
+      const qtySoldNow = remaining > 0 ? remaining * sellPct : 0
+      const proceeds = qtySoldNow * target
+      const profit = qtySoldNow * (target - entryPriceUsd)
 
-      const proceedsSim = plannedQty * target
-      const profitSim = plannedQty * (target - entryPriceUsd)
-      remaining = Math.max(0, remaining - plannedQty)
-      cumulative += profitSim
+      remaining = Math.max(0, remaining - qtySoldNow)
+      cumulative += profit
 
       rows.push({
         gainPercent: gain,
         targetPriceUsd: round(target, 8),
-        plannedQtyToSell: round(plannedQty, 8),
+        plannedQtyToSell: round(qtySoldNow, 8),
         executedQtyToSell: null,
-        proceedsUsd: null,
+        proceedsUsd: round(proceeds, 2),
         remainingQtyAfter: round(remaining, 8),
-        realizedProfitUsd: null,
+        realizedProfitUsd: round(profit, 2),
         cumulativeRealizedProfitUsd: round(cumulative, 2),
+        isExecuted: false,
       })
 
       if (remaining <= 0) break
