@@ -106,10 +106,7 @@ export default function PortfolioPage() {
     <div className="grid gap-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-cyan-300 text-sky-700 font-bold flex items-center justify-center">
-            M
-          </div>
-          <div className="text-xl font-semibold">Main Portfolio</div>
+      
         </div>
 
         <div className="flex gap-3">
