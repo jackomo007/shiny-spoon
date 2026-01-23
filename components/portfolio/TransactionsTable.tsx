@@ -37,7 +37,6 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
       <div className="px-5 py-4 border-b border-[#eef2f7] flex items-center justify-between gap-3">
         <div>
           <div className="font-semibold">Transactions</div>
-          <div className="text-xs text-gray-500">All portfolio transactions (spot)</div>
         </div>
 
         <input
