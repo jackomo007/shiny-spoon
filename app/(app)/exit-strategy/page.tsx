@@ -60,9 +60,9 @@ function clamp(n: number, min: number, max: number) {
 
 function ScaleOutPlanTable({ rows, coinSymbol }: { rows: ExitStrategyStepRow[]; coinSymbol: string }) {
   return (
-    <div className="rounded-xl border bg-white overflow-x-auto">
+    <div className="rounded-xl border bg-white overflow-x-auto overflow-y-auto max-h-[45vh]">
       <table className="w-full text-sm">
-        <thead className="border-b bg-gray-50">
+        <thead className="border-b bg-gray-50 sticky top-0 z-10">
           <tr className="text-left text-gray-600">
             <th className="px-4 py-3">Gain</th>
             <th className="px-4 py-3">Target Price</th>
@@ -81,13 +81,9 @@ function ScaleOutPlanTable({ rows, coinSymbol }: { rows: ExitStrategyStepRow[]; 
               <tr key={r.gainPercent} className="border-b last:border-b-0">
                 <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
                 <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
-                <td className="px-4 py-3">
-                  {num(qtySold, 8).replace(/\.?0+$/, "")}
-                </td>
+                <td className="px-4 py-3">{num(qtySold, 8).replace(/\.?0+$/, "")}</td>
                 <td className="px-4 py-3">{usd(r.proceedsUsd)}</td>
-                <td className="px-4 py-3">
-                  {num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")} 
-                </td>
+                <td className="px-4 py-3">{num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}</td>
                 <td className="px-4 py-3">{usd(r.realizedProfitUsd)}</td>
                 <td className="px-4 py-3">{usd(r.cumulativeRealizedProfitUsd)}</td>
               </tr>
@@ -385,7 +381,7 @@ export default function ExitStrategyPage() {
                 onClick={() => void simulatePlan()}
                 type="button"
                 disabled={simLoading || !canShowPctFields}
-                title="Preview do plano sem salvar"
+                title="Preview the plan without saving"
               >
                 {simLoading ? "Simulating…" : "Simulate Scale-Out Plan"}
               </button>
@@ -408,65 +404,69 @@ export default function ExitStrategyPage() {
             </div>
           }
         >
-          <div className="grid gap-3">
-            {addError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addError}</div>
-            )}
+          <div className="max-h-[70vh] overflow-y-auto pr-2">
+            <div className="grid gap-3">
+              {addError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {addError}
+                </div>
+              )}
 
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">Coin</span>
-              <AssetAutocomplete value={coinSymbol} onChange={handleCoinChange} />
-            </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Coin</span>
+                <AssetAutocomplete value={coinSymbol} onChange={handleCoinChange} />
+              </label>
 
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">Strategy Type</span>
-              <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                value={strategyType}
-                onChange={(e) => setStrategyType(e.target.value as StrategyType)}
-              >
-                <option value="percentage">Percentage Based</option>
-              </select>
-            </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Strategy Type</span>
+                <select
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={strategyType}
+                  onChange={(e) => setStrategyType(e.target.value as StrategyType)}
+                >
+                  <option value="percentage">Percentage Based</option>
+                </select>
+              </label>
 
-            {canShowPctFields && (
-              <>
-                <label className="grid gap-1">
-                  <span className="text-xs text-gray-500">Sell %</span>
-                  <input
-                    type="number"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    value={sellPercent}
-                    onChange={(e) => setSellPercent(Number(e.target.value))}
-                    min={0}
-                    max={100}
-                    step={0.01}
-                  />
-                </label>
+              {canShowPctFields && (
+                <>
+                  <label className="grid gap-1">
+                    <span className="text-xs text-gray-500">Sell %</span>
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      value={sellPercent}
+                      onChange={(e) => setSellPercent(Number(e.target.value))}
+                      min={0}
+                      max={100}
+                      step={0.01}
+                    />
+                  </label>
 
-                <label className="grid gap-1">
-                  <span className="text-xs text-gray-500">Gain Interval %</span>
-                  <input
-                    type="number"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    value={gainPercent}
-                    onChange={(e) => setGainPercent(Number(e.target.value))}
-                    min={0}
-                    step={0.01}
-                  />
-                </label>
-              </>
-            )}
+                  <label className="grid gap-1">
+                    <span className="text-xs text-gray-500">Gain Interval %</span>
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                      value={gainPercent}
+                      onChange={(e) => setGainPercent(Number(e.target.value))}
+                      min={0}
+                      step={0.01}
+                    />
+                  </label>
+                </>
+              )}
 
-            {simError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{simError}</div>
-            )}
+              {simError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{simError}</div>
+              )}
 
-            {simRows && (
-              <div className="mt-2">
-                <ScaleOutPlanTable rows={simRows} coinSymbol={coinSymbol} />
-              </div>
-            )}
+              {simRows && (
+                <div className="mt-2">
+                  <ScaleOutPlanTable rows={simRows} coinSymbol={coinSymbol} />
+                </div>
+              )}
+            </div>
           </div>
         </Modal>
       )}
