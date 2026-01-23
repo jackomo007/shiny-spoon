@@ -1,97 +1,121 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import AddTransactionModal from "@/components/portfolio/AddTransactionModal"
-import PortfolioSummaryCards from "@/components/portfolio/PortfolioSummaryCards" // você pode remover depois, se não quiser os 3 cards
-import AssetsTable, { AssetRow } from "@/components/portfolio/AssetsTable"
-import TransactionsTable, { TxRow } from "@/components/portfolio/TransactionsTable"
-import HoldingsAllocationCard, { AllocationAssetRow } from "@/components/portfolio/HoldingsAllocationCard"
-import TopPerformersCard from "@/components/portfolio/TopPerformersCard"
-import Card from "@/components/ui/Card"
-import { usd, pct } from "@/components/portfolio/format"
+import { useEffect, useState } from "react";
+import AddTransactionModal from "@/components/portfolio/AddTransactionModal";
+import PortfolioSummaryCards from "@/components/portfolio/PortfolioSummaryCards"; // você pode remover depois, se não quiser os 3 cards
+import AssetsTable, { AssetRow } from "@/components/portfolio/AssetsTable";
+import TransactionsTable, {
+  TxRow,
+} from "@/components/portfolio/TransactionsTable";
+import HoldingsAllocationCard, {
+  AllocationAssetRow,
+} from "@/components/portfolio/HoldingsAllocationCard";
+import TopPerformersCard from "@/components/portfolio/TopPerformersCard";
+import Card from "@/components/ui/Card";
+import { usd, pct } from "@/components/portfolio/format";
 
 type Summary = {
-  currentBalanceUsd: number
-  totalInvestedUsd: number
+  currentBalanceUsd: number;
+  totalInvestedUsd: number;
   profit: {
-    realized: { usd: number }
-    unrealized: { usd: number }
-    total: { usd: number; pct: number }
-  }
-  portfolio24h: { pct: number; usd: number }
-  topPerformer: null | { symbol: string; name: string | null; profitUsd: number; profitPct: number | null }
-}
+    realized: { usd: number };
+    unrealized: { usd: number };
+    total: { usd: number; pct: number };
+  };
+  portfolio24h: { pct: number; usd: number };
+  topPerformer: null | {
+    symbol: string;
+    name: string | null;
+    profitUsd: number;
+    profitPct: number | null;
+  };
+};
 
 type PortfolioApiRes = {
-  summary: Summary
-  assets: AssetRow[]
-  transactions: TxRow[]
-}
+  summary: Summary;
+  assets: AssetRow[];
+  transactions: TxRow[];
+};
 
-function BalanceCard(props: { summary: Summary }) {
-  const s = props.summary
-  const profitUp = s.profit.total.usd >= 0
+function BalanceCard({ summary: s }: { summary: Summary }) {
+  const profitUp = s.profit.total.usd >= 0;
 
   return (
-    <Card className="p-5">
+    <Card className="rounded-[14px] shadow-[0_8px_20px_rgba(0,0,0,0.04)] h-[356px] flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-slate-400 font-medium">Current Balance</div>
-        <div className="text-slate-400 font-medium">24h</div>
+        <div className="text-[15px] font-medium text-slate-400">
+          Current Balance
+        </div>
       </div>
 
-      <div className="text-4xl font-bold tracking-tight">{usd(s.currentBalanceUsd)}</div>
+      <div className="text-[36px] font-bold tracking-[-0.5px] mb-2">
+        {usd(s.currentBalanceUsd)}
+      </div>
 
-      <div className="mt-4 border-t pt-4 space-y-3 text-sm">
-        <div className="flex items-center justify-between">
-          <div className="text-slate-400">Total Profit</div>
-          <div className={`font-semibold ${profitUp ? "text-emerald-600" : "text-red-600"}`}>
-            {pct(s.profit.total.pct)} {usd(s.profit.total.usd)}
+      <div className="text-[15px]">
+        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+          <div className="text-slate-400 flex items-center gap-2">
+            Total Profit <span className="text-slate-300">ⓘ</span>
+          </div>
+          <div className="font-semibold flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-[10px] py-[6px] rounded-full text-[13px] font-semibold bg-emerald-50 text-emerald-600">
+              {pct(s.profit.total.pct)}
+            </span>
+            <span className={profitUp ? "text-emerald-600" : "text-red-600"}>
+              {usd(s.profit.total.usd)}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="text-slate-400">Realised Profit</div>
+        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+          <div className="text-slate-400 flex items-center gap-2">
+            Realised Profit <span className="text-slate-300">ⓘ</span>
+          </div>
           <div className="font-semibold">{usd(s.profit.realized.usd)}</div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="text-slate-400">Unrealised Profit</div>
-          <div className="font-semibold text-emerald-600">{usd(s.profit.unrealized.usd)}</div>
+        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+          <div className="text-slate-400 flex items-center gap-2">
+            Unrealised Profit <span className="text-slate-300">ⓘ</span>
+          </div>
+          <div className="font-semibold text-emerald-600">
+            {usd(s.profit.unrealized.usd)}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between py-[14px] border-t border-slate-200 pb-6">
           <div className="text-slate-400">Total Invested</div>
           <div className="font-semibold">{usd(s.totalInvestedUsd)}</div>
         </div>
       </div>
     </Card>
-  )
+  );
 }
 
 export default function PortfolioPage() {
-  const [data, setData] = useState<PortfolioApiRes | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [data, setData] = useState<PortfolioApiRes | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   async function load() {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/portfolio", { cache: "no-store" })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const j = (await res.json()) as PortfolioApiRes
-      setData(j)
+      const res = await fetch("/api/portfolio", { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as PortfolioApiRes;
+      setData(j);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load")
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    void load()
-  }, [])
+    void load();
+  }, []);
 
   const hasAssets = (data?.assets?.length ?? 0) > 0
 
@@ -127,7 +151,8 @@ export default function PortfolioPage() {
           <div className="max-w-xl">
             <div className="text-xl font-semibold">Your Portfolio is Empty</div>
             <div className="text-sm text-gray-600 mt-2">
-              Add a new asset with the button below or use search to start tracking your portfolio.
+              Add a new asset with the button below or use search to start
+              tracking your portfolio.
             </div>
 
             <button
@@ -140,16 +165,17 @@ export default function PortfolioPage() {
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="grid gap-6">
-            <BalanceCard summary={data.summary} />
-            <TopPerformersCard topPerformer={data.summary.topPerformer} />
-          </div>
+          {/* Fila 1 */}
+          <BalanceCard summary={data.summary} />
+          <HoldingsAllocationCard assets={allocationAssets} />
 
-          <div className="grid gap-6">
-            <HoldingsAllocationCard assets={allocationAssets} />
-            <AssetsTable assets={data.assets} />
-            <TransactionsTable rows={data.transactions} />
-          </div>
+          {/* Fila 2 */}
+          <TopPerformersCard topPerformer={data.summary.topPerformer} />
+          <AssetsTable assets={data.assets} />
+
+          {/* Fila 3 (solo derecha) */}
+          <div className="hidden lg:block" />
+          <TransactionsTable rows={data.transactions} />
         </div>
       )}
 
@@ -157,8 +183,8 @@ export default function PortfolioPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onDone={async () => {
-          setModalOpen(false)
-          await load()
+          setModalOpen(false);
+          await load();
         }}
       />
 
@@ -166,5 +192,5 @@ export default function PortfolioPage() {
         <span>© 2025 Stakk AI. All rights reserved.</span>
       </footer>
     </div>
-  )
+  );
 }
