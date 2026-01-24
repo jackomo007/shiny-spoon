@@ -40,7 +40,7 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
 
   return (
     <Card className="p-0 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#eef2f7] flex items-center justify-between gap-3">
+      <div className="pt-1 pb-3 flex items-center justify-between gap-3">
         <div>
           <div className="font-semibold">Transactions</div>
         </div>
@@ -52,10 +52,8 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
-
-      <div className="overflow-x-auto">
         <Table>
-          <thead>
+          <thead className="border-b border-[#eef2f7]">
             <tr>
               <Th>Type</Th>
               <Th>Quantity</Th>
@@ -119,7 +117,6 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
             })}
           </tbody>
         </Table>
-      </div>
     </Card>
   )
 }

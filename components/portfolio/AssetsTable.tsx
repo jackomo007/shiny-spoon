@@ -25,13 +25,14 @@ export default function AssetsTable(props: { assets: AssetRow[]; title?: string 
 
   return (
     <Card className="p-0 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#eef2f7]">
-        <div className="font-semibold text-[#0f172a]">{props.title ?? "Your Assets"}</div>
+      <div className="pt-1 pb-3 flex items-center justify-between gap-3">
+        <div className="font-semibold text-[#0f172a]">
+          {props.title ?? "Your Assets"}
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
         <Table>
-          <thead>
+          <thead className="border-b border-[#eef2f7]">
             <tr>
               <Th>Asset</Th>
               <Th>Price / 24h</Th>
@@ -96,7 +97,6 @@ export default function AssetsTable(props: { assets: AssetRow[]; title?: string 
             })}
           </tbody>
         </Table>
-      </div>
     </Card>
   )
 }

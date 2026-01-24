@@ -13,8 +13,15 @@ export function Table({
   ...rest
 }: TableProps) {
   return (
-    <div className={["overflow-x-auto", containerClassName].filter(Boolean).join(" ")}>
-      <table className={["w-full text-sm", className].filter(Boolean).join(" ")} {...rest}>
+    <div
+      className={["overflow-x-auto", containerClassName]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <table
+        className={["w-full text-sm", className].filter(Boolean).join(" ")}
+        {...rest}
+      >
         {children}
       </table>
     </div>
@@ -25,7 +32,9 @@ type ThProps = React.ThHTMLAttributes<HTMLTableCellElement>;
 export function Th({ children, className, ...rest }: ThProps) {
   return (
     <th
-      className={["text-left text-gray-500 font-medium pb-2", className].filter(Boolean).join(" ")}
+      className={["text-left text-gray-500 font-medium pb-2", className]
+        .filter(Boolean)
+        .join(" ")}
       {...rest}
     >
       {children}
@@ -37,7 +46,9 @@ type TdProps = React.TdHTMLAttributes<HTMLTableCellElement>;
 export function Td({ children, className, ...rest }: TdProps) {
   return (
     <td
-      className={["py-3 border-top border-gray-100", className].filter(Boolean).join(" ")}
+      className={["py-4 align-middle border-b border-[#eef2f7]", className]
+        .filter(Boolean)
+        .join(" ")}
       {...rest}
     >
       {children}
@@ -49,7 +60,9 @@ type TrProps = React.HTMLAttributes<HTMLTableRowElement>;
 export function Tr({ children, className, ...rest }: TrProps) {
   return (
     <tr
-      className={["[&>td]:pr-4 last:[&>td]:pr-0", className].filter(Boolean).join(" ")}
+      className={["[&>td]:pr-4 last:[&>td]:pr-0", className]
+        .filter(Boolean)
+        .join(" ")}
       {...rest}
     >
       {children}
