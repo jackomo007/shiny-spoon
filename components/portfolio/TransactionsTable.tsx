@@ -34,8 +34,6 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
   }, [props.rows, q])
 
   function badgeModeForTx(t: TxRow): "coin" | "win" | "loss" {
-    // Sua regra: em transactions, cor verde se win, vermelha se loss.
-    // Só faz sentido quando existe PnL (normalmente no SELL).
     if (t.gainLossUsd == null) return "coin"
     return t.gainLossUsd >= 0 ? "win" : "loss"
   }
@@ -78,12 +76,13 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
               return (
                 <Tr key={t.id}>
                   <Td className="font-medium">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 pl-1">
                       <CoinBadge
                         symbol={t.symbol}
                         iconUrl={t.iconUrl ?? null}
                         mode={badgeModeForTx(t)}
                         size="md"
+                        showBorder
                       />
 
                       <div className="grid">
