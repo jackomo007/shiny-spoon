@@ -12,15 +12,6 @@ export type SpotTxRow = {
   executedAt: Date
 }
 
-export type HoldingRow = {
-  symbol: string
-  qtyBought: number
-  qtySold: number
-  investedUsd: number // sum(qty * price) for buys
-  proceedsUsd: number // sum(qty * price) for sells
-  feesUsd: number
-}
-
 export const PortfolioRepoV2 = {
   async ensureDefaultJournal(accountId: string) {
     const existing = await prisma.journal.findFirst({
@@ -66,21 +57,27 @@ export const PortfolioRepoV2 = {
         amount: true,
         entry_price: true,
         buy_fee: true,
+        sell_fee: true,
         trade_datetime: true,
       },
       orderBy: { trade_datetime: "desc" },
       take: 250,
     })
 
-    return rows.map((r) => ({
-      id: r.id,
-      symbol: String(r.asset_name).toUpperCase(),
-      side: r.side as Side,
-      qty: Number(r.amount ?? 0),
-      priceUsd: Number(r.entry_price ?? 0),
-      feeUsd: Number(r.buy_fee ?? 0),
-      executedAt: new Date(r.trade_datetime),
-    }))
+    return rows.map((r) => {
+      const side = r.side as Side
+      const feeUsd = Number(side === "buy" ? r.buy_fee : r.sell_fee) || 0
+
+      return {
+        id: r.id,
+        symbol: String(r.asset_name).toUpperCase(),
+        side,
+        qty: Number(r.amount ?? 0),
+        priceUsd: Number(r.entry_price ?? 0),
+        feeUsd,
+        executedAt: new Date(r.trade_datetime),
+      }
+    })
   },
 
   async createSpotTransaction(params: {
@@ -95,10 +92,8 @@ export const PortfolioRepoV2 = {
   }) {
     const journalId = await this.ensureDefaultJournal(params.accountId)
     const strategyId = await this.ensureNoneStrategy(params.accountId)
-
-    // trade_type: você pode ter um enum/const interno no projeto.
-    // Aqui usamos 0 para "spot". Se no seu app for outro valor, ajuste aqui.
     const tradeType = 0
+    const feeUsd = params.feeUsd ?? 0
 
     const je = await prisma.journal_entry.create({
       data: {
@@ -115,8 +110,8 @@ export const PortfolioRepoV2 = {
         strategy_rule_match: 0,
         amount_spent: params.qty * params.priceUsd,
         journal_id: journalId,
-        buy_fee: params.feeUsd ?? 0,
-        sell_fee: 0,
+        buy_fee: params.side === "buy" ? feeUsd : 0,
+        sell_fee: params.side === "sell" ? feeUsd : 0,
         timeframe_code: "1D",
         trading_fee: 0,
       },

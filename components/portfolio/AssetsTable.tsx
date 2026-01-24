@@ -9,6 +9,7 @@ export type AssetRow = {
   symbol: string
   name: string | null
   coingeckoId: string | null
+  iconUrl: string | null
   priceUsd: number
   change24hPct: number | null
   totalInvestedUsd: number
@@ -50,7 +51,7 @@ export default function AssetsTable(props: { assets: AssetRow[]; title?: string 
                 <Tr key={a.symbol}>
                   <Td className="font-medium">
                     <div className="flex items-center gap-3">
-                      <CoinBadge symbol={a.symbol} mode="coin" />
+                      <CoinBadge symbol={a.symbol} iconUrl={a.iconUrl ?? null} mode="coin" />
 
                       <div className="grid">
                         <span className="text-[#0f172a]">{a.symbol}</span>

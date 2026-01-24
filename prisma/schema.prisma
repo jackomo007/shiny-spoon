@@ -269,13 +269,17 @@ model trade_pre_analysis {
 }
 
 model verified_asset {
-  id         String   @id @default(uuid()) @db.Char(36)
-  symbol     String   @unique @db.VarChar(50)
-  name       String?  @db.VarChar(100)
-  exchange   String   @default("Binance") @db.VarChar(50)
-  created_at DateTime @default(now()) @db.DateTime(0)
+  id           String   @id @default(uuid()) @db.Char(36)
+  symbol       String   @unique @db.VarChar(50)
+  name         String?  @db.VarChar(100)
+  exchange     String   @default("Binance") @db.VarChar(50)
+  coingecko_id String?  @db.VarChar(100)
+  image_url    String?  @db.VarChar(2048)
+  created_at   DateTime @default(now()) @db.DateTime(0)
+  updated_at   DateTime @updatedAt @db.DateTime(0)
 
   @@index([name])
+  @@index([coingecko_id])
 }
 
 model app_prompt {

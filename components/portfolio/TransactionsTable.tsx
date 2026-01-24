@@ -11,6 +11,7 @@ export type TxRow = {
   side: "buy" | "sell"
   symbol: string
   name: string | null
+  iconUrl: string | null
   executedAt: string
   qty: number
   priceUsd: number
@@ -31,6 +32,13 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
       return s.includes(query)
     })
   }, [props.rows, q])
+
+  function badgeModeForTx(t: TxRow): "coin" | "win" | "loss" {
+    // Sua regra: em transactions, cor verde se win, vermelha se loss.
+    // Só faz sentido quando existe PnL (normalmente no SELL).
+    if (t.gainLossUsd == null) return "coin"
+    return t.gainLossUsd >= 0 ? "win" : "loss"
+  }
 
   return (
     <Card className="p-0 rounded-2xl overflow-hidden">
@@ -71,12 +79,15 @@ export default function TransactionsTable(props: { rows: TxRow[] }) {
                 <Tr key={t.id}>
                   <Td className="font-medium">
                     <div className="flex items-center gap-3">
-                      <CoinBadge symbol={t.symbol} mode={isSell ? "sell" : "buy"} size="md" />
+                      <CoinBadge
+                        symbol={t.symbol}
+                        iconUrl={t.iconUrl ?? null}
+                        mode={badgeModeForTx(t)}
+                        size="md"
+                      />
 
                       <div className="grid">
-                        <div className="text-[#0f172a]">
-                          {isSell ? "Sell" : "Buy"} {t.symbol}
-                        </div>
+                        <div className="text-[#0f172a]">{isSell ? "Sell" : "Buy"} {t.symbol}</div>
                         <div className="text-xs text-gray-500">{dt.toLocaleString()}</div>
                       </div>
                     </div>

@@ -6,11 +6,10 @@ const nextConfig: NextConfig = {
   },
 
   images: {
-    ...(module.exports?.images || {}),
     remotePatterns: [
-      ...(module.exports?.images?.remotePatterns || []),
-      { protocol: 'https', hostname: 'onpoint-tradingapp.s3.amazonaws.com' },
-      { protocol: 'https', hostname: '*.amazonaws.com' },
+      { protocol: "https", hostname: "onpoint-tradingapp.s3.amazonaws.com" },
+      { protocol: "https", hostname: "coin-images.coingecko.com" },
+      { protocol: "https", hostname: "assets.coingecko.com" },
     ],
   },
 
