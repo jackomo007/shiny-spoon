@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import AddTransactionModal from "@/components/portfolio/AddTransactionModal";
 import AssetsTable, { AssetRow } from "@/components/portfolio/AssetsTable";
 import TransactionsTable, { TxRow } from "@/components/portfolio/TransactionsTable";
-import HoldingsAllocationCard, { AllocationAssetRow } from "@/components/portfolio/HoldingsAllocationCard";
+import HoldingsAllocationCard, {
+  AllocationAssetRow,
+} from "@/components/portfolio/HoldingsAllocationCard";
 import TopPerformersCard from "@/components/portfolio/TopPerformersCard";
 import Card from "@/components/ui/Card";
-import { usd, pct } from "@/components/portfolio/format";
+import { usd, pct, cls } from "@/components/portfolio/format";
 
 type Summary = {
   currentBalanceUsd: number;
@@ -58,6 +60,7 @@ function BalanceCardEmpty({ summary: s }: { summary: Summary }) {
 
 function BalanceCardFilled({ summary: s }: { summary: Summary }) {
   const profitUp = s.profit.total.usd >= 0;
+  const unrealizedUp = s.profit.unrealized.usd >= 0;
 
   return (
     <Card className="rounded-[14px] shadow-[0_8px_20px_rgba(0,0,0,0.04)] h-[356px] flex flex-col p-6">
@@ -75,7 +78,12 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
             Total Profit <span className="text-slate-300">ⓘ</span>
           </div>
           <div className="font-semibold flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-[10px] py-[6px] rounded-full text-[13px] font-semibold bg-emerald-50 text-emerald-600">
+            <span
+              className={cls(
+                "inline-flex items-center gap-1 px-[10px] py-[6px] rounded-full text-[13px] font-semibold",
+                profitUp ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+              )}
+            >
               {pct(s.profit.total.pct)}
             </span>
             <span className={profitUp ? "text-emerald-600" : "text-red-600"}>
@@ -95,7 +103,10 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
           <div className="text-slate-400 flex items-center gap-2">
             Unrealised Profit <span className="text-slate-300">ⓘ</span>
           </div>
-          <div className="font-semibold text-emerald-600">{usd(s.profit.unrealized.usd)}</div>
+
+          <div className={cls("font-semibold", unrealizedUp ? "text-emerald-600" : "text-red-600")}>
+            {usd(s.profit.unrealized.usd)}
+          </div>
         </div>
 
         <div className="flex items-center justify-between py-[14px] border-t border-slate-200 pb-6">
