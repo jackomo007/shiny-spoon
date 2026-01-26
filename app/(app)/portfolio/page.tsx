@@ -215,7 +215,7 @@ export default function PortfolioPage() {
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <BalanceCardFilled summary={data.summary} />
           <HoldingsAllocationCard assets={allocationAssets} />
-          <TopPerformersCard topPerformer={data.summary.topPerformer} />
+          <TopPerformersCard assets={data.assets} />
           <AssetsTable assets={data.assets} />
           <div className="hidden lg:block" />
           <TransactionsTable rows={data.transactions} />
