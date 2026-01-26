@@ -52,13 +52,23 @@ export default function AddTransactionModal(props: {
 
   const [side, setSide] = useState<"buy" | "sell">("buy")
   const [priceMode, setPriceMode] = useState<"market" | "custom">("market")
-  const [priceUsd, setPriceUsd] = useState<number>(0)
+
+  // IMPORTANT: keep raw string for typing behavior (same as Journal)
+  const [priceRaw, setPriceRaw] = useState<string>("")
 
   const [amountRaw, setAmountRaw] = useState<string>("")
   const [totalRaw, setTotalRaw] = useState<string>("")
   const [busy, setBusy] = useState(false)
 
   const lastEdited = useRef<"amount" | "total" | null>(null)
+
+  function numFromRaw(s: string) {
+    if (!s) return 0
+    const n = Number(s)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const priceUsd = useMemo(() => numFromRaw(priceRaw), [priceRaw])
 
   function resetAll() {
     setStep("pick")
@@ -68,7 +78,7 @@ export default function AddTransactionModal(props: {
 
     setSide("buy")
     setPriceMode("market")
-    setPriceUsd(0)
+    setPriceRaw("")
 
     setAmountRaw("")
     setTotalRaw("")
@@ -113,7 +123,10 @@ export default function AddTransactionModal(props: {
     }
 
     const t = setTimeout(async () => {
-      const res = await fetch(`/api/portfolio/assets/search?q=${encodeURIComponent(q)}`, { cache: "no-store" })
+      const res = await fetch(
+        `/api/portfolio/assets/search?q=${encodeURIComponent(q)}`,
+        { cache: "no-store" }
+      )
       if (!res.ok) return
 
       const j = (await res.json()) as SearchAssetsResponse
@@ -136,16 +149,14 @@ export default function AddTransactionModal(props: {
   )
 
   async function loadMarketPrice(id: string) {
-    const res = await fetch(`/api/portfolio/assets/price?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+    const res = await fetch(
+      `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
+      { cache: "no-store" }
+    )
     if (!res.ok) return
     const j = (await res.json()) as PriceResponse
-    setPriceUsd(Number(j.priceUsd ?? 0))
-  }
-
-  function numFromRaw(s: string) {
-    if (!s) return 0
-    const n = Number(s)
-    return Number.isFinite(n) ? n : 0
+    const p = Number(j.priceUsd ?? 0)
+    setPriceRaw(p > 0 ? String(p) : "")
   }
 
   useEffect(() => {
@@ -210,6 +221,7 @@ export default function AddTransactionModal(props: {
                     asset: { id: selected.id, symbol: selected.symbol, name: selected.name },
                     side,
                     priceMode,
+                    // For custom mode, we submit the parsed number from priceRaw
                     priceUsd: priceMode === "custom" ? priceUsd : undefined,
                     qty: lastEdited.current === "total" ? undefined : amount || undefined,
                     totalUsd: lastEdited.current === "amount" ? undefined : total || undefined,
@@ -225,7 +237,8 @@ export default function AddTransactionModal(props: {
 
                   if (!res.ok) {
                     const j = (await res.json().catch(() => null)) as { error?: unknown } | null
-                    const msg = typeof j?.error === "string" ? j.error : "Failed to add transaction"
+                    const msg =
+                      typeof j?.error === "string" ? j.error : "Failed to add transaction"
                     throw new Error(msg)
                   }
 
@@ -268,6 +281,7 @@ export default function AddTransactionModal(props: {
                     setStep("form")
                     setSide("buy")
                     setPriceMode("market")
+                    setPriceRaw("")
                     setAmountRaw("")
                     setTotalRaw("")
                     lastEdited.current = null
@@ -279,7 +293,9 @@ export default function AddTransactionModal(props: {
                       <span className="font-semibold">{a.symbol}</span>
                       <span className="text-xs text-gray-500">{a.name}</span>
                     </div>
-                    <div className="text-sm text-gray-700">{a.priceUsd != null ? usd(a.priceUsd) : ""}</div>
+                    <div className="text-sm text-gray-700">
+                      {a.priceUsd != null ? usd(a.priceUsd) : ""}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -299,6 +315,7 @@ export default function AddTransactionModal(props: {
                       setStep("form")
                       setSide("buy")
                       setPriceMode("market")
+                      setPriceRaw("")
                       setAmountRaw("")
                       setTotalRaw("")
                       lastEdited.current = null
@@ -321,7 +338,9 @@ export default function AddTransactionModal(props: {
             <button
               className={cls(
                 "px-3 py-2 rounded-xl text-sm border",
-                side === "buy" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white border-gray-200"
+                side === "buy"
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-white border-gray-200"
               )}
               onClick={() => setSide("buy")}
             >
@@ -330,7 +349,9 @@ export default function AddTransactionModal(props: {
             <button
               className={cls(
                 "px-3 py-2 rounded-xl text-sm border",
-                side === "sell" ? "bg-red-600 text-white border-red-600" : "bg-white border-gray-200"
+                side === "sell"
+                  ? "bg-red-600 text-white border-red-600"
+                  : "bg-white border-gray-200"
               )}
               onClick={() => setSide("sell")}
             >
@@ -347,8 +368,10 @@ export default function AddTransactionModal(props: {
                 onChange={async (e) => {
                   const next = e.target.value as "market" | "custom"
                   setPriceMode(next)
-                  if (next === "market" && selected) {
-                    await loadMarketPrice(selected.id)
+
+                  if (next === "market") {
+                    setPriceRaw("")
+                    if (selected) await loadMarketPrice(selected.id)
                   }
                 }}
               >
@@ -359,12 +382,17 @@ export default function AddTransactionModal(props: {
 
             <label className="grid gap-1">
               <span className="text-xs text-gray-500">{priceLabel}</span>
-              <input
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                value={priceUsd ? String(priceUsd) : ""}
-                readOnly={priceMode === "market"}
-                onChange={(e) => setPriceUsd(Number(e.target.value))}
+              <MoneyInputStandalone
+                valueRaw={priceRaw}
+                onChangeRaw={(v) => {
+                  // only allow editing in custom mode; in market it is readonly
+                  if (priceMode === "market") return
+                  setPriceRaw(v)
+                }}
+                maxDecimals={8}
                 placeholder="0"
+                readOnly={priceMode === "market"}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
               />
             </label>
           </div>
@@ -414,7 +442,7 @@ export default function AddTransactionModal(props: {
               setSelected(null)
               setAmountRaw("")
               setTotalRaw("")
-              setPriceUsd(0)
+              setPriceRaw("")
               lastEdited.current = null
             }}
             type="button"
