@@ -53,7 +53,6 @@ export default function AddTransactionModal(props: {
   const [side, setSide] = useState<"buy" | "sell">("buy")
   const [priceMode, setPriceMode] = useState<"market" | "custom">("market")
 
-  // IMPORTANT: keep raw string for typing behavior (same as Journal)
   const [priceRaw, setPriceRaw] = useState<string>("")
 
   const [amountRaw, setAmountRaw] = useState<string>("")
@@ -69,6 +68,8 @@ export default function AddTransactionModal(props: {
   }
 
   const priceUsd = useMemo(() => numFromRaw(priceRaw), [priceRaw])
+
+  const hasQuery = query.trim().length > 0
 
   function resetAll() {
     setStep("pick")
@@ -221,7 +222,6 @@ export default function AddTransactionModal(props: {
                     asset: { id: selected.id, symbol: selected.symbol, name: selected.name },
                     side,
                     priceMode,
-                    // For custom mode, we submit the parsed number from priceRaw
                     priceUsd: priceMode === "custom" ? priceUsd : undefined,
                     qty: lastEdited.current === "total" ? undefined : amount || undefined,
                     totalUsd: lastEdited.current === "amount" ? undefined : total || undefined,
@@ -269,38 +269,40 @@ export default function AddTransactionModal(props: {
             />
           </label>
 
-          <div className="grid gap-2">
-            <div className="text-xs font-semibold text-gray-600">Top by market cap</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {top.map((a) => (
-                <button
-                  key={a.id}
-                  className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
-                  onClick={async () => {
-                    setSelected(a)
-                    setStep("form")
-                    setSide("buy")
-                    setPriceMode("market")
-                    setPriceRaw("")
-                    setAmountRaw("")
-                    setTotalRaw("")
-                    lastEdited.current = null
-                    await loadMarketPrice(a.id)
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="grid">
-                      <span className="font-semibold">{a.symbol}</span>
-                      <span className="text-xs text-gray-500">{a.name}</span>
+          {!hasQuery && (
+            <div className="grid gap-2">
+              <div className="text-xs font-semibold text-gray-600">Top by market cap</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {top.map((a) => (
+                  <button
+                    key={a.id}
+                    className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
+                    onClick={async () => {
+                      setSelected(a)
+                      setStep("form")
+                      setSide("buy")
+                      setPriceMode("market")
+                      setPriceRaw("")
+                      setAmountRaw("")
+                      setTotalRaw("")
+                      lastEdited.current = null
+                      await loadMarketPrice(a.id)
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="grid">
+                        <span className="font-semibold">{a.symbol}</span>
+                        <span className="text-xs text-gray-500">{a.name}</span>
+                      </div>
+                      <div className="text-sm text-gray-700">
+                        {a.priceUsd != null ? usd(a.priceUsd) : ""}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-700">
-                      {a.priceUsd != null ? usd(a.priceUsd) : ""}
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {results.length > 0 && (
             <div className="grid gap-2">
@@ -385,7 +387,6 @@ export default function AddTransactionModal(props: {
               <MoneyInputStandalone
                 valueRaw={priceRaw}
                 onChangeRaw={(v) => {
-                  // only allow editing in custom mode; in market it is readonly
                   if (priceMode === "market") return
                   setPriceRaw(v)
                 }}
