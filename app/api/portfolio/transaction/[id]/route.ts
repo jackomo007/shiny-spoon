@@ -14,17 +14,27 @@ const Body = z.object({
   executedAt: z.string().datetime().optional(),
 });
 
-export async function PUT(req: Request, ctx: { params: { id: string } }) {
+type RouteContext = {
+  params: {
+    id: string;
+  };
+};
+
+export async function PUT(req: Request, context: unknown) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const tradeId = ctx.params.id;
+    const { params } = context as RouteContext;
+    const tradeId = params.id;
+
     const input = Body.parse(await req.json());
 
-    const trade_datetime = input.executedAt ? new Date(input.executedAt) : undefined;
+    const trade_datetime = input.executedAt
+      ? new Date(input.executedAt)
+      : undefined;
 
     const data: Record<string, unknown> = {
       side: input.side,
@@ -48,7 +58,10 @@ export async function PUT(req: Request, ctx: { params: { id: string } }) {
     });
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ ok: true });
@@ -61,14 +74,15 @@ export async function PUT(req: Request, ctx: { params: { id: string } }) {
   }
 }
 
-export async function DELETE(req: Request, ctx: { params: { id: string } }) {
+export async function DELETE(req: Request, context: unknown) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const tradeId = ctx.params.id;
+    const { params } = context as RouteContext;
+    const tradeId = params.id;
 
     const result = await prisma.journal_entry.deleteMany({
       where: {
@@ -81,7 +95,10 @@ export async function DELETE(req: Request, ctx: { params: { id: string } }) {
     });
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ ok: true });
