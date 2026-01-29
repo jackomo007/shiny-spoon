@@ -549,7 +549,7 @@ export default function AddTransactionModal(props: {
             </div>
 
             <div className="text-xs text-gray-500">
-              Amount e Total se recalculam entre si. Em Market Price, o preço é buscado automaticamente e fica readonly.
+              Amount and Total are calculated from each other. In Market Price, the price is automatically retrieved and remains read-only.
             </div>
 
             <button
