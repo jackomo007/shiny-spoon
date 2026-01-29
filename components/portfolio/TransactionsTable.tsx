@@ -44,10 +44,6 @@ export default function TransactionsTable(props: {
   return (
     <Card className="p-0 rounded-2xl overflow-hidden">
       <div className="pt-1 pb-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="font-semibold">Transactions</div>
-        </div>
-
         <input
           className="w-[280px] max-w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
           placeholder="Search"

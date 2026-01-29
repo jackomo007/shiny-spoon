@@ -69,14 +69,14 @@ export default function HoldingsAllocationCard(props: {
   const hasData = pie.length > 0 && totalUsd > 0;
 
   return (
-    <Card className="p-6 rounded-2xl h-[356px]">
-      <div className="text-lg font-semibold mb-[1px]">Holdings Allocation</div>
+    <Card className="p-6 rounded-2xl min-h-[356px]">
+      <div className="text-lg font-semibold mb-1">Holdings Allocation</div>
 
       {!hasData ? (
         <div className="text-sm text-gray-600">No holdings yet.</div>
       ) : (
-        <div className="grid gap-[1px]">
-          <div className="h-[252px] w-full">
+        <div className="flex flex-col gap-3">
+          <div className="w-full h-[252px] min-h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -112,19 +112,21 @@ export default function HoldingsAllocationCard(props: {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            {pie.map((p) => (
-              <div
-                key={p.symbol}
-                className="flex items-center gap-2 text-sm text-gray-700"
-              >
-                <span
-                  className="inline-block h-3 w-10 rounded-sm"
-                  style={{ background: p.color }}
-                />
-                <span className="font-medium">{p.symbol}</span>
-              </div>
-            ))}
+          <div className="max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              {pie.map((p) => (
+                <div
+                  key={p.symbol}
+                  className="flex items-center gap-2 text-xs text-gray-700 whitespace-nowrap"
+                >
+                  <span
+                    className="inline-block h-3 w-10 rounded-sm shrink-0"
+                    style={{ background: p.color }}
+                  />
+                  <span className="font-medium">{p.symbol}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

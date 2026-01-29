@@ -14,22 +14,17 @@ const Body = z.object({
   executedAt: z.string().datetime().optional(),
 });
 
-export async function PUT(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export async function PUT(req: Request, ctx: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: tradeId } = await ctx.params;
+    const tradeId = ctx.params.id;
     const input = Body.parse(await req.json());
 
-    const trade_datetime = input.executedAt
-      ? new Date(input.executedAt)
-      : undefined;
+    const trade_datetime = input.executedAt ? new Date(input.executedAt) : undefined;
 
     const data: Record<string, unknown> = {
       side: input.side,
@@ -53,10 +48,7 @@ export async function PUT(
     });
 
     if (result.count === 0) {
-      return NextResponse.json(
-        { error: "Transaction not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
     return NextResponse.json({ ok: true });
@@ -65,6 +57,36 @@ export async function PUT(
       return NextResponse.json({ error: err.flatten() }, { status: 400 });
     }
     console.error("[PUT /api/portfolio/transaction/:id] error:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request, ctx: { params: { id: string } }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.accountId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const tradeId = ctx.params.id;
+
+    const result = await prisma.journal_entry.deleteMany({
+      where: {
+        id: tradeId,
+        account_id: session.accountId,
+        spot_trade: { some: {} },
+        asset_name: { not: "CASH" },
+        side: { in: ["buy", "sell"] },
+      },
+    });
+
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/portfolio/transaction/:id] error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

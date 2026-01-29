@@ -63,6 +63,8 @@ export default function AddTransactionModal(props: {
   const [totalRaw, setTotalRaw] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
   const lastEdited = useRef<"amount" | "total" | null>(null);
 
   function numFromRaw(s: string) {
@@ -88,6 +90,8 @@ export default function AddTransactionModal(props: {
     setAmountRaw("");
     setTotalRaw("");
     setBusy(false);
+
+    setConfirmDeleteOpen(false);
 
     lastEdited.current = null;
   }
@@ -172,12 +176,13 @@ export default function AddTransactionModal(props: {
   }, [query, props.open]);
 
   const priceLabel = useMemo(
-    () =>
-      priceMode === "market" ? "Market Price (USD)" : "Custom Price (USD)",
+    () => (priceMode === "market" ? "Market Price (USD)" : "Custom Price (USD)"),
     [priceMode],
   );
 
   async function loadMarketPrice(id: string) {
+    revealConfirmDeleteIfOpen(false);
+
     const res = await fetch(
       `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
       { cache: "no-store" },
@@ -186,6 +191,10 @@ export default function AddTransactionModal(props: {
     const j = (await res.json()) as PriceResponse;
     const p = Number(j.priceUsd ?? 0);
     setPriceRaw(p > 0 ? String(p) : "");
+  }
+
+  function revealConfirmDeleteIfOpen(open: boolean) {
+    setConfirmDeleteOpen(open);
   }
 
   useEffect(() => {
@@ -202,329 +211,404 @@ export default function AddTransactionModal(props: {
       const newAmount = total / priceUsd;
       setAmountRaw(total ? String(newAmount) : "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceUsd]);
 
-  const canSave =
-    !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
+  const canSave = !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
+
+  const canDelete = mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
+
+  async function handleDeleteNow() {
+    if (!props.initialTx?.id) return;
+
+    try {
+      setBusy(true);
+
+      const res = await fetch(`/api/portfolio/transaction/${props.initialTx.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        const msg = typeof j?.error === "string" ? j.error : "Failed to delete transaction";
+        throw new Error(msg);
+      }
+
+      setConfirmDeleteOpen(false);
+
+      await props.onDone();
+      props.onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      alert(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <Modal
-      open={props.open}
-      onClose={() => {
-        props.onClose();
-      }}
-      title={
-        step === "pick"
-          ? mode === "edit"
-            ? "Edit Transaction"
-            : "Add Asset"
-          : mode === "edit"
-            ? `Edit Transaction • ${selected?.symbol ?? ""}`
-            : `Add Asset • ${selected?.symbol ?? ""}`
-      }
-      footer={
-        <div className="flex items-center justify-end gap-3">
-          <button
-            className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-            onClick={() => {
-              props.onClose();
-            }}
-            disabled={busy}
-          >
-            Cancel
-          </button>
+    <>
+      <Modal
+        open={props.open}
+        onClose={() => {
+          if (busy) return;
+          props.onClose();
+        }}
+        title={
+          step === "pick"
+            ? mode === "edit"
+              ? "Edit Transaction"
+              : "Add Asset"
+            : mode === "edit"
+              ? `Edit Transaction • ${selected?.symbol ?? ""}`
+              : `Add Asset • ${selected?.symbol ?? ""}`
+        }
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            {canDelete ? (
+              <button
+                className="rounded-xl bg-red-500 text-white px-4 py-2 text-sm hover:bg-red-600 disabled:opacity-50"
+                onClick={() => revealConfirmDeleteIfOpen(true)}
+                disabled={!canDelete}
+                type="button"
+              >
+                Delete
+              </button>
+            ) : (
+              <div />
+            )}
 
-          {step === "pick" ? null : (
-            <button
-              className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-              disabled={!canSave}
-              onClick={async () => {
-                if (!selected) return;
-                try {
-                  setBusy(true);
-                  const amount = numFromRaw(amountRaw);
-                  const total = numFromRaw(totalRaw);
+            <div className="flex items-center justify-end gap-3">
+              <button
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 disabled:opacity-50"
+                onClick={() => props.onClose()}
+                disabled={busy}
+                type="button"
+              >
+                Cancel
+              </button>
 
-                  const payload: {
-                    asset: { id: string; symbol: string; name: string };
-                    side: "buy" | "sell";
-                    priceMode: "market" | "custom";
-                    priceUsd?: number;
-                    qty?: number;
-                    totalUsd?: number;
-                    feeUsd: number;
-                    executedAt: string;
-                  } = {
-                    asset: {
-                      id: selected.id,
-                      symbol: selected.symbol,
-                      name: selected.name,
-                    },
-                    side,
-                    priceMode,
-                    priceUsd: priceMode === "custom" ? priceUsd : undefined,
-                    qty:
-                      lastEdited.current === "total"
-                        ? undefined
-                        : amount || undefined,
-                    totalUsd:
-                      lastEdited.current === "amount"
-                        ? undefined
-                        : total || undefined,
-                    feeUsd: 0,
-                    executedAt: new Date().toISOString(),
-                  };
+              {step === "pick" ? null : (
+                <button
+                  className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
+                  disabled={!canSave}
+                  onClick={async () => {
+                    if (!selected) return;
+                    try {
+                      setBusy(true);
+                      const amount = numFromRaw(amountRaw);
+                      const total = numFromRaw(totalRaw);
 
-                  const url =
-                    mode === "edit" && props.initialTx?.id
-                      ? `/api/portfolio/transaction/${props.initialTx.id}`
-                      : "/api/portfolio/add-transaction";
+                      const payload: {
+                        asset: { id: string; symbol: string; name: string };
+                        side: "buy" | "sell";
+                        priceMode: "market" | "custom";
+                        priceUsd?: number;
+                        qty?: number;
+                        totalUsd?: number;
+                        feeUsd: number;
+                        executedAt: string;
+                      } = {
+                        asset: {
+                          id: selected.id,
+                          symbol: selected.symbol,
+                          name: selected.name,
+                        },
+                        side,
+                        priceMode,
+                        priceUsd: priceMode === "custom" ? priceUsd : undefined,
+                        qty: lastEdited.current === "total" ? undefined : amount || undefined,
+                        totalUsd: lastEdited.current === "amount" ? undefined : total || undefined,
+                        feeUsd: 0,
+                        executedAt: new Date().toISOString(),
+                      };
 
-                  const method = mode === "edit" ? "PUT" : "POST";
+                      const url =
+                        mode === "edit" && props.initialTx?.id
+                          ? `/api/portfolio/transaction/${props.initialTx.id}`
+                          : "/api/portfolio/add-transaction";
 
-                  const res = await fetch(url, {
-                    method,
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(
-                      mode === "edit"
-                        ? {
-                            side,
-                            qty: amount,
-                            priceUsd: priceUsd,
-                            feeUsd: 0,
-                            executedAt: props.initialTx?.executedAt,
-                          }
-                        : payload,
-                    ),
-                  });
-                  if (!res.ok) {
-                    const j = (await res.json().catch(() => null)) as {
-                      error?: unknown;
-                    } | null;
-                    const msg =
-                      typeof j?.error === "string"
-                        ? j.error
-                        : "Failed to save changes";
+                      const method = mode === "edit" ? "PUT" : "POST";
 
-                    throw new Error(msg);
-                  }
+                      const res = await fetch(url, {
+                        method,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(
+                          mode === "edit"
+                            ? {
+                                side,
+                                qty: amount,
+                                priceUsd: priceUsd,
+                                feeUsd: 0,
+                                executedAt: props.initialTx?.executedAt,
+                              }
+                            : payload,
+                        ),
+                      });
 
-                  await props.onDone();
-                } catch (e) {
-                  const msg = e instanceof Error ? e.message : "Failed";
-                  alert(msg);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {mode === "edit" ? "Save changes" : "Save"}
-            </button>
-          )}
-        </div>
-      }
-    >
-      {step === "pick" && mode !== "edit" ? (
-        <div className="grid gap-4">
-          <label className="grid gap-1">
-            <span className="text-xs text-gray-500">Search asset</span>
-            <input
-              className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              placeholder="Search BTC, ETH, Solana..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
+                      if (!res.ok) {
+                        const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
+                        const msg =
+                          typeof j?.error === "string" ? j.error : "Failed to save changes";
+                        throw new Error(msg);
+                      }
 
-          {!hasQuery && (
-            <div className="grid gap-2">
-              <div className="text-xs font-semibold text-gray-600">
-                Top by market cap
+                      await props.onDone();
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Failed";
+                      alert(msg);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  type="button"
+                >
+                  {mode === "edit" ? "Save changes" : "Save"}
+                </button>
+              )}
+            </div>
+          </div>
+        }
+      >
+        {step === "pick" && mode !== "edit" ? (
+          <div className="grid gap-4">
+            <label className="grid gap-1">
+              <span className="text-xs text-gray-500">Search asset</span>
+              <input
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                placeholder="Search BTC, ETH, Solana..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+
+            {!hasQuery && (
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold text-gray-600">Top by market cap</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {top.map((a) => (
+                    <button
+                      key={a.id}
+                      className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
+                      onClick={async () => {
+                        setSelected(a);
+                        setStep("form");
+                        setSide("buy");
+                        setPriceMode("market");
+                        setPriceRaw("");
+                        setAmountRaw("");
+                        setTotalRaw("");
+                        lastEdited.current = null;
+                        await loadMarketPrice(a.id);
+                      }}
+                      type="button"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="grid">
+                          <span className="font-semibold">{a.symbol}</span>
+                          <span className="text-xs text-gray-500">{a.name}</span>
+                        </div>
+                        <div className="text-sm text-gray-700">
+                          {a.priceUsd != null ? usd(a.priceUsd) : ""}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {top.map((a) => (
-                  <button
-                    key={a.id}
-                    className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
-                    onClick={async () => {
-                      setSelected(a);
-                      setStep("form");
-                      setSide("buy");
-                      setPriceMode("market");
-                      setPriceRaw("");
-                      setAmountRaw("");
-                      setTotalRaw("");
-                      lastEdited.current = null;
-                      await loadMarketPrice(a.id);
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
+            )}
+
+            {results.length > 0 && (
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold text-gray-600">Search results</div>
+                <div className="grid gap-2">
+                  {results.map((a) => (
+                    <button
+                      key={a.id}
+                      className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
+                      onClick={async () => {
+                        setSelected(a);
+                        setStep("form");
+                        setSide("buy");
+                        setPriceMode("market");
+                        setPriceRaw("");
+                        setAmountRaw("");
+                        setTotalRaw("");
+                        lastEdited.current = null;
+                        await loadMarketPrice(a.id);
+                      }}
+                      type="button"
+                    >
                       <div className="grid">
                         <span className="font-semibold">{a.symbol}</span>
                         <span className="text-xs text-gray-500">{a.name}</span>
                       </div>
-                      <div className="text-sm text-gray-700">
-                        {a.priceUsd != null ? usd(a.priceUsd) : ""}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          {results.length > 0 && (
-            <div className="grid gap-2">
-              <div className="text-xs font-semibold text-gray-600">
-                Search results
-              </div>
-              <div className="grid gap-2">
-                {results.map((a) => (
-                  <button
-                    key={a.id}
-                    className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
-                    onClick={async () => {
-                      setSelected(a);
-                      setStep("form");
-                      setSide("buy");
-                      setPriceMode("market");
-                      setPriceRaw("");
-                      setAmountRaw("");
-                      setTotalRaw("");
-                      lastEdited.current = null;
-                      await loadMarketPrice(a.id);
-                    }}
-                  >
-                    <div className="grid">
-                      <span className="font-semibold">{a.symbol}</span>
-                      <span className="text-xs text-gray-500">{a.name}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className={cls(
-                "px-3 py-2 rounded-xl text-sm border",
-                side === "buy"
-                  ? "bg-emerald-600 text-white border-emerald-600"
-                  : "bg-white border-gray-200",
-              )}
-              onClick={() => setSide("buy")}
-            >
-              Buy
-            </button>
-            <button
-              className={cls(
-                "px-3 py-2 rounded-xl text-sm border",
-                side === "sell"
-                  ? "bg-red-600 text-white border-red-600"
-                  : "bg-white border-gray-200",
-              )}
-              onClick={() => setSide("sell")}
-            >
-              Sell
-            </button>
+            )}
           </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">Price Mode</span>
-              <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                value={priceMode}
-                onChange={async (e) => {
-                  const next = e.target.value as "market" | "custom";
-                  setPriceMode(next);
-
-                  if (next === "market") {
-                    setPriceRaw("");
-                    if (selected) await loadMarketPrice(selected.id);
-                  }
-                }}
+        ) : (
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className={cls(
+                  "px-3 py-2 rounded-xl text-sm border",
+                  side === "buy"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white border-gray-200",
+                )}
+                onClick={() => setSide("buy")}
+                type="button"
               >
-                <option value="market">Market Price</option>
-                <option value="custom">Custom Price</option>
-              </select>
-            </label>
+                Buy
+              </button>
+              <button
+                className={cls(
+                  "px-3 py-2 rounded-xl text-sm border",
+                  side === "sell"
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-white border-gray-200",
+                )}
+                onClick={() => setSide("sell")}
+                type="button"
+              >
+                Sell
+              </button>
+            </div>
 
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">{priceLabel}</span>
-              <MoneyInputStandalone
-                valueRaw={priceRaw}
-                onChangeRaw={(v) => {
-                  if (priceMode === "market") return;
-                  setPriceRaw(v);
-                }}
-                maxDecimals={8}
-                placeholder="0"
-                readOnly={priceMode === "market"}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              />
-            </label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Price Mode</span>
+                <select
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={priceMode}
+                  onChange={async (e) => {
+                    const next = e.target.value as "market" | "custom";
+                    setPriceMode(next);
+
+                    if (next === "market") {
+                      setPriceRaw("");
+                      if (selected) await loadMarketPrice(selected.id);
+                    }
+                  }}
+                >
+                  <option value="market">Market Price</option>
+                  <option value="custom">Custom Price</option>
+                </select>
+              </label>
+
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">{priceLabel}</span>
+                <MoneyInputStandalone
+                  valueRaw={priceRaw}
+                  onChangeRaw={(v) => {
+                    if (priceMode === "market") return;
+                    setPriceRaw(v);
+                  }}
+                  maxDecimals={8}
+                  placeholder="0"
+                  readOnly={priceMode === "market"}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Amount</span>
+                <MoneyInputStandalone
+                  valueRaw={amountRaw}
+                  onChangeRaw={(v) => {
+                    lastEdited.current = "amount";
+                    setAmountRaw(v);
+                    const n = numFromRaw(v);
+                    if (!n || priceUsd <= 0) setTotalRaw("");
+                    else setTotalRaw(String(n * priceUsd));
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </label>
+
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Total (USD)</span>
+                <MoneyInputStandalone
+                  valueRaw={totalRaw}
+                  onChangeRaw={(v) => {
+                    lastEdited.current = "total";
+                    setTotalRaw(v);
+                    const n = numFromRaw(v);
+                    if (!n || priceUsd <= 0) setAmountRaw("");
+                    else setAmountRaw(String(n / priceUsd));
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </label>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              Amount e Total se recalculam entre si. Em Market Price, o preço é buscado automaticamente e fica readonly.
+            </div>
+
+            <button
+              className="text-xs text-slate-500 underline justify-self-start"
+              onClick={async () => {
+                setStep("pick");
+                setSelected(null);
+                setAmountRaw("");
+                setTotalRaw("");
+                setPriceRaw("");
+                lastEdited.current = null;
+              }}
+              type="button"
+            >
+              Back to asset selection
+            </button>
           </div>
+        )}
+      </Modal>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">Amount</span>
-              <MoneyInputStandalone
-                valueRaw={amountRaw}
-                onChangeRaw={(v) => {
-                  lastEdited.current = "amount";
-                  setAmountRaw(v);
-                  const n = numFromRaw(v);
-                  if (!n || priceUsd <= 0) setTotalRaw("");
-                  else setTotalRaw(String(n * priceUsd));
-                }}
-                placeholder="0"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              />
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-500">Total (USD)</span>
-              <MoneyInputStandalone
-                valueRaw={totalRaw}
-                onChangeRaw={(v) => {
-                  lastEdited.current = "total";
-                  setTotalRaw(v);
-                  const n = numFromRaw(v);
-                  if (!n || priceUsd <= 0) setAmountRaw("");
-                  else setAmountRaw(String(n / priceUsd));
-                }}
-                placeholder="0"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              />
-            </label>
+      {confirmDeleteOpen && (
+        <Modal
+          open
+          onClose={() => (busy ? null : setConfirmDeleteOpen(false))}
+          title="Delete Transaction"
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <button
+                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => setConfirmDeleteOpen(false)}
+                type="button"
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-xl bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700 disabled:opacity-50"
+                onClick={() => void handleDeleteNow()}
+                type="button"
+                disabled={busy}
+              >
+                {busy ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          }
+        >
+          <div className="text-sm text-gray-700">
+            Are you sure you want to delete this transaction
+            {selected?.symbol ? (
+              <>
+                {" "}
+                for <b>{selected.symbol}</b>
+              </>
+            ) : null}
+            ?
+            <div className="mt-2 text-xs text-gray-500">This action cannot be undone.</div>
           </div>
-
-          <div className="text-xs text-gray-500">
-            Amount e Total se recalculam entre si. Em Market Price, o preço é
-            buscado automaticamente e fica readonly.
-          </div>
-
-          <button
-            className="text-xs text-slate-500 underline justify-self-start"
-            onClick={async () => {
-              setStep("pick");
-              setSelected(null);
-              setAmountRaw("");
-              setTotalRaw("");
-              setPriceRaw("");
-              lastEdited.current = null;
-            }}
-            type="button"
-          >
-            Back to asset selection
-          </button>
-        </div>
+        </Modal>
       )}
-    </Modal>
+    </>
   );
 }
