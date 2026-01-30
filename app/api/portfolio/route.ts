@@ -14,45 +14,77 @@ type PriceResult = {
   change24hPct: number | null
 }
 
-async function getBinancePriceUsdt(symbol: string): Promise<number> {
+async function getBinanceTicker24h(
+  symbol: string
+): Promise<{ priceUsd: number; change24hPct: number | null }> {
   const pair = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`
-  const url = `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(pair)}`
+  const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${encodeURIComponent(pair)}`
   const res = await fetch(url, { cache: "no-store" })
   if (!res.ok) throw new Error(`Binance HTTP ${res.status}`)
-  const j = (await res.json()) as unknown
+  const j: unknown = await res.json()
 
   if (typeof j !== "object" || j === null) throw new Error("Invalid Binance response")
-  const price = (j as { price?: unknown }).price
-  if (typeof price !== "string") throw new Error("Invalid Binance price")
 
-  const p = Number(price)
+  const lastPrice = (j as { lastPrice?: unknown }).lastPrice
+  const priceChangePercent = (j as { priceChangePercent?: unknown }).priceChangePercent
+
+  if (typeof lastPrice !== "string") throw new Error("Invalid Binance lastPrice")
+
+  const p = Number(lastPrice)
   if (!Number.isFinite(p) || p <= 0) throw new Error("Invalid Binance price")
-  return p
+
+  let change: number | null = null
+  if (typeof priceChangePercent === "string") {
+    const c = Number(priceChangePercent)
+    change = Number.isFinite(c) ? c : null
+  }
+
+  return { priceUsd: p, change24hPct: change }
 }
 
-async function resolvePrice(symbol: string, coingeckoId: string | null, avgEntry: number): Promise<PriceResult> {
+async function resolvePrice(
+  symbol: string,
+  coingeckoId: string | null,
+  avgEntry: number
+): Promise<PriceResult> {
+  let cgPrice: number | null = null
+  let cgChange: number | null = null
+
   if (coingeckoId) {
     const cg = await cgPriceUsdByIdSafe(coingeckoId)
     if (cg.ok) {
-      return {
-        priceUsd: cg.priceUsd,
-        source: "coingecko",
-        isEstimated: false,
-        change24hPct: cg.change24hPct,
-      }
+      cgPrice = cg.priceUsd
+      cgChange = cg.change24hPct ?? null
+    }
+  }
+
+  if (cgPrice != null && cgChange != null) {
+    return {
+      priceUsd: cgPrice,
+      source: "coingecko",
+      isEstimated: false,
+      change24hPct: cgChange,
     }
   }
 
   try {
-    const p = await getBinancePriceUsdt(symbol)
-    return { priceUsd: p, source: "binance", isEstimated: false, change24hPct: null }
+    const t = await getBinanceTicker24h(symbol)
+    return {
+      priceUsd: cgPrice ?? t.priceUsd,
+      source: cgPrice != null ? "coingecko" : "binance",
+      isEstimated: false,
+      change24hPct: t.change24hPct,
+    }
   } catch {
-    // ignore
+    const p = Number(avgEntry)
+    const safe = Number.isFinite(p) && p > 0 ? p : 0
+    return {
+      priceUsd: cgPrice ?? safe,
+      source: cgPrice != null ? "coingecko" : "avg_entry",
+      isEstimated: cgPrice == null,
+      change24hPct: null,
+    }
   }
-
-  const p = Number(avgEntry)
-  const safe = Number.isFinite(p) && p > 0 ? p : 0
-  return { priceUsd: safe, source: "avg_entry", isEstimated: true, change24hPct: null }
 }
 
 type DbRow = {
