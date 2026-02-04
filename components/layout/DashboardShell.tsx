@@ -35,7 +35,6 @@ export default function DashboardShell({ children }: Props) {
   const [courseOpen, setCourseOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Sidebar: abre com hover, fecha apenas com clique no X
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   const pathname = usePathname();
