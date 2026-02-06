@@ -10,6 +10,7 @@ import HoldingsAllocationCard, {
   AllocationAssetRow,
 } from "@/components/portfolio/HoldingsAllocationCard";
 import TopPerformersCard from "@/components/portfolio/TopPerformersCard";
+import AssetDetailView from "@/components/portfolio/AssetDetailView";
 import Card from "@/components/ui/Card";
 import { usd, pct, cls } from "@/components/portfolio/format";
 
@@ -67,19 +68,41 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
   const unrealizedUp = s.profit.unrealized.usd >= 0;
 
   return (
-    <Card className="rounded-[14px] shadow-[0_8px_20px_rgba(0,0,0,0.04)] h-[356px] flex flex-col p-6">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-[15px] font-medium text-slate-400">
+    <Card className="rounded-[14px] shadow-[0_8px_20px_rgba(0,0,0,0.04)] flex flex-col p-6">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[15px] font-medium text-slate-400 flex items-center gap-2">
           Current Balance
+        </div>
+        <div className="text-[15px] font-medium text-slate-500 flex items-center gap-1">
+          24h <span className="text-xs">▾</span>
         </div>
       </div>
 
-      <div className="text-[36px] font-bold tracking-[-0.5px] mb-2">
+      <div className="text-[36px] font-bold tracking-[-0.5px] mb-1">
         {usd(s.currentBalanceUsd)}
       </div>
 
       <div className="text-[15px]">
-        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+        <div className="flex items-center gap-3 mb-3">
+          <span
+            className={cls(
+              "font-semibold text-sm",
+              s.portfolio24h.pct >= 0 ? "text-emerald-600" : "text-red-600",
+            )}
+          >
+            {pct(s.portfolio24h.pct)}
+          </span>
+          <span
+            className={cls(
+              "font-semibold text-sm",
+              s.portfolio24h.pct >= 0 ? "text-emerald-600" : "text-red-600",
+            )}
+          >
+            {usd(s.portfolio24h.usd)}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400 flex items-center gap-2">
             Total Profit <span className="text-slate-300">ⓘ</span>
           </div>
@@ -100,14 +123,14 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+        <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400 flex items-center gap-2">
             Realised Profit <span className="text-slate-300">ⓘ</span>
           </div>
           <div className="font-semibold">{usd(s.profit.realized.usd)}</div>
         </div>
 
-        <div className="flex items-center justify-between py-[14px] border-t border-slate-200">
+        <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400 flex items-center gap-2">
             Unrealised Profit <span className="text-slate-300">ⓘ</span>
           </div>
@@ -122,7 +145,7 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between py-[14px] border-t border-slate-200 pb-6">
+        <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400">Total Invested</div>
           <div className="font-semibold">{usd(s.totalInvestedUsd)}</div>
         </div>
@@ -140,6 +163,8 @@ export default function PortfolioPage() {
   const [activeTab, setActiveTab] = useState<"assets" | "transactions">(
     "assets",
   );
+
+  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -171,11 +196,30 @@ export default function PortfolioPage() {
     }));
   }, [data?.assets]);
 
+  if (selectedAsset) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
+          <div className="flex flex-col gap-6">
+            {data && <BalanceCardFilled summary={data.summary} />}
+            {data && <TopPerformersCard assets={data.assets} />}
+          </div>
+
+          <div>
+            <AssetDetailView
+              symbol={selectedAsset}
+              onBack={() => setSelectedAsset(null)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          {/* left header content */}
         </div>
 
         <div className="flex items-center gap-4">
@@ -237,7 +281,10 @@ export default function PortfolioPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <BalanceCardFilled summary={data.summary} />
+
+          {/* NOVO: Holdings Allocation só aparece quando NÃO há asset selecionado */}
           <HoldingsAllocationCard assets={allocationAssets} />
+
           <TopPerformersCard assets={data.assets} />
 
           <div className="lg:col-start-2 lg:row-start-1 lg:row-span-3">
@@ -272,7 +319,10 @@ export default function PortfolioPage() {
 
               <div className="p-6">
                 {activeTab === "assets" ? (
-                  <AssetsTable assets={data.assets} />
+                  <AssetsTable
+                    assets={data.assets}
+                    onAssetClick={(symbol) => setSelectedAsset(symbol)}
+                  />
                 ) : (
                   <TransactionsTable
                     rows={data.transactions}

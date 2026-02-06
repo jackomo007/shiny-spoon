@@ -39,6 +39,7 @@ function pct2Always(v: number | null, fallback = 0) {
 export default function AssetsTable(props: {
   assets: AssetRow[];
   title?: string;
+  onAssetClick?: (symbol: string) => void;
 }) {
   const rows = props.assets;
 
@@ -70,7 +71,13 @@ export default function AssetsTable(props: {
             const upPnl = (a.currentProfitUsd ?? 0) >= 0;
 
             return (
-              <Tr key={a.symbol}>
+              <Tr
+                key={a.symbol}
+                onClick={() => props.onAssetClick?.(a.symbol)} // NOVO: clique na linha
+                className={cls(
+                  props.onAssetClick && "cursor-pointer hover:bg-slate-50", // NOVO: visual de clicável
+                )}
+              >
                 <Td className="font-medium">
                   <div className="flex items-center gap-3">
                     <CoinBadge
