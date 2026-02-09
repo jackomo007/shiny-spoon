@@ -45,7 +45,8 @@ async function getBinanceTicker24h(
 async function resolvePrice(
   symbol: string,
   coingeckoId: string | null,
-  avgEntry: number
+  avgEntry: number,
+  exchange: string | null
 ): Promise<PriceResult> {
   let cgPrice: number | null = null
   let cgChange: number | null = null
@@ -58,7 +59,7 @@ async function resolvePrice(
     }
   }
 
-  if (cgPrice != null && cgChange != null) {
+  if (cgPrice != null) {
     return {
       priceUsd: cgPrice,
       source: "coingecko",
@@ -67,23 +68,28 @@ async function resolvePrice(
     }
   }
 
-  try {
-    const t = await getBinanceTicker24h(symbol)
-    return {
-      priceUsd: cgPrice ?? t.priceUsd,
-      source: cgPrice != null ? "coingecko" : "binance",
-      isEstimated: false,
-      change24hPct: t.change24hPct,
+  const canUseBinance = (exchange ?? "Binance").toLowerCase() === "binance"
+  if (canUseBinance) {
+    try {
+      const t = await getBinanceTicker24h(symbol)
+      return {
+        priceUsd: t.priceUsd,
+        source: "binance",
+        isEstimated: false,
+        change24hPct: t.change24hPct,
+      }
+    } catch {
+      // cai no avg_entry
     }
-  } catch {
-    const p = Number(avgEntry)
-    const safe = Number.isFinite(p) && p > 0 ? p : 0
-    return {
-      priceUsd: cgPrice ?? safe,
-      source: cgPrice != null ? "coingecko" : "avg_entry",
-      isEstimated: cgPrice == null,
-      change24hPct: null,
-    }
+  }
+
+  const p = Number(avgEntry)
+  const safe = Number.isFinite(p) && p > 0 ? p : 0
+  return {
+    priceUsd: safe,
+    source: "avg_entry",
+    isEstimated: true,
+    change24hPct: null,
   }
 }
 
@@ -131,7 +137,7 @@ export async function GET() {
 
     const metas = await prisma.verified_asset.findMany({
       where: { symbol: { in: symbols } },
-      select: { symbol: true, name: true, coingecko_id: true, image_url: true },
+      select: { symbol: true, name: true, coingecko_id: true, image_url: true, exchange: true },
     })
     const enriched = await Promise.all(
       metas.map(async (m) => {
@@ -156,14 +162,14 @@ export async function GET() {
           }
         }
 
-        return { symbol, name, coingeckoId, iconUrl }
+        return { symbol, name, coingeckoId, iconUrl, exchange: m.exchange ?? null }
       })
     )
 
     const metaBySymbol = new Map(
       enriched.map((m) => [
         m.symbol,
-        { name: m.name, coingeckoId: m.coingeckoId, iconUrl: m.iconUrl },
+        { name: m.name, coingeckoId: m.coingeckoId, iconUrl: m.iconUrl, exchange: m.exchange ?? null },
       ])
     )
 
@@ -174,6 +180,7 @@ export async function GET() {
         name: string | null
         coingeckoId: string | null
         iconUrl: string | null
+        exchange: string | null
         qtyHeld: number
         costBasisUsd: number
         totalInvestedUsd: number
@@ -197,7 +204,7 @@ export async function GET() {
 
     function getState(symbol: string) {
       const s = symbol.toUpperCase()
-      const meta = metaBySymbol.get(s) ?? { name: null, coingeckoId: null, iconUrl: null }
+      const meta = metaBySymbol.get(s) ?? { name: null, coingeckoId: null, iconUrl: null, exchange: null }
 
       const cur =
         st.get(s) ?? {
@@ -205,6 +212,7 @@ export async function GET() {
           name: meta.name,
           coingeckoId: meta.coingeckoId,
           iconUrl: meta.iconUrl,
+          exchange: meta.exchange,
           qtyHeld: 0,
           costBasisUsd: 0,
           totalInvestedUsd: 0,
@@ -282,8 +290,12 @@ export async function GET() {
         const avgEntry =
           g.qtyHeld > 0 ? g.costBasisUsd / g.qtyHeld : g.totalInvestedUsd > 0 ? g.totalInvestedUsd : 0
 
-        const pr = await resolvePrice(g.symbol, g.coingeckoId, g.qtyHeld > 0 ? avgEntry : 0)
-
+        const pr = await resolvePrice(
+          g.symbol,
+          g.coingeckoId,
+          g.qtyHeld > 0 ? avgEntry : 0,
+          g.exchange
+        )
         const holdingsValueUsd = g.qtyHeld * pr.priceUsd
         const currentProfitUsd = holdingsValueUsd - g.costBasisUsd
         const currentProfitPct = g.costBasisUsd > 0 ? (currentProfitUsd / g.costBasisUsd) * 100 : null
