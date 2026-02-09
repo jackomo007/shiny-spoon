@@ -34,8 +34,9 @@ export default function DashboardShell({ children }: Props) {
   const [accOpen, setAccOpen] = useState(false);
   const [courseOpen, setCourseOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   const pathname = usePathname();
 
@@ -54,6 +55,15 @@ export default function DashboardShell({ children }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    function handleScroll() {
+      setIsScrolled(window.scrollY > 88);
+    }
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
@@ -246,7 +256,9 @@ export default function DashboardShell({ children }: Props) {
 
       <div className="mx-auto w-full max-w-7xl md:max-w-none px-4 md:px-6 py-6 relative">
         <aside
-          className="hidden md:block fixed left-0 top-[88px] bottom-0 z-40 transition-all duration-300 ease-in-out bg-white shadow-lg"
+          className={`hidden md:block fixed left-0 bottom-0 z-40 transition-all duration-300 ease-in-out bg-white shadow-lg ${
+            isScrolled ? "top-0" : "top-[88px]"
+          }`}
           onMouseEnter={() => setSidebarExpanded(true)}
           style={{
             width: sidebarExpanded ? "260px" : "64px",
