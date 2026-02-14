@@ -201,8 +201,8 @@ export default function PortfolioPage() {
       <div className="p-4 md:p-8">
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
           <div className="flex flex-col gap-6">
-            {data && <BalanceCardFilled summary={data.summary} />}
-            {data && <TopPerformersCard assets={data.assets} />}
+          {data && <BalanceCardFilled summary={data.summary} />}
+          {data && <TopPerformersCard assets={data.assets} />}
           </div>
 
           <div>
@@ -280,14 +280,14 @@ export default function PortfolioPage() {
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <BalanceCardFilled summary={data.summary} />
+          <div className="flex flex-col gap-6">
+            <BalanceCardFilled summary={data.summary} />
+            <TopPerformersCard assets={data.assets} />
+          </div>
 
-          {/* NOVO: Holdings Allocation só aparece quando NÃO há asset selecionado */}
-          <HoldingsAllocationCard assets={allocationAssets} />
+          <div className="flex flex-col gap-6">
+            <HoldingsAllocationCard assets={allocationAssets} />
 
-          <TopPerformersCard assets={data.assets} />
-
-          <div className="lg:col-start-2 lg:row-start-1 lg:row-span-3">
             <Card className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] p-0 overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
                 <div className="flex items-center gap-2">
