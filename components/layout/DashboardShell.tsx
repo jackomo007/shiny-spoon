@@ -104,13 +104,40 @@ export default function DashboardShell({ children }: Props) {
               </span>
             </Link>
 
-            <nav className="hidden xl:flex items-center gap-6 opacity-90">
-              <Link href="/dashboard">Home</Link>
-              <Link href="/journal">Trading Journal</Link>
-              <Link href="/strategies">Strategy Creator</Link>
-              <Link href="/exit-strategy">Exit Strategy</Link>
-              <Link href="/trade-analyzer">Trade Analyzer</Link>
-              {isAdmin && <Link href="/admin">Admin</Link>}
+            <nav className="hidden xl:flex items-center gap-6">
+              <Link href="/dashboard" className="opacity-90">
+                Home
+              </Link>
+              <Link href="/journal" className="opacity-90">
+                Trading Journal
+              </Link>
+              <Link href="/strategies" className="opacity-90">
+                Strategy Creator
+              </Link>
+              <Link href="/exit-strategy" className="opacity-90">
+                Exit Strategy
+              </Link>
+              {isAdmin && (
+                <Link href="/admin" className="opacity-90">
+                  Admin
+                </Link>
+              )}
+              <Link
+                href="https://discord.gg/invitation"
+                target="_blank"
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full font-semibold text-white transition-transform hover:scale-105"
+                style={{ backgroundColor: "#5865F2" }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 127.14 96.36"
+                  fill="currentColor"
+                >
+                  <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.71,32.65-1.82,56.6.48,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.22,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.51,11.1,105.33,105.33,0,0,0,32.27-16.15h0C130.58,50.46,121.7,26.78,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5.07-12.71,11.41-12.71S54,46,53.89,53,48.81,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5.07-12.71,11.44-12.71S96.23,46,96.12,53,91.04,65.69,84.69,65.69Z" />
+                </svg>
+                Join Discord
+              </Link>
             </nav>
 
             <button
@@ -174,15 +201,6 @@ export default function DashboardShell({ children }: Props) {
                           Exit Strategy
                         </Link>
                       </li>
-                      <li>
-                        <Link
-                          href="/trade-analyzer"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          Trade Analyzer
-                        </Link>
-                      </li>
                       {isAdmin && (
                         <li>
                           <Link
@@ -194,6 +212,17 @@ export default function DashboardShell({ children }: Props) {
                           </Link>
                         </li>
                       )}
+                      <li>
+                        <Link
+                          href="https://discord.gg/invitation"
+                          target="_blank"
+                          className="flex items-center justify-center gap-3 rounded-xl px-3 py-3 font-bold text-white mt-2"
+                          style={{ backgroundColor: "#5865F2" }}
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          <span>Join our Discord</span>
+                        </Link>
+                      </li>
                     </ul>
                   </div>
                 </div>
