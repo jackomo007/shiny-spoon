@@ -214,7 +214,7 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       {loading ? (
         <Card className="p-6">Loading…</Card>
       ) : error ? (
