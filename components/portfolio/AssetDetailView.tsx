@@ -95,6 +95,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
 
   return (
     <div>
+      {/* Back button */}
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={onBack}
@@ -104,7 +105,9 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
         </button>
       </div>
 
+      {/* Balance & Key Levels cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Balance Card */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-slate-400 font-semibold">
@@ -199,12 +202,13 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
           </div>
         </Card>
 
+        {/* Key Levels Card */}
         <Card className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="font-bold text-lg mb-1">Key Levels</div>
               <div className="text-sm text-slate-500 font-semibold">
-                Next support & resistance (with 2 more queued)
+                Next support & resistance
               </div>
             </div>
             <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-semibold text-slate-600 border border-slate-200">
@@ -213,17 +217,18 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Supports - apenas o primeiro */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-xl" />
 
               <div className="flex items-center justify-between mb-3">
-                <div className="font-bold">Supports</div>
+                <div className="font-bold">Support</div>
                 <div className="text-xs text-slate-500 font-semibold">
                   Below price
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-xl p-3 mb-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-3">
                 <div className="text-xs text-slate-500 font-bold mb-1">
                   Next Support
                 </div>
@@ -239,36 +244,20 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   </span>
                 </div>
               </div>
-
-              {data.keyLevels.supports.slice(1).map((level, i) => (
-                <div
-                  key={i}
-                  className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between mb-2 last:mb-0"
-                >
-                  <div>
-                    <div className="font-bold">{usd(level.price)}</div>
-                    <div className="text-xs text-slate-500 font-bold">
-                      Support #{i + 2}
-                    </div>
-                  </div>
-                  <span className="px-2 py-1 bg-slate-100 rounded-full text-xs font-semibold border border-slate-200">
-                    {level.timeframe}
-                  </span>
-                </div>
-              ))}
             </div>
 
+            {/* Resistances - apenas a primeira */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l-xl" />
 
               <div className="flex items-center justify-between mb-3">
-                <div className="font-bold">Resistances</div>
+                <div className="font-bold">Resistance</div>
                 <div className="text-xs text-slate-500 font-semibold">
                   Above price
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-xl p-3 mb-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-3">
                 <div className="text-xs text-slate-500 font-bold mb-1">
                   Next Resistance
                 </div>
@@ -284,37 +273,12 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   </span>
                 </div>
               </div>
-
-              {data.keyLevels.resistances.slice(1).map((level, i) => (
-                <div
-                  key={i}
-                  className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between mb-2 last:mb-0"
-                >
-                  <div>
-                    <div className="font-bold">{usd(level.price)}</div>
-                    <div className="text-xs text-slate-500 font-bold">
-                      Resistance #{i + 2}
-                    </div>
-                  </div>
-                  <span className="px-2 py-1 bg-slate-100 rounded-full text-xs font-semibold border border-slate-200">
-                    {level.timeframe}
-                  </span>
-                </div>
-              ))}
             </div>
-          </div>
-
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
-            <div className="text-sm text-slate-500 font-semibold">
-              Source: Pivot / S/R engine
-            </div>
-            <button className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-semibold border border-slate-200">
-              View Zones
-            </button>
           </div>
         </Card>
       </div>
 
+      {/* Transactions table */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="text-lg font-bold">
@@ -356,6 +320,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   minute: "2-digit",
                 });
 
+                // Verifica se precisa adicionar header de data
                 const prevDate =
                   index > 0
                     ? new Date(
@@ -373,6 +338,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
 
                 const rows = [];
 
+                // Adiciona header de data se necessário
                 if (showDateHeader) {
                   rows.push(
                     <tr key={`date-${tx.id}`}>
@@ -386,6 +352,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   );
                 }
 
+                // Adiciona linha da transação
                 rows.push(
                   <tr key={tx.id} className="border-b border-slate-100">
                     <td className="py-4 px-2">
