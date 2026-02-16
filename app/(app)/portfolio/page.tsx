@@ -201,15 +201,12 @@ export default function PortfolioPage() {
       <div className="p-4 md:p-8">
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
           <div className="flex flex-col gap-6">
-          {data && <BalanceCardFilled summary={data.summary} />}
-          {data && <TopPerformersCard assets={data.assets} />}
+            {data && <BalanceCardFilled summary={data.summary} />}
+            {data && <TopPerformersCard assets={data.assets} />}
           </div>
 
           <div>
-            <AssetDetailView
-              symbol={selectedAsset}
-              onBack={() => setSelectedAsset(null)}
-            />
+            <AssetDetailView symbol={selectedAsset} onBack={() => setSelectedAsset(null)} />
           </div>
         </div>
       </div>
@@ -219,17 +216,9 @@ export default function PortfolioPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-        </div>
+        <div className="flex items-center gap-3"></div>
 
-        <div className="flex items-center gap-4">
-          <button
-            className="px-[18px] py-[10px] rounded-[10px] bg-blue-600 text-white font-semibold hover:bg-blue-700"
-            onClick={() => setModalOpen(true)}
-          >
-            + Add Asset
-          </button>
-        </div>
+        <div className="flex items-center gap-4"></div>
       </div>
 
       {loading ? (
@@ -246,8 +235,7 @@ export default function PortfolioPage() {
             <div className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] h-[420px] border-2 border-dashed border-slate-200 bg-white/35 p-6 flex flex-col gap-3">
               <div className="font-bold text-slate-500">Top Performers</div>
               <div className="flex-1 flex items-center justify-center text-center text-sm text-slate-500 px-6">
-                No assets yet. Top performers will appear here once you add
-                assets.
+                No assets yet. Top performers will appear here once you add assets.
               </div>
             </div>
           </div>
@@ -259,13 +247,10 @@ export default function PortfolioPage() {
                   💧
                 </div>
 
-                <div className="text-[22px] font-bold mb-2">
-                  Your Portfolio is Empty
-                </div>
+                <div className="text-[22px] font-bold mb-2">Your Portfolio is Empty</div>
 
                 <div className="text-slate-500 leading-relaxed mb-6">
-                  Add a new asset with the button below or use search to start
-                  tracking your portfolio.
+                  Add a new asset with the button below or use search to start tracking your portfolio.
                 </div>
 
                 <button
@@ -315,6 +300,15 @@ export default function PortfolioPage() {
                     Transactions
                   </button>
                 </div>
+
+                {activeTab === "assets" && (
+                  <button
+                    className="px-[18px] py-[10px] rounded-[10px] bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                    onClick={() => setModalOpen(true)}
+                  >
+                    + Add Asset
+                  </button>
+                )}
               </div>
 
               <div className="p-6">
