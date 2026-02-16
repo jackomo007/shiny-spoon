@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, JSX } from "react";
+import { useState, useEffect } from "react";
 import Card from "@/components/ui/Card";
-import { usd, pct, cls } from "@/components/portfolio/format";
+import { Table, Th, Tr, Td } from "@/components/ui/Table";
+import { usd, pct, qty, cls } from "@/components/portfolio/format";
+import { CoinBadge } from "@/components/portfolio/CoinBadge";
 
 type AssetDetail = {
   symbol: string;
@@ -92,6 +94,13 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
   const change24Up = (data.metrics.change24h.pct ?? 0) >= 0;
   const totalProfitUp = data.metrics.totalProfit.usd >= 0;
   const unrealizedUp = data.metrics.unrealizedProfit >= 0;
+
+  function badgeModeForTx(
+    tx: AssetDetail["transactions"][0],
+  ): "coin" | "win" | "loss" {
+    if (tx.gainLossUsd == null) return "coin";
+    return tx.gainLossUsd >= 0 ? "win" : "loss";
+  }
 
   return (
     <div>
@@ -278,163 +287,99 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
         </Card>
       </div>
 
-      {/* Transactions table */}
+      {/* Transactions table - AGORA USANDO O MESMO LAYOUT DO TransactionsTable */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="text-lg font-bold">
             {data.name || symbol} Transactions
           </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              🔍
-            </span>
             <input
               type="text"
               placeholder="Search"
-              className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm w-64 outline-none focus:border-slate-300"
+              className="w-[280px] max-w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-t border-b border-slate-200 text-xs text-slate-500 font-bold">
-                <th className="text-left py-3 px-2">Type</th>
-                <th className="text-left py-3 px-2">Quantity</th>
-                <th className="text-left py-3 px-2">Price</th>
-                <th className="text-left py-3 px-2">Total</th>
-                <th className="text-right py-3 px-2">Gain/Loss</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.transactions.reduce((acc, tx, index) => {
-                const date = new Date(tx.executedAt);
-                const dateStr = date.toLocaleDateString("en-US", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                });
-                const timeStr = date.toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
+        <Table>
+          <thead className="border-b border-[#eef2f7]">
+            <tr>
+              <Th>Type</Th>
+              <Th>Quantity</Th>
+              <Th>Price</Th>
+              <Th>Total</Th>
+              <Th className="text-right">Gain / Loss</Th>
+            </tr>
+          </thead>
 
-                // Verifica se precisa adicionar header de data
-                const prevDate =
-                  index > 0
-                    ? new Date(
-                        data.transactions[index - 1].executedAt,
-                      ).toLocaleDateString("en-US", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })
-                    : null;
+          <tbody>
+            {data.transactions.map((tx) => {
+              const dt = new Date(tx.executedAt);
+              const isSell = tx.side === "sell";
+              const pnl = tx.gainLossUsd;
+              const pnlUp = (pnl ?? 0) >= 0;
 
-                const showDateHeader = prevDate !== dateStr;
+              return (
+                <Tr key={tx.id} className="cursor-pointer hover:bg-slate-50">
+                  <Td className="font-medium">
+                    <div className="flex items-center gap-3 pl-1">
+                      <CoinBadge
+                        symbol={symbol}
+                        iconUrl={data.iconUrl ?? null}
+                        mode={badgeModeForTx(tx)}
+                        size="md"
+                        showBorder
+                      />
 
-                const gainUp = (tx.gainLossUsd ?? 0) >= 0;
-
-                const rows = [];
-
-                // Adiciona header de data se necessário
-                if (showDateHeader) {
-                  rows.push(
-                    <tr key={`date-${tx.id}`}>
-                      <td
-                        colSpan={5}
-                        className="py-3 px-2 font-bold text-sm text-slate-700"
-                      >
-                        {dateStr}
-                      </td>
-                    </tr>,
-                  );
-                }
-
-                // Adiciona linha da transação
-                rows.push(
-                  <tr key={tx.id} className="border-b border-slate-100">
-                    <td className="py-4 px-2">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10">
-                          <div
-                            className={cls(
-                              "absolute left-0 top-1 w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-sm shadow-md",
-                              tx.side === "buy"
-                                ? "bg-orange-500"
-                                : "bg-emerald-500",
-                            )}
-                          >
-                            {symbol.charAt(0)}
-                          </div>
-                          <div className="absolute right-0 bottom-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-xs shadow-md">
-                            $
-                          </div>
+                      <div className="grid">
+                        <div className="text-[#0f172a]">
+                          {isSell ? "Sell" : "Buy"} {symbol}
                         </div>
-                        <div>
-                          <div className="font-black">
-                            {tx.side === "buy" ? "Buy" : "Sell"} {symbol}
-                          </div>
-                          <div className="text-xs text-slate-500 font-bold">
-                            {timeStr}
-                          </div>
+                        <div className="text-xs text-gray-500">
+                          {dt.toLocaleString()}
                         </div>
                       </div>
-                    </td>
-                    <td className="py-4 px-2">
-                      <span
-                        className={cls(
-                          "font-bold",
-                          tx.side === "buy"
-                            ? "text-emerald-600"
-                            : "text-slate-700",
-                        )}
-                      >
-                        {tx.side === "buy" ? "+" : ""}
-                        {tx.qty.toFixed(2)} {symbol}
-                      </span>
-                    </td>
-                    <td className="py-4 px-2 font-semibold">
-                      {usd(tx.priceUsd)}
-                    </td>
-                    <td className="py-4 px-2 font-semibold">
-                      {usd(tx.totalUsd)}
-                    </td>
-                    <td className="py-4 px-2 text-right">
-                      {tx.gainLossUsd !== null ? (
-                        <>
-                          <div
-                            className={cls(
-                              "font-bold",
-                              gainUp ? "text-emerald-600" : "text-red-600",
-                            )}
-                          >
-                            {usd(tx.gainLossUsd)}
-                          </div>
-                          {tx.gainLossPct !== null && (
-                            <div
-                              className={cls(
-                                "text-sm font-semibold",
-                                gainUp ? "text-emerald-600" : "text-red-600",
-                              )}
-                            >
-                              {pct(tx.gainLossPct)}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>,
-                );
+                    </div>
+                  </Td>
 
-                return [...acc, ...rows];
-              }, [] as JSX.Element[])}
-            </tbody>
-          </table>
-        </div>
+                  <Td className="text-[#0f172a]">
+                    {isSell ? "-" : "+"}
+                    {qty(Math.abs(tx.qty))} {symbol}
+                  </Td>
+
+                  <Td className="text-[#0f172a]">{usd(tx.priceUsd)}</Td>
+                  <Td className="text-[#0f172a]">{usd(tx.totalUsd)}</Td>
+
+                  <Td className="text-right">
+                    {isSell ? (
+                      <div className="grid justify-end">
+                        <span
+                          className={cls(
+                            "font-semibold",
+                            pnlUp ? "text-emerald-600" : "text-red-600",
+                          )}
+                        >
+                          {usd(tx.gainLossUsd)}
+                        </span>
+                        <span
+                          className={cls(
+                            "text-xs",
+                            pnlUp ? "text-emerald-600" : "text-red-600",
+                          )}
+                        >
+                          {pct(tx.gainLossPct)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            })}
+          </tbody>
+        </Table>
       </Card>
     </div>
   );
