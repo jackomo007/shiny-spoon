@@ -325,7 +325,7 @@ export default function DashboardShell({ children }: Props) {
                   pathname={pathname}
                 />
 
-                                <NavGroup
+                <NavGroup
                   href="/portfolio"
                   label="Portfolio Manager"
                   icon="💼"
@@ -343,7 +343,7 @@ export default function DashboardShell({ children }: Props) {
                     pathname={pathname}
                   />
                 </NavGroup>
-                
+
                 <NavGroup
                   href="/journal"
                   label="Trading Journal"
