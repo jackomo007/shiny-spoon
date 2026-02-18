@@ -324,6 +324,26 @@ export default function DashboardShell({ children }: Props) {
                   showText={sidebarExpanded}
                   pathname={pathname}
                 />
+
+                                <NavGroup
+                  href="/portfolio"
+                  label="Portfolio Manager"
+                  icon="💼"
+                  showText={sidebarExpanded}
+                  pathname={pathname}
+                  open={portfolioGroupOpen}
+                  setOpen={setPortfolioGroupOpen}
+                  isActiveGroup={portfolioGroupActive}
+                >
+                  <NavChildItem
+                    href="/exit-strategy"
+                    label="Exit Strategy Simulator"
+                    icon="🚪"
+                    showText={sidebarExpanded}
+                    pathname={pathname}
+                  />
+                </NavGroup>
+                
                 <NavGroup
                   href="/journal"
                   label="Trading Journal"
@@ -345,25 +365,6 @@ export default function DashboardShell({ children }: Props) {
                     href="/trade-analyzer"
                     label="Trade Analyzer"
                     icon="📈"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                </NavGroup>
-
-                <NavGroup
-                  href="/portfolio"
-                  label="Portfolio Manager"
-                  icon="💼"
-                  showText={sidebarExpanded}
-                  pathname={pathname}
-                  open={portfolioGroupOpen}
-                  setOpen={setPortfolioGroupOpen}
-                  isActiveGroup={portfolioGroupActive}
-                >
-                  <NavChildItem
-                    href="/exit-strategy"
-                    label="Exit Strategy Simulator"
-                    icon="🚪"
                     showText={sidebarExpanded}
                     pathname={pathname}
                   />
