@@ -350,7 +350,7 @@ export default function DashboardShell({ children }: Props) {
                   />
                 </NavGroup>
 
-                                <NavGroup
+                <NavGroup
                   href="/portfolio"
                   label="Portfolio Manager"
                   icon="💼"
@@ -518,6 +518,8 @@ function NavGroup({
   isActiveGroup: boolean;
   children: React.ReactNode;
 }) {
+  const isActive = pathname === href;
+
   return (
     <li className="select-none">
       <div className="flex items-center">
@@ -525,7 +527,7 @@ function NavGroup({
           href={href}
           title={!showText ? label : undefined}
           className={`flex-1 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-            isActiveGroup
+            isActive
               ? "bg-purple-50 text-purple-700"
               : "text-gray-700 hover:bg-gray-50"
           }`}
@@ -574,11 +576,7 @@ function NavGroup({
         )}
       </div>
 
-      {showText && open && (
-        <ul className="mt-1 grid gap-1">
-          {children}
-        </ul>
-      )}
+      {showText && open && <ul className="mt-1 grid gap-1">{children}</ul>}
     </li>
   );
 }
