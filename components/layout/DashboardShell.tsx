@@ -38,8 +38,6 @@ export default function DashboardShell({ children }: Props) {
 
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
-  const [tradingGroupOpen, setTradingGroupOpen] = useState(true);
-
   const pathname = usePathname();
 
   const openComingSoon = (e?: React.MouseEvent) => {
@@ -106,40 +104,13 @@ export default function DashboardShell({ children }: Props) {
               </span>
             </Link>
 
-            <nav className="hidden xl:flex items-center gap-6">
-              <Link href="/dashboard" className="opacity-90">
-                Home
-              </Link>
-              <Link href="/journal" className="opacity-90">
-                Trading Journal
-              </Link>
-              <Link href="/strategies" className="opacity-90">
-                Strategy Creator
-              </Link>
-              <Link href="/exit-strategy" className="opacity-90">
-                Exit Strategy Simulator
-              </Link>
-              {isAdmin && (
-                <Link href="/admin" className="opacity-90">
-                  Admin
-                </Link>
-              )}
-              <Link
-                href="https://discord.gg/invitation"
-                target="_blank"
-                className="flex items-center gap-2 px-4 py-1.5 rounded-full font-semibold text-white transition-transform hover:scale-105"
-                style={{ backgroundColor: "#5865F2" }}
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 127.14 96.36"
-                  fill="currentColor"
-                >
-                  <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.71,32.65-1.82,56.6.48,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.22,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.51,11.1,105.33,105.33,0,0,0,32.27-16.15h0C130.58,50.46,121.7,26.78,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5.07-12.71,11.41-12.71S54,46,53.89,53,48.81,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5.07-12.71,11.44-12.71S96.23,46,96.12,53,91.04,65.69,84.69,65.69Z" />
-                </svg>
-                Join Discord
-              </Link>
+            <nav className="hidden xl:flex items-center gap-6 opacity-90">
+              <Link href="/dashboard">Home</Link>
+              <Link href="/journal">Trading Journal</Link>
+              <Link href="/strategies">Strategy Creator</Link>
+              <Link href="/exit-strategy">Exit Strategy</Link>
+              <Link href="/trade-analyzer">Trade Analyzer</Link>
+              {isAdmin && <Link href="/admin">Admin</Link>}
             </nav>
 
             <button
@@ -200,7 +171,16 @@ export default function DashboardShell({ children }: Props) {
                           className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
                         >
-                          Exit Strategy Simulator
+                          Exit Strategy
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/trade-analyzer"
+                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          Trade Analyzer
                         </Link>
                       </li>
                       {isAdmin && (
@@ -214,17 +194,6 @@ export default function DashboardShell({ children }: Props) {
                           </Link>
                         </li>
                       )}
-                      <li>
-                        <Link
-                          href="https://discord.gg/invitation"
-                          target="_blank"
-                          className="flex items-center justify-center gap-3 rounded-xl px-3 py-3 font-bold text-white mt-2"
-                          style={{ backgroundColor: "#5865F2" }}
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          <span>Join our Discord</span>
-                        </Link>
-                      </li>
                     </ul>
                   </div>
                 </div>
@@ -344,95 +313,38 @@ export default function DashboardShell({ children }: Props) {
                   showText={sidebarExpanded}
                   pathname={pathname}
                 />
-                <li>
-                  <div className="flex items-center">
-                    <Link
-                      href="/journal"
-                      className={`flex-1 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-                        pathname === "/journal"
-                          ? "bg-purple-50 text-purple-700"
-                          : "text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <span className="w-5 text-center flex-shrink-0 text-lg">
-                        🗒️
-                      </span>
-                      <span
-                        className="whitespace-nowrap text-sm font-medium overflow-hidden transition-all duration-300"
-                        style={{
-                          width: sidebarExpanded ? "auto" : "0",
-                          opacity: sidebarExpanded ? 1 : 0,
-                        }}
-                      >
-                        Trading Journal
-                      </span>
-                    </Link>
-
-                    {sidebarExpanded && (
-                      <button
-                        onClick={() => setTradingGroupOpen((v) => !v)}
-                        className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 mr-1 flex-shrink-0"
-                        title={
-                          tradingGroupOpen ? "Collapse group" : "Expand group"
-                        }
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className={`transition-transform duration-200 ${
-                            tradingGroupOpen ? "rotate-180" : "rotate-0"
-                          }`}
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {tradingGroupOpen && sidebarExpanded && (
-                    <ul className="mt-1 ml-4 grid gap-1 border-l-2 border-gray-100 pl-2">
-                      <NavItem
-                        href="/portfolio"
-                        label="Portfolio Manager"
-                        icon="💼"
-                        showText={sidebarExpanded}
-                        pathname={pathname}
-                      />
-                      <NavItem
-                        href="/strategies"
-                        label="Strategy Creator"
-                        icon="🧭"
-                        showText={sidebarExpanded}
-                        pathname={pathname}
-                      />
-                      <NavItem
-                        href="/trade-analyzer"
-                        label="Trade Analyzer"
-                        icon="📈"
-                        showText={sidebarExpanded}
-                        pathname={pathname}
-                      />
-                    </ul>
-                  )}
-                </li>
-
+                <NavItem
+                  href="/portfolio"
+                  label="Portfolio Manager"
+                  icon="💼"
+                  showText={sidebarExpanded}
+                  pathname={pathname}
+                />
+                <NavItem
+                  href="/journal"
+                  label="Trading Journal"
+                  icon="🗒️"
+                  showText={sidebarExpanded}
+                  pathname={pathname}
+                />
+                <NavItem
+                  href="/strategies"
+                  label="Strategy Creator"
+                  icon="🧭"
+                  showText={sidebarExpanded}
+                  pathname={pathname}
+                />
                 <NavItem
                   href="/exit-strategy"
-                  label="Exit Strategy Simulator"
+                  label="Exit Strategy"
                   icon="🚪"
                   showText={sidebarExpanded}
                   pathname={pathname}
                 />
                 <NavItem
-                  href="/add-coin"
-                  label="Coin Tracker"
-                  icon="🔍"
+                  href="/trade-analyzer"
+                  label="Trade Analyzer"
+                  icon="📈"
                   showText={sidebarExpanded}
                   pathname={pathname}
                 />
@@ -445,6 +357,13 @@ export default function DashboardShell({ children }: Props) {
                     pathname={pathname}
                   />
                 )}
+                <NavItem
+                  href="/add-coin"
+                  label="Coin Tracker"
+                  icon="🔍"
+                  showText={sidebarExpanded}
+                  pathname={pathname}
+                />
               </ul>
             </nav>
           </div>
