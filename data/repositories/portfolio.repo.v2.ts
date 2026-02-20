@@ -12,6 +12,71 @@ export type SpotTxRow = {
   executedAt: Date
 }
 
+function statusFromPnl(pnlUsd: number): "win" | "loss" | "break_even" {
+  if (Math.abs(pnlUsd) < 0.01) return "break_even"
+  return pnlUsd > 0 ? "win" : "loss"
+}
+
+async function avgCostBeforeSell(params: {
+  accountId: string
+  symbol: string
+  executedAt: Date
+}): Promise<number> {
+  const symbol = params.symbol.trim().toUpperCase()
+
+  const rows = await prisma.journal_entry.findMany({
+    where: {
+      account_id: params.accountId,
+      spot_trade: { some: {} },
+      asset_name: symbol,
+      side: { in: ["buy", "sell"] },
+      trade_datetime: { lt: params.executedAt },
+    },
+    orderBy: { trade_datetime: "asc" },
+    select: {
+      side: true,
+      amount: true,
+      entry_price: true,
+      buy_fee: true,
+      sell_fee: true,
+    },
+  })
+
+  let qtyHeld = 0
+  let costBasisUsd = 0
+
+  for (const r of rows) {
+    const side = r.side as Side
+    const qty = Number(r.amount ?? 0)
+    const price = Number(r.entry_price ?? 0)
+    const fee = Number(side === "buy" ? r.buy_fee : r.sell_fee) || 0
+
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    if (!Number.isFinite(price) || price <= 0) continue
+
+    const total = qty * price
+
+    if (side === "buy") {
+      qtyHeld += qty
+      costBasisUsd += total + fee
+    } else {
+      const avg = qtyHeld > 0 ? costBasisUsd / qtyHeld : 0
+      const reduceQty = Math.min(qty, qtyHeld)
+
+      qtyHeld -= reduceQty
+      costBasisUsd -= reduceQty * avg
+
+      if (qtyHeld < 1e-10) {
+        qtyHeld = 0
+        costBasisUsd = 0
+      }
+    }
+  }
+
+  const avg = qtyHeld > 0 ? costBasisUsd / qtyHeld : 0
+  return Number.isFinite(avg) && avg > 0 ? avg : 0
+}
+
 export const PortfolioRepoV2 = {
   async ensureDefaultJournal(accountId: string) {
     const existing = await prisma.journal.findFirst({
@@ -92,26 +157,54 @@ export const PortfolioRepoV2 = {
   }) {
     const journalId = await this.ensureDefaultJournal(params.accountId)
     const strategyId = await this.ensureNoneStrategy(params.accountId)
-    const tradeType = 0
+
+    const symbol = params.symbol.trim().toUpperCase()
+    const qty = params.qty
+    const priceUsd = params.priceUsd
     const feeUsd = params.feeUsd ?? 0
+
+    let entry_price = priceUsd
+    let exit_price: number | null = null
+    let status: "in_progress" | "win" | "loss" | "break_even" = "in_progress"
+    let amount_spent = qty * priceUsd
+
+    const buy_fee = params.side === "buy" ? feeUsd : 0
+    const sell_fee = params.side === "sell" ? feeUsd : 0
+
+    if (params.side === "sell") {
+      const avgEntry = await avgCostBeforeSell({
+        accountId: params.accountId,
+        symbol,
+        executedAt: params.executedAt,
+      })
+
+      entry_price = avgEntry > 0 ? avgEntry : priceUsd
+      exit_price = priceUsd
+
+      amount_spent = qty * entry_price
+
+      const pnlNet = (exit_price - entry_price) * qty - sell_fee
+      status = statusFromPnl(pnlNet)
+    }
 
     const je = await prisma.journal_entry.create({
       data: {
         account_id: params.accountId,
-        trade_type: tradeType,
-        asset_name: params.symbol.toUpperCase(),
+        trade_type: 0,
+        asset_name: symbol,
         side: params.side,
-        status: "in_progress",
-        entry_price: params.priceUsd,
-        amount: params.qty,
+        status,
+        entry_price,
+        exit_price,
+        amount: qty,
         trade_datetime: params.executedAt,
         strategy_id: strategyId,
         notes_entry: params.notes ?? null,
         strategy_rule_match: 0,
-        amount_spent: params.qty * params.priceUsd,
+        amount_spent,
         journal_id: journalId,
-        buy_fee: params.side === "buy" ? feeUsd : 0,
-        sell_fee: params.side === "sell" ? feeUsd : 0,
+        buy_fee,
+        sell_fee,
         timeframe_code: "1D",
         trading_fee: 0,
       },
