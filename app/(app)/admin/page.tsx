@@ -29,7 +29,7 @@ export default async function AdminHomePage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto p-6">
       <h1 className="text-2xl font-bold mb-2">Admin Console</h1>
       <p className="text-sm text-gray-600 mb-6">Choose a section to manage.</p>
 

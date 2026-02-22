@@ -77,131 +77,304 @@ export default function DashboardShell({ children }: Props) {
   const portfolioGroupActive =
     pathname === "/portfolio" || pathname === "/exit-strategy";
 
+  const topNavLinkBase =
+    "text-sm px-3 py-2 rounded-xl transition-colors whitespace-nowrap";
+  const topNavInactive = "text-[#6B6777] hover:bg-white";
+  const topNavActive = "bg-[#F1EAFE] text-[#7C3AED] font-semibold";
+
+  const isTopActive = (href: string) => pathname === href;
+
   return (
     <div className="min-h-dvh bg-gray-50">
-      <div
-        className="relative text-gray-700"
-        style={{ backgroundColor: "#f6f1ff" }}
-      >
-        <div className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6 relative">
-            <Link
-              href="/"
-              className="inline-flex items-center"
-              aria-label="Stakk AI – Home"
-              title="Stakk AI"
-            >
-              <span
-                className="font-extrabold leading-none tracking-tight"
-                style={{
-                  fontSize: 24,
-                  color: "#0F1220",
-                }}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-[#E9E6F2] text-[#14121A]">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-3">
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="flex items-center gap-6 min-w-0">
+              <Link
+                href="/"
+                className="flex items-center gap-3"
+                aria-label="Stakk AI – Home"
+                title="Stakk AI"
               >
-                Stakk
-              </span>
+                <div className="h-9 w-9 rounded-[12px] bg-[radial-gradient(circle_at_30%_30%,#B49BFF,#7C3AED)] shadow-[0_10px_22px_rgba(124,58,237,0.25)] relative overflow-hidden">
+                  <div className="absolute inset-[9px] rounded-[10px] bg-white/70 rotate-[14deg] [clip-path:polygon(0_40%,55%_0,100%_40%,55%_100%)]" />
+                </div>
+                <span className="font-extrabold tracking-[0.02em] text-[18px]">
+                  Stakk <b className="text-[#7C3AED] font-extrabold">AI</b>
+                </span>
+              </Link>
 
-              <span style={{ width: 6, display: "inline-block" }} />
-
-              <span
-                className="font-extrabold leading-none tracking-tight bg-clip-text text-transparent bg-gradient-to-r"
-                style={{
-                  fontSize: 24,
-                  backgroundImage:
-                    "linear-gradient(90deg, #6D28D9 0%, #A855F7 100%)",
-                }}
+              <nav
+                className="hidden lg:flex items-center gap-2 text-[14px]"
+                aria-label="Primary navigation"
               >
-                AI
-              </span>
-            </Link>
+                <Link
+                  href="/dashboard"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/dashboard") ? topNavActive : topNavInactive
+                  }`}
+                >
+                  Home
+                </Link>
+                <Link
+                  href="/journal"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/journal") ? topNavActive : topNavInactive
+                  }`}
+                >
+                  Trading Journal
+                </Link>
+                <Link
+                  href="/strategies"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/strategies") ? topNavActive : topNavInactive
+                  }`}
+                >
+                  Strategy Creator
+                </Link>
+                <Link
+                  href="/exit-strategy"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/exit-strategy")
+                      ? topNavActive
+                      : topNavInactive
+                  }`}
+                >
+                  Exit Strategy
+                </Link>
+                <Link
+                  href="/trade-analyzer"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/trade-analyzer")
+                      ? topNavActive
+                      : topNavInactive
+                  }`}
+                >
+                  Trade Analyzer
+                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className={`${topNavLinkBase} ${
+                      isTopActive("/admin") ? topNavActive : topNavInactive
+                    }`}
+                  >
+                    Admin
+                  </Link>
+                )}
+              </nav>
+            </div>
 
-            <nav className="hidden xl:flex items-center gap-6 opacity-90">
-              <Link href="/dashboard">Home</Link>
-              <Link href="/journal">Trading Journal</Link>
-              <Link href="/strategies">Strategy Creator</Link>
-              <Link href="/exit-strategy">Exit Strategy</Link>
-              <Link href="/trade-analyzer">Trade Analyzer</Link>
-              {isAdmin && <Link href="/admin">Admin</Link>}
-            </nav>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAccOpen(true)}
+                className="hidden sm:inline-flex items-center gap-2 rounded-full border border-[#E9E6F2] bg-white px-3 py-2 text-[13px] text-[#6B6777] shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
+                title="Switch account"
+              >
+                <span className="text-[#6D28D9] font-black text-base">⎈</span>
+                <span>Accounts</span>
+              </button>
 
-            <button
-              className="inline-flex flex-col items-center justify-center rounded-full bg-white/15 p-2 hover:bg-white/20 xl:hidden cursor-pointer"
-              onClick={() => setMobileOpen((v) => !v)}
-              aria-label="Open menu"
-              aria-expanded={mobileOpen}
-              aria-controls="mobile-nav"
-            >
-              <span className="block h-0.5 w-5 bg-gray-700 mb-1.5" />
-              <span className="block h-0.5 w-5 bg-gray-700 mb-1.5" />
-              <span className="block h-0.5 w-5 bg-gray-700" />
-            </button>
+              <div className="relative">
+                <button
+                  onClick={() => setOpenProfile((v) => !v)}
+                  className="flex items-center gap-2 rounded-full border border-[#E9E6F2] bg-white px-3 py-2 text-[13px] text-[#14121A] shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
+                >
+                  <span className="h-7 w-7 rounded-full bg-gradient-to-br from-[#B49BFF] to-[#7C3AED] grid place-items-center overflow-hidden relative text-[11px] font-extrabold text-white">
+                    {data?.user?.image ? (
+                      <Image
+                        src={data.user.image}
+                        alt="avatar"
+                        fill
+                        className="object-cover"
+                        sizes="28px"
+                      />
+                    ) : (
+                      avatarText
+                    )}
+                  </span>
+                  <span className="hidden sm:inline font-semibold truncate max-w-[140px]">
+                    {displayName}
+                  </span>
+                </button>
+
+                {openProfile && (
+                  <div
+                    className="absolute right-0 mt-2 w-64 bg-white text-gray-800 rounded-2xl shadow-xl p-2 z-50 border border-gray-100"
+                    onMouseLeave={() => setOpenProfile(false)}
+                  >
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Hi, {displayName.split(" ")[0]}!
+                    </div>
+                    <MenuItem href="/profile" label="My profile" emoji="🙋‍♂️" />
+
+                    <button
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 cursor-pointer"
+                      onClick={() => signOut({ callbackUrl: "/login" })}
+                    >
+                      <span className="text-lg">🚪</span> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="inline-flex lg:hidden flex-col items-center justify-center rounded-full border border-[#E9E6F2] bg-white p-2 shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
+                onClick={() => setMobileOpen((v) => !v)}
+                aria-label="Open menu"
+                aria-expanded={mobileOpen}
+                aria-controls="mobile-nav"
+              >
+                <span className="block h-0.5 w-5 bg-[#14121A] mb-1.5 rounded-full" />
+                <span className="block h-0.5 w-5 bg-[#14121A] mb-1.5 rounded-full" />
+                <span className="block h-0.5 w-5 bg-[#14121A] rounded-full" />
+              </button>
+            </div>
 
             {mobileOpen && (
               <>
                 <div
-                  className="fixed inset-0 z-[45] bg-black/30 xl:hidden"
+                  className="fixed inset-0 z-[45] bg-black/30 lg:hidden"
                   onClick={() => setMobileOpen(false)}
                 />
                 <div
                   id="mobile-nav"
-                  className="absolute left-0 right-0 top-full z-50 xl:hidden border-t border-white/20 backdrop-blur-sm"
-                  style={{ backgroundColor: "#f6f1ff" }}
+                  className="absolute left-0 right-0 top-full z-50 lg:hidden border-t border-[#E9E6F2] bg-gradient-to-b from-white via-[#F7F4FF] to-[#EFE9FF] backdrop-blur shadow-[0_18px_40px_rgba(20,18,26,0.22)] rounded-b-2xl"
                 >
-                  <div className="mx-auto max-w-7xl px-6 py-3">
-                    <ul className="grid gap-2 text-gray-700 animate-[fadeDown_160ms_ease-out]">
+                  <div className="mx-auto max-w-7xl px-4 md:px-6 py-3">
+                    <ul className="grid gap-2 text-sm animate-[fadeDown_160ms_ease-out]">
                       <li>
                         <Link
                           href="/dashboard"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/dashboard")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
                         >
-                          Home
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              🏠
+                            </span>
+                            <span className="font-medium">Home</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/dashboard") ? "Current" : ""}
+                          </span>
                         </Link>
                       </li>
+
                       <li>
                         <Link
                           href="/journal"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/journal")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
                         >
-                          Trading Journal
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              🗒️
+                            </span>
+                            <span className="font-medium">Trading Journal</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/journal") ? "Current" : ""}
+                          </span>
                         </Link>
                       </li>
+
                       <li>
                         <Link
                           href="/strategies"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/strategies")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
                         >
-                          Strategy Creator
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              🧭
+                            </span>
+                            <span className="font-medium">
+                              Strategy Creator
+                            </span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/strategies") ? "Current" : ""}
+                          </span>
                         </Link>
                       </li>
+
                       <li>
                         <Link
                           href="/exit-strategy"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/exit-strategy")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
                         >
-                          Exit Strategy Simulator
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              🚪
+                            </span>
+                            <span className="font-medium">Exit Strategy</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/exit-strategy") ? "Current" : ""}
+                          </span>
                         </Link>
                       </li>
+
                       <li>
                         <Link
                           href="/trade-analyzer"
-                          className="block rounded-xl px-3 py-2 hover:bg-white/20"
                           onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/trade-analyzer")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
                         >
-                          Trade Analyzer
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              📈
+                            </span>
+                            <span className="font-medium">Trade Analyzer</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/trade-analyzer") ? "Current" : ""}
+                          </span>
                         </Link>
                       </li>
+
                       {isAdmin && (
                         <li>
                           <Link
                             href="/admin"
-                            className="block rounded-xl px-3 py-2 hover:bg-white/20"
                             onClick={() => setMobileOpen(false)}
+                            className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                              isTopActive("/admin")
+                                ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                                : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                            }`}
                           >
-                            Admin
+                            <div className="flex items-center gap-3">
+                              <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                                🛡️
+                              </span>
+                              <span className="font-medium">Admin</span>
+                            </div>
+                            <span className="text-xs text-[#9C92D4]">
+                              {isTopActive("/admin") ? "Current" : ""}
+                            </span>
                           </Link>
                         </li>
                       )}
@@ -211,59 +384,8 @@ export default function DashboardShell({ children }: Props) {
               </>
             )}
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setAccOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20 cursor-pointer"
-              title="Switch account"
-            >
-              <span>👥</span> Accounts
-            </button>
-
-            <div className="relative">
-              <button
-                onClick={() => setOpenProfile((v) => !v)}
-                className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 hover:bg-white/20 cursor-pointer"
-              >
-                <span className="h-8 w-8 rounded-full bg-white/20 grid place-items-center overflow-hidden relative">
-                  {data?.user?.image ? (
-                    <Image
-                      src={data.user.image}
-                      alt="avatar"
-                      fill
-                      className="object-cover"
-                      sizes="32px"
-                    />
-                  ) : (
-                    avatarText
-                  )}
-                </span>
-                <span className="hidden sm:inline">{displayName}</span>
-              </button>
-
-              {openProfile && (
-                <div
-                  className="absolute right-0 mt-2 w-64 bg-white text-gray-800 rounded-2xl shadow-xl p-2 z-50"
-                  onMouseLeave={() => setOpenProfile(false)}
-                >
-                  <div className="px-3 py-2 text-sm text-gray-500">
-                    Hi, {displayName.split(" ")[0]}!
-                  </div>
-                  <MenuItem href="/profile" label="My profile" emoji="🙋‍♂️" />
-
-                  <button
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 cursor-pointer"
-                    onClick={() => signOut({ callbackUrl: "/login" })}
-                  >
-                    <span className="text-lg">🚪</span> Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-      </div>
+      </header>
 
       <div className="mx-auto w-full max-w-7xl md:max-w-none px-4 md:px-6 py-6 relative">
         <aside
