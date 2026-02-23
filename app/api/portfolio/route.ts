@@ -294,14 +294,11 @@ export async function GET() {
       }
     }
 
+    const openStates = Array.from(st.values()).filter((g) => g.qtyHeld > 0);
+
     const assetRows = await Promise.all(
-      Array.from(st.values()).map(async (g) => {
-        const avgEntry =
-          g.qtyHeld > 0
-            ? g.costBasisUsd / g.qtyHeld
-            : g.totalInvestedUsd > 0
-              ? g.totalInvestedUsd
-              : 0;
+      openStates.map(async (g) => {
+        const avgEntry = g.qtyHeld > 0 ? g.costBasisUsd / g.qtyHeld : 0;
 
         const pr = await resolvePrice(
           g.symbol,
@@ -319,16 +316,10 @@ export async function GET() {
           name: g.name,
           coingeckoId: g.coingeckoId,
           iconUrl: g.iconUrl,
-
           priceUsd: pr.priceUsd,
           change24hPct: pr.change24hPct,
           totalInvestedUsd: g.totalInvestedUsd,
-          avgPriceUsd:
-            g.qtyHeld > 0
-              ? avgEntry
-              : g.totalInvestedUsd > 0
-                ? g.totalInvestedUsd
-                : 0,
+          avgPriceUsd: avgEntry,
           qtyHeld: g.qtyHeld,
           holdingsValueUsd,
           currentProfitUsd,
