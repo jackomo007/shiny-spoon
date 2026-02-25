@@ -22,21 +22,20 @@ model user {
 }
 
 model account {
-  id         String       @id @default(uuid()) @db.Char(36)
-  user_id    Int
-  type       account_type
-  name       String?      @db.VarChar(100)
-  created_at DateTime     @default(now()) @db.DateTime(0)
-
+  id                 String                 @id @default(uuid()) @db.Char(36)
+  user_id            Int
+  type               account_type
+  name               String?                @db.VarChar(100)
+  created_at         DateTime               @default(now()) @db.DateTime(0)
   user               user                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_account_user")
   subscriptions      chart_subscription[]
+  price_structures   coin_price_structure[]
+  exit_strategies    exit_strategy[]
   journals           journal[]
   journal_entries    journal_entry[]
   strategies         strategy[]
-  pre_trade_analyses trade_pre_analysis[]
   tags               tag[]
-  price_structures   coin_price_structure[]
-  exit_strategies exit_strategy[]
+  pre_trade_analyses trade_pre_analysis[]
 
   @@unique([user_id, type], map: "uniq_user_type")
   @@index([user_id], map: "idx_account_user")
@@ -115,8 +114,8 @@ model journal_entry {
   futures_trade       futures_trade[]
   account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
   journal             journal              @relation(fields: [journal_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_journal")
-  spot_trade          spot_trade[]
   tags                journal_entry_tag[]
+  spot_trade          spot_trade[]
 
   @@index([strategy_id], map: "fk_journal_entry_strategy")
   @@index([account_id], map: "fk_journal_entry_account")
@@ -124,13 +123,12 @@ model journal_entry {
 }
 
 model tag {
-  id         String   @id @default(uuid()) @db.Char(36)
-  account_id String   @db.Char(36)
-  name       String   @db.VarChar(100)
-  created_at DateTime @default(now()) @db.DateTime(0)
-
-  account account             @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_tag_account")
-  entries journal_entry_tag[]
+  id         String              @id @default(uuid()) @db.Char(36)
+  account_id String              @db.Char(36)
+  name       String              @db.VarChar(100)
+  created_at DateTime            @default(now()) @db.DateTime(0)
+  entries    journal_entry_tag[]
+  account    account             @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_tag_account")
 
   @@unique([account_id, name], map: "uniq_tag_account_name")
   @@index([account_id], map: "idx_tag_account")
@@ -139,11 +137,11 @@ model tag {
 model journal_entry_tag {
   journal_entry_id String
   tag_id           String
-
-  journal_entry journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  tag           tag           @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  journal_entry    journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  tag              tag           @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([journal_entry_id, tag_id])
+  @@index([tag_id], map: "journal_entry_tag_tag_id_fkey")
 }
 
 model spot_trade {
@@ -273,9 +271,9 @@ model verified_asset {
   symbol       String   @unique @db.VarChar(50)
   name         String?  @db.VarChar(100)
   exchange     String   @default("Binance") @db.VarChar(50)
+  created_at   DateTime @default(now()) @db.DateTime(0)
   coingecko_id String?  @db.VarChar(100)
   image_url    String?  @db.VarChar(2048)
-  created_at   DateTime @default(now()) @db.DateTime(0)
   updated_at   DateTime @updatedAt @db.DateTime(0)
 
   @@index([name])
@@ -331,51 +329,39 @@ model portfolio_trade {
 }
 
 model exit_strategy {
-  id            String   @id @default(uuid()) @db.Char(36)
-  account_id    String   @db.Char(36)
-  coin_symbol   String   @db.VarChar(20)
-  is_all_coins  Boolean  @default(false)
+  id            String                    @id @default(uuid()) @db.Char(36)
+  account_id    String                    @db.Char(36)
+  coin_symbol   String                    @db.VarChar(20)
+  strategy_type exit_strategy_type        @default(percentage)
+  sell_percent  Decimal                   @db.Decimal(5, 2)
+  gain_percent  Decimal                   @db.Decimal(6, 2)
+  is_active     Boolean                   @default(true)
+  created_at    DateTime                  @default(now()) @db.DateTime(0)
+  updated_at    DateTime                  @updatedAt @db.DateTime(0)
+  account       account                   @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_account")
+  executions    exit_strategy_execution[]
 
-  strategy_type exit_strategy_type @default(percentage)
-  sell_percent  Decimal  @db.Decimal(5, 2)
-  gain_percent  Decimal  @db.Decimal(6, 2)
-
-  is_active     Boolean  @default(true)
-  created_at    DateTime @default(now()) @db.DateTime(0)
-  updated_at    DateTime @updatedAt @db.DateTime(0)
-
-  account     account                   @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_account")
-  executions  exit_strategy_execution[]
-
+  @@unique([account_id, coin_symbol, strategy_type], map: "uniq_exit_strategy_account_coin_type")
   @@index([account_id], map: "idx_exit_strategy_account")
   @@index([account_id, coin_symbol], map: "idx_exit_strategy_account_coin")
-  @@unique([account_id, coin_symbol, strategy_type], map: "uniq_exit_strategy_account_coin_type")
   @@map("exit_strategy")
 }
 
 model exit_strategy_execution {
-  id                String   @id @default(uuid()) @db.Char(36)
-  exit_strategy_id  String   @db.Char(36)
+  id                String        @id @default(uuid()) @db.Char(36)
+  exit_strategy_id  String        @db.Char(36)
+  step_gain_percent Decimal       @db.Decimal(6, 2)
+  target_price      Decimal       @db.Decimal(18, 8)
+  executed_price    Decimal       @db.Decimal(18, 8)
+  quantity_sold     Decimal       @db.Decimal(18, 8)
+  proceeds          Decimal       @db.Decimal(18, 8)
+  realized_profit   Decimal       @db.Decimal(18, 8)
+  executed_at       DateTime      @default(now()) @db.DateTime(0)
+  strategy          exit_strategy @relation(fields: [exit_strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_execution_strategy")
 
-  step_gain_percent Decimal  @db.Decimal(6, 2)
-  target_price      Decimal  @db.Decimal(18, 8)
-  executed_price    Decimal  @db.Decimal(18, 8)
-
-  quantity_sold     Decimal  @db.Decimal(18, 8)
-  proceeds          Decimal  @db.Decimal(18, 8)
-  realized_profit   Decimal  @db.Decimal(18, 8)
-
-  executed_at       DateTime @default(now()) @db.DateTime(0)
-
-  strategy exit_strategy @relation(fields: [exit_strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_exit_strategy_execution_strategy")
-
-  @@index([exit_strategy_id], map: "idx_exit_strategy_execution_strategy")
   @@unique([exit_strategy_id, step_gain_percent], map: "uniq_strategy_step_gain")
+  @@index([exit_strategy_id], map: "idx_exit_strategy_execution_strategy")
   @@map("exit_strategy_execution")
-}
-
-enum exit_strategy_type {
-  percentage
 }
 
 model coin_price_structure {
@@ -384,18 +370,20 @@ model coin_price_structure {
   asset_symbol  String   @db.VarChar(50)
   exchange      String   @db.VarChar(50)
   timeframe     String   @db.VarChar(16)
-
   levels_json   String   @db.LongText
   last_price    Decimal  @db.Decimal(18, 8)
   last_price_at DateTime @db.DateTime(0)
   created_at    DateTime @default(now()) @db.DateTime(0)
   updated_at    DateTime @updatedAt @db.DateTime(0)
+  account       account  @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_price_structure_account")
 
-  account account @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_price_structure_account")
-
-  @@index([account_id], map: "idx_price_structure_account")
   @@unique([account_id, asset_symbol, exchange, timeframe], map: "uniq_price_structure_acc_asset_ex_tf")
+  @@index([account_id], map: "idx_price_structure_account")
   @@map("coin_price_structure")
+}
+
+enum exit_strategy_type {
+  percentage
 }
 
 enum account_type {
