@@ -334,6 +334,7 @@ model exit_strategy {
   id            String   @id @default(uuid()) @db.Char(36)
   account_id    String   @db.Char(36)
   coin_symbol   String   @db.VarChar(20)
+  is_all_coins  Boolean  @default(false)
 
   strategy_type exit_strategy_type @default(percentage)
   sell_percent  Decimal  @db.Decimal(5, 2)

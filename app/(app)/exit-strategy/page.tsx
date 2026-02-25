@@ -1,66 +1,91 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import Modal from "@/components/ui/Modal"
-import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete"
+import { useEffect, useMemo, useState } from "react";
+import Modal from "@/components/ui/Modal";
+import AssetMultiSelect, {
+  type CoinSelection,
+} from "@/components/trade-analyzer/AssetMultiSelect";
 
-type StrategyType = "percentage"
+type StrategyType = "percentage";
+
+type ExitStrategyAssetSummary = {
+  coinSymbol: string;
+  qtyOpen: number;
+  entryPriceUsd: number;
+  currentPriceUsd: number;
+  currentPriceSource: "binance" | "coingecko" | "db_cache" | "avg_entry";
+  currentPriceIsEstimated: boolean;
+  nextGainPercent: number;
+  targetPriceUsd: number;
+  qtyToSell: number;
+  usdValueToSell: number;
+  distanceToTargetPercent: number;
+  status: "pending" | "ready";
+};
 
 type ExitStrategySummary = {
-  id: string
-  coinSymbol: string
-  strategyType: StrategyType
-  sellPercent: number
-  gainPercent: number
-  isActive: boolean
-
-  qtyOpen: number
-  entryPriceUsd: number
-
-  currentPriceUsd: number
-  currentPriceSource: "binance" | "coingecko" | "db_cache" | "avg_entry"
-  currentPriceIsEstimated: boolean
-
-  nextGainPercent: number
-  targetPriceUsd: number
-  qtyToSell: number
-  usdValueToSell: number
-  distanceToTargetPercent: number
-
-  status: "pending" | "ready"
-}
+  id: string;
+  isAllCoins: boolean;
+  coinSymbols: string[];
+  strategyType: StrategyType;
+  sellPercent: number;
+  gainPercent: number;
+  isActive: boolean;
+  assets: ExitStrategyAssetSummary[];
+  totalAssets: number;
+  totalProfitUsd: number;
+};
 
 type ExitStrategyStepRow = {
-  gainPercent: number
-  targetPriceUsd: number
-  plannedQtyToSell: number
-  executedQtyToSell: number | null
-  proceedsUsd: number
-  remainingQtyAfter: number
-  realizedProfitUsd: number
-  cumulativeRealizedProfitUsd: number
-  isExecuted?: boolean
-}
+  gainPercent: number;
+  targetPriceUsd: number;
+  plannedQtyToSell: number;
+  executedQtyToSell: number | null;
+  proceedsUsd: number;
+  remainingQtyAfter: number;
+  realizedProfitUsd: number;
+  cumulativeRealizedProfitUsd: number;
+  isExecuted?: boolean;
+};
 
-type Details = { summary: ExitStrategySummary; rows: ExitStrategyStepRow[] }
+type Details = {
+  summary: ExitStrategySummary;
+  rowsByCoin: Record<string, ExitStrategyStepRow[]>;
+};
+
+type SimCoinResult = {
+  coinSymbol: string;
+  qtyOpen: number;
+  entryPriceUsd: number;
+  rows: ExitStrategyStepRow[];
+};
 
 function usd(n: number | null | undefined) {
-  const v = typeof n === "number" && !Number.isNaN(n) ? n : 0
-  return v.toLocaleString(undefined, { style: "currency", currency: "USD" })
+  const v = typeof n === "number" && !Number.isNaN(n) ? n : 0;
+  return v.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
 function num(n: number, d = 2) {
-  if (!Number.isFinite(n)) return "-"
-  return n.toLocaleString(undefined, { maximumFractionDigits: d })
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString(undefined, { maximumFractionDigits: d });
 }
 
 function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n))
+  return Math.min(max, Math.max(min, n));
 }
 
-function ScaleOutPlanTable({ rows, coinSymbol }: { rows: ExitStrategyStepRow[]; coinSymbol: string }) {
+function ScaleOutPlanTable({
+  rows,
+  coinSymbol,
+}: {
+  rows: ExitStrategyStepRow[];
+  coinSymbol: string;
+}) {
   return (
     <div className="rounded-xl border bg-white overflow-x-auto overflow-y-auto max-h-[45vh]">
+      <div className="px-4 py-2 border-b bg-gray-50 text-sm font-medium text-gray-700">
+        {coinSymbol}
+      </div>
       <table className="w-full text-sm">
         <thead className="border-b bg-gray-50 sticky top-0 z-10">
           <tr className="text-left text-gray-600">
@@ -73,211 +98,251 @@ function ScaleOutPlanTable({ rows, coinSymbol }: { rows: ExitStrategyStepRow[]; 
             <th className="px-4 py-3">Cumulative Profit</th>
           </tr>
         </thead>
-
         <tbody>
           {rows.map((r) => {
-            const qtySold = r.executedQtyToSell ?? r.plannedQtyToSell
+            const qtySold = r.executedQtyToSell ?? r.plannedQtyToSell;
             return (
               <tr key={r.gainPercent} className="border-b last:border-b-0">
                 <td className="px-4 py-3">+{num(r.gainPercent, 0)}%</td>
                 <td className="px-4 py-3">{usd(r.targetPriceUsd)}</td>
-                <td className="px-4 py-3">{num(qtySold, 8).replace(/\.?0+$/, "")}</td>
+                <td className="px-4 py-3">
+                  {num(qtySold, 8).replace(/\.?0+$/, "")}
+                </td>
                 <td className="px-4 py-3">{usd(r.proceedsUsd)}</td>
-                <td className="px-4 py-3">{num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}</td>
+                <td className="px-4 py-3">
+                  {num(r.remainingQtyAfter, 8).replace(/\.?0+$/, "")}
+                </td>
                 <td className="px-4 py-3">{usd(r.realizedProfitUsd)}</td>
-                <td className="px-4 py-3">{usd(r.cumulativeRealizedProfitUsd)}</td>
+                <td className="px-4 py-3">
+                  {usd(r.cumulativeRealizedProfitUsd)}
+                </td>
               </tr>
-            )
+            );
           })}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
 export default function ExitStrategyPage() {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [items, setItems] = useState<ExitStrategySummary[]>([])
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<ExitStrategySummary[]>([]);
 
-  const [addOpen, setAddOpen] = useState(false)
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const [details, setDetails] = useState<Details | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [details, setDetails] = useState<Details | null>(null);
 
-  const [confirmDelete, setConfirmDelete] = useState<null | { id: string; label: string }>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<null | {
+    id: string;
+    label: string;
+  }>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const [coinSymbol, setCoinSymbol] = useState("ADA")
-  const [strategyType, setStrategyType] = useState<StrategyType>("percentage")
-  const [sellPercent, setSellPercent] = useState(25)
-  const [gainPercent, setGainPercent] = useState(30)
+  // ── Add modal state ──────────────────────────────────────────────────────────
+  const [coinSelection, setCoinSelection] = useState<CoinSelection>([]);
+  const [strategyType, setStrategyType] = useState<StrategyType>("percentage");
+  const [sellPercent, setSellPercent] = useState(25);
+  const [gainPercent, setGainPercent] = useState(30);
 
-  const [addError, setAddError] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+  const [simResults, setSimResults] = useState<SimCoinResult[] | null>(null);
 
-  const [simLoading, setSimLoading] = useState(false)
-  const [simError, setSimError] = useState<string | null>(null)
-  const [simRows, setSimRows] = useState<ExitStrategyStepRow[] | null>(null)
-
-  const canShowPctFields = useMemo(() => strategyType === "percentage", [strategyType])
-
-  const handleCoinChange = (v: string) => {
-    const next = (v ?? "").trim()
-    if (!next) return
-    setCoinSymbol(next.toUpperCase())
-  }
+  const canSimulate = useMemo(() => {
+    if (strategyType !== "percentage") return false;
+    if (coinSelection === "all") return true;
+    return coinSelection.length > 0;
+  }, [strategyType, coinSelection]);
 
   const load = async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/exit-strategies", { cache: "no-store" })
+      const res = await fetch("/api/exit-strategies", { cache: "no-store" });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
-        throw new Error(j.error || `HTTP ${res.status}`)
+        const j = (await res
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
+        throw new Error(j.error || `HTTP ${res.status}`);
       }
-      const json = (await res.json()) as { data: ExitStrategySummary[] }
-      setItems(json.data)
+      const json = (await res.json()) as { data: ExitStrategySummary[] };
+      setItems(json.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load")
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    void load()
-  }, [])
+    void load();
+  }, []);
 
   useEffect(() => {
     if (!addOpen) {
-      setAddError(null)
-      setSimError(null)
-      setSimRows(null)
-      setSimLoading(false)
+      setAddError(null);
+      setSimError(null);
+      setSimResults(null);
+      setSimLoading(false);
+      setCoinSelection([]);
     }
-  }, [addOpen])
+  }, [addOpen]);
 
   const openDetails = async (id: string) => {
-    setSelectedId(id)
-    setDetails(null)
-    setDetailsOpen(true)
-    setError(null)
-
+    setDetails(null);
+    setDetailsOpen(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/exit-strategies/${encodeURIComponent(id)}`, { cache: "no-store" })
+      const res = await fetch(
+        `/api/exit-strategies/${encodeURIComponent(id)}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
-        throw new Error(j.error || `HTTP ${res.status}`)
+        const j = (await res
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
+        throw new Error(j.error || `HTTP ${res.status}`);
       }
-      const json = (await res.json()) as { data: Details }
-      setDetails(json.data)
+      const json = (await res.json()) as { data: Details };
+      setDetails(json.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load details")
+      setError(e instanceof Error ? e.message : "Failed to load details");
     }
-  }
+  };
 
   const createStrategy = async () => {
-    setError(null)
-    setAddError(null)
+    setError(null);
+    setAddError(null);
+
+    if (coinSelection !== "all" && coinSelection.length === 0) {
+      setAddError("Please select at least one coin.");
+      return;
+    }
 
     try {
+      const body =
+        coinSelection === "all"
+          ? { allCoins: true, strategyType, sellPercent, gainPercent }
+          : {
+              allCoins: false,
+              coinSymbols: coinSelection,
+              strategyType,
+              sellPercent,
+              gainPercent,
+            };
+
       const res = await fetch("/api/exit-strategies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coinSymbol, strategyType, sellPercent, gainPercent }),
-      })
+        body: JSON.stringify(body),
+      });
 
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
-
+        const j = (await res
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
         if (res.status === 409) {
-          setAddError(j.error || "An exit strategy for this coin already exists. Open it in View to see details.")
-          return
+          setAddError(
+            j.error ||
+              "An exit strategy already exists for one or more selected coins.",
+          );
+          return;
         }
-
-        throw new Error(j.error || "Operation failed")
+        throw new Error(j.error || "Operation failed");
       }
 
-      setAddOpen(false)
-      await load()
+      setAddOpen(false);
+      await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create")
+      setError(e instanceof Error ? e.message : "Failed to create");
     }
-  }
+  };
 
   const simulatePlan = async () => {
-    setSimLoading(true)
-    setSimError(null)
-    setSimRows(null)
+    setSimLoading(true);
+    setSimError(null);
+    setSimResults(null);
 
     try {
+      const body =
+        coinSelection === "all"
+          ? { allCoins: true, sellPercent, gainPercent, maxSteps: 10 }
+          : {
+              allCoins: false,
+              coinSymbols: coinSelection,
+              sellPercent,
+              gainPercent,
+              maxSteps: 10,
+            };
+
       const res = await fetch("/api/exit-strategies/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coinSymbol,
-          sellPercent,
-          gainPercent,
-          maxSteps: 10,
-        }),
-      })
+        body: JSON.stringify(body),
+      });
 
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
-        throw new Error(j.error || `HTTP ${res.status}`)
+        const j = (await res
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
+        throw new Error(j.error || `HTTP ${res.status}`);
       }
 
-      const json = (await res.json()) as { data: { rows: ExitStrategyStepRow[] } }
-      setSimRows(json.data.rows)
+      const json = (await res.json()) as { data: { results: SimCoinResult[] } };
+      setSimResults(json.data.results);
     } catch (e) {
-      setSimError(e instanceof Error ? e.message : "Failed to simulate")
+      setSimError(e instanceof Error ? e.message : "Failed to simulate");
     } finally {
-      setSimLoading(false)
+      setSimLoading(false);
     }
-  }
+  };
 
-  const requestDelete = (id: string, label: string) => {
-    setConfirmDelete({ id, label })
-  }
+  const requestDelete = (id: string, label: string) =>
+    setConfirmDelete({ id, label });
 
   const confirmDeleteNow = async () => {
-    if (!confirmDelete) return
-    const { id } = confirmDelete
-
-    setDeletingId(id)
-    setError(null)
-
+    if (!confirmDelete) return;
+    const { id } = confirmDelete;
+    setDeletingId(id);
+    setError(null);
     try {
-      const res = await fetch(`/api/exit-strategies/${encodeURIComponent(id)}`, { method: "DELETE" })
+      const res = await fetch(
+        `/api/exit-strategies/${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
       if (!res.ok && res.status !== 204) {
-        const j = (await res.json().catch(() => ({} as { error?: string }))) as { error?: string }
-        throw new Error(j.error || `Failed (${res.status})`)
+        const j = (await res
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
+        throw new Error(j.error || `Failed (${res.status})`);
       }
-
-      setConfirmDelete(null)
-      await load()
+      setConfirmDelete(null);
+      await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete")
+      setError(e instanceof Error ? e.message : "Failed to delete");
     } finally {
-      setDeletingId(null)
+      setDeletingId(null);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Exit Strategy</h1>
-          <p className="text-sm text-gray-500">Execution-ready scale-out plans for your portfolio.</p>
+          <p className="text-sm text-gray-500">
+            Execution-ready scale-out plans for your portfolio.
+          </p>
         </div>
-
         <button
           className="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700"
           onClick={() => {
-            setAddError(null)
-            setAddOpen(true)
+            setAddError(null);
+            setAddOpen(true);
           }}
           type="button"
         >
@@ -285,7 +350,11 @@ export default function ExitStrategyPage() {
         </button>
       </div>
 
-      {error && <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-200">
+          {error}
+        </div>
+      )}
 
       <div className="rounded-2xl border bg-white p-6">
         <div className="text-lg font-semibold mb-4">Your Strategies</div>
@@ -299,25 +368,39 @@ export default function ExitStrategyPage() {
         ) : (
           <div className="grid gap-4">
             {items.map((s) => {
-              const isReady = s.status === "ready"
+              const firstAsset = s.assets[0];
+              if (!firstAsset) return null;
 
-              const statusLabel = isReady ? "Ready" : "Pending"
-              const statusClasses = isReady ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-700"
-
-              const distance = clamp(s.distanceToTargetPercent, 0, 100)
-              const progress = 100 - distance
+              const isReady = firstAsset.status === "ready";
+              const statusLabel = isReady ? "Ready" : "Pending";
+              const statusClasses = isReady
+                ? "bg-purple-100 text-purple-700"
+                : "bg-gray-100 text-gray-700";
+              const distance = clamp(
+                firstAsset.distanceToTargetPercent,
+                0,
+                100,
+              );
+              const progress = 100 - distance;
 
               return (
-                <div key={s.id} className="rounded-2xl border bg-white overflow-hidden">
+                <div
+                  key={s.id}
+                  className="rounded-2xl border bg-white overflow-hidden"
+                >
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-lg font-semibold">{s.coinSymbol}</div>
+                        <div className="text-lg font-semibold">
+                          {s.isAllCoins
+                            ? "All Coins"
+                            : s.coinSymbols.join(", ")}
+                        </div>
                         <div className="text-sm text-gray-500">
-                          Sell {num(s.sellPercent, 2)}% every {num(s.gainPercent, 2)}% gain
+                          Sell {num(s.sellPercent, 2)}% every{" "}
+                          {num(s.gainPercent, 2)}% gain
                         </div>
                       </div>
-
                       <div className="flex items-center gap-2">
                         <button
                           className="h-9 px-4 rounded-xl bg-purple-600 text-white text-sm hover:bg-purple-700"
@@ -326,10 +409,16 @@ export default function ExitStrategyPage() {
                         >
                           View
                         </button>
-
                         <button
                           className="h-9 w-10 rounded-xl border bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                          onClick={() => requestDelete(s.id, s.coinSymbol)}
+                          onClick={() =>
+                            requestDelete(
+                              s.id,
+                              s.isAllCoins
+                                ? "All Coins"
+                                : s.coinSymbols.join(", "),
+                            )
+                          }
                           aria-label="Delete strategy"
                           title="Delete"
                           type="button"
@@ -344,25 +433,39 @@ export default function ExitStrategyPage() {
                       <div className="text-sm text-gray-700">
                         Next:{" "}
                         <span className="font-semibold text-gray-900">
-                          Sell {num(s.qtyToSell, 8).replace(/\.?0+$/, "")} {s.coinSymbol} ({usd(s.usdValueToSell)}) at $
-                          {Number(s.targetPriceUsd).toFixed(3)} (+{num(s.nextGainPercent, 0)}%)
+                          Sell{" "}
+                          {num(firstAsset.qtyToSell, 8).replace(/\.?0+$/, "")}{" "}
+                          {firstAsset.coinSymbol} (
+                          {usd(firstAsset.usdValueToSell)}) at $
+                          {Number(firstAsset.targetPriceUsd).toFixed(3)} (+
+                          {num(firstAsset.nextGainPercent, 0)}%)
                         </span>
                       </div>
                     </div>
 
                     <div className="mt-3 flex items-center gap-3 text-sm">
                       <div className="text-gray-600">
-                        Distance: <span className="text-gray-900">{num(s.distanceToTargetPercent, 2)}%</span>
+                        Distance:{" "}
+                        <span className="text-gray-900">
+                          {num(firstAsset.distanceToTargetPercent, 2)}%
+                        </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${statusClasses}`}>{statusLabel}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs ${statusClasses}`}
+                      >
+                        {statusLabel}
+                      </span>
                     </div>
 
                     <div className="mt-3 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-purple-600" style={{ width: `${progress.toFixed(2)}%` }} />
+                      <div
+                        className="h-full rounded-full bg-purple-600"
+                        style={{ width: `${progress.toFixed(2)}%` }}
+                      />
                     </div>
                   </div>
                 </div>
-              )
+              );
             })}
           </div>
         )}
@@ -380,12 +483,11 @@ export default function ExitStrategyPage() {
                 className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
                 onClick={() => void simulatePlan()}
                 type="button"
-                disabled={simLoading || !canShowPctFields}
+                disabled={simLoading || !canSimulate}
                 title="Preview the plan without saving"
               >
                 {simLoading ? "Simulating…" : "Simulate Scale-Out Plan"}
               </button>
-
               <button
                 className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50"
                 onClick={() => setAddOpen(false)}
@@ -393,7 +495,6 @@ export default function ExitStrategyPage() {
               >
                 Cancel
               </button>
-
               <button
                 className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm hover:bg-purple-700"
                 onClick={() => void createStrategy()}
@@ -413,8 +514,11 @@ export default function ExitStrategyPage() {
               )}
 
               <label className="grid gap-1">
-                <span className="text-xs text-gray-500">Coin</span>
-                <AssetAutocomplete value={coinSymbol} onChange={handleCoinChange} />
+                <span className="text-xs text-gray-500">Coins</span>
+                <AssetMultiSelect
+                  value={coinSelection}
+                  onChange={setCoinSelection}
+                />
               </label>
 
               <label className="grid gap-1">
@@ -422,48 +526,54 @@ export default function ExitStrategyPage() {
                 <select
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   value={strategyType}
-                  onChange={(e) => setStrategyType(e.target.value as StrategyType)}
+                  onChange={(e) =>
+                    setStrategyType(e.target.value as StrategyType)
+                  }
                 >
                   <option value="percentage">Percentage Based</option>
                 </select>
               </label>
 
-              {canShowPctFields && (
-                <>
-                  <label className="grid gap-1">
-                    <span className="text-xs text-gray-500">Sell %</span>
-                    <input
-                      type="number"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      value={sellPercent}
-                      onChange={(e) => setSellPercent(Number(e.target.value))}
-                      min={0}
-                      max={100}
-                      step={0.01}
-                    />
-                  </label>
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Sell %</span>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={sellPercent}
+                  onChange={(e) => setSellPercent(Number(e.target.value))}
+                  min={0}
+                  max={100}
+                  step={0.01}
+                />
+              </label>
 
-                  <label className="grid gap-1">
-                    <span className="text-xs text-gray-500">Gain Interval %</span>
-                    <input
-                      type="number"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      value={gainPercent}
-                      onChange={(e) => setGainPercent(Number(e.target.value))}
-                      min={0}
-                      step={0.01}
-                    />
-                  </label>
-                </>
-              )}
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">Gain Interval %</span>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={gainPercent}
+                  onChange={(e) => setGainPercent(Number(e.target.value))}
+                  min={0}
+                  step={0.01}
+                />
+              </label>
 
               {simError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{simError}</div>
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {simError}
+                </div>
               )}
 
-              {simRows && (
-                <div className="mt-2">
-                  <ScaleOutPlanTable rows={simRows} coinSymbol={coinSymbol} />
+              {simResults && simResults.length > 0 && (
+                <div className="mt-2 grid gap-3">
+                  {simResults.map((r) => (
+                    <ScaleOutPlanTable
+                      key={r.coinSymbol}
+                      rows={r.rows}
+                      coinSymbol={r.coinSymbol}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -498,8 +608,11 @@ export default function ExitStrategyPage() {
           }
         >
           <div className="text-sm text-gray-700">
-            Are you sure you want to delete the exit strategy for <b>{confirmDelete.label}</b>?
-            <div className="mt-2 text-xs text-gray-500">This will also remove its execution history.</div>
+            Are you sure you want to delete the exit strategy for{" "}
+            <b>{confirmDelete.label}</b>?
+            <div className="mt-2 text-xs text-gray-500">
+              This will also remove its execution history.
+            </div>
           </div>
         </Modal>
       )}
@@ -509,19 +622,23 @@ export default function ExitStrategyPage() {
           open
           widthClass="max-w-5xl"
           onClose={() => {
-            setDetailsOpen(false)
-            setSelectedId(null)
-            setDetails(null)
+            setDetailsOpen(false);
+            setDetails(null);
           }}
-          title={details?.summary ? `${details.summary.coinSymbol} – Scale-Out Plan` : "Loading…"}
+          title={
+            details?.summary
+              ? details.summary.isAllCoins
+                ? "All Coins – Scale-Out Plan"
+                : `${details.summary.coinSymbols.join(", ")} – Scale-Out Plan`
+              : "Loading…"
+          }
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
                 className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm hover:bg-purple-700"
                 onClick={() => {
-                  setDetailsOpen(false)
-                  setSelectedId(null)
-                  setDetails(null)
+                  setDetailsOpen(false);
+                  setDetails(null);
                 }}
                 type="button"
               >
@@ -534,11 +651,13 @@ export default function ExitStrategyPage() {
             <div className="text-sm text-gray-600">Loading…</div>
           ) : (
             <div className="grid gap-4">
-              <ScaleOutPlanTable rows={details.rows} coinSymbol={details.summary.coinSymbol} />
+              {Object.entries(details.rowsByCoin).map(([coin, rows]) => (
+                <ScaleOutPlanTable key={coin} rows={rows} coinSymbol={coin} />
+              ))}
             </div>
           )}
         </Modal>
       )}
     </div>
-  )
+  );
 }
