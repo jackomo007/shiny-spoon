@@ -53,7 +53,7 @@ type Details = {
   rowsByCoin: Record<string, ExitStrategyStepRow[]>;
 };
 
-type SimCoinResult = {
+type CoinSimResult = {
   coinSymbol: string;
   qtyOpen: number;
   entryPriceUsd: number;
@@ -74,18 +74,9 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-function ScaleOutPlanTable({
-  rows,
-  coinSymbol,
-}: {
-  rows: ExitStrategyStepRow[];
-  coinSymbol: string;
-}) {
+function ScaleOutPlanTable({ rows }: { rows: ExitStrategyStepRow[] }) {
   return (
     <div className="rounded-xl border bg-white overflow-x-auto overflow-y-auto max-h-[45vh]">
-      <div className="px-4 py-2 border-b bg-gray-50 text-sm font-medium text-gray-700">
-        {coinSymbol}
-      </div>
       <table className="w-full text-sm">
         <thead className="border-b bg-gray-50 sticky top-0 z-10">
           <tr className="text-left text-gray-600">
@@ -125,6 +116,187 @@ function ScaleOutPlanTable({
   );
 }
 
+const PREVIEW_LIMIT = 3;
+
+function StrategyCard({
+  s,
+  onView,
+  onDelete,
+  deletingId,
+}: {
+  s: ExitStrategySummary;
+  onView: (id: string) => void;
+  onDelete: (id: string, label: string) => void;
+  deletingId: string | null;
+}) {
+  const label = s.isAllCoins ? "All Coins" : s.coinSymbols.join(", ");
+  const strategyName = `Sell ${num(s.sellPercent, 0)}% Every ${num(s.gainPercent, 0)}% Gain`;
+  const previewAssets = s.assets.slice(0, PREVIEW_LIMIT);
+  const hiddenCount = s.assets.length - PREVIEW_LIMIT;
+
+  return (
+    <div className="rounded-2xl border bg-white overflow-hidden">
+      <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-4">
+        <div>
+          <div className="text-base font-semibold text-gray-900">
+            {strategyName}
+          </div>
+          <div className="text-sm text-gray-500 mt-0.5">
+            Applies to:{" "}
+            <span className="font-medium text-gray-700">
+              {s.totalAssets} {s.totalAssets === 1 ? "asset" : "assets"}
+            </span>
+            {" · "}
+            Total Profit:{" "}
+            <span className="font-medium text-gray-700">
+              {usd(s.totalProfitUsd)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            className="h-9 px-4 rounded-xl bg-purple-600 text-white text-sm hover:bg-purple-700"
+            onClick={() => onView(s.id)}
+            type="button"
+          >
+            View
+          </button>
+          <button
+            className="h-9 w-9 rounded-xl border bg-white text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-50 flex items-center justify-center transition-colors"
+            onClick={() => onDelete(s.id, label)}
+            aria-label="Delete strategy"
+            title="Delete"
+            type="button"
+            disabled={deletingId === s.id}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {s.assets.length > 0 && (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-t border-b bg-gray-50">
+                <tr className="text-left text-gray-500 text-xs uppercase tracking-wide">
+                  <th className="px-5 py-2.5">Asset</th>
+                  <th className="px-5 py-2.5">Next Sell</th>
+                  <th className="px-5 py-2.5">Target Price</th>
+                  <th className="px-5 py-2.5">Distance</th>
+                  <th className="px-5 py-2.5">Progress</th>
+                  <th className="px-5 py-2.5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewAssets.map((asset) => {
+                  const distance = clamp(asset.distanceToTargetPercent, 0, 100);
+                  const progress = 100 - distance;
+                  const isReady = asset.status === "ready";
+
+                  return (
+                    <tr
+                      key={asset.coinSymbol}
+                      className="border-b last:border-b-0 hover:bg-gray-50"
+                    >
+                      <td className="px-5 py-3 font-medium text-gray-900">
+                        {asset.coinSymbol}
+                      </td>
+                      <td className="px-5 py-3 text-gray-700">
+                        <div>Sell {num(s.sellPercent, 0)}%</div>
+                        <div className="text-xs text-gray-500">
+                          {num(asset.qtyToSell, 8).replace(/\.?0+$/, "")}{" "}
+                          {asset.coinSymbol} ({usd(asset.usdValueToSell)})
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-gray-700">
+                        ${Number(asset.targetPriceUsd).toFixed(3)}
+                        <span className="text-xs text-gray-500 ml-1">
+                          (+{num(asset.nextGainPercent, 0)}%)
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-gray-700">
+                        {num(asset.distanceToTargetPercent, 2)}%
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-purple-600"
+                              style={{ width: `${progress.toFixed(2)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {progress.toFixed(0)}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            isReady
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {isReady ? "Ready" : "Pending"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
+            {hiddenCount > 0 ? (
+              <span className="text-xs text-gray-500">
+                +{hiddenCount} more {hiddenCount === 1 ? "asset" : "assets"}
+              </span>
+            ) : (
+              <span />
+            )}
+            <button
+              type="button"
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+              onClick={() => onView(s.id)}
+            >
+              View All
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ExitStrategyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +313,6 @@ export default function ExitStrategyPage() {
   }>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // ── Add modal state ──────────────────────────────────────────────────────────
   const [coinSelection, setCoinSelection] = useState<CoinSelection>([]);
   const [strategyType, setStrategyType] = useState<StrategyType>("percentage");
   const [sellPercent, setSellPercent] = useState(25);
@@ -150,7 +321,7 @@ export default function ExitStrategyPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
-  const [simResults, setSimResults] = useState<SimCoinResult[] | null>(null);
+  const [simResults, setSimResults] = useState<CoinSimResult[] | null>(null);
 
   const canSimulate = useMemo(() => {
     if (strategyType !== "percentage") return false;
@@ -196,6 +367,7 @@ export default function ExitStrategyPage() {
     setDetails(null);
     setDetailsOpen(true);
     setError(null);
+
     try {
       const res = await fetch(
         `/api/exit-strategies/${encodeURIComponent(id)}`,
@@ -247,8 +419,7 @@ export default function ExitStrategyPage() {
           .catch(() => ({}) as { error?: string })) as { error?: string };
         if (res.status === 409) {
           setAddError(
-            j.error ||
-              "An exit strategy already exists for one or more selected coins.",
+            j.error || "An exit strategy for one or more coins already exists.",
           );
           return;
         }
@@ -292,7 +463,7 @@ export default function ExitStrategyPage() {
         throw new Error(j.error || `HTTP ${res.status}`);
       }
 
-      const json = (await res.json()) as { data: { results: SimCoinResult[] } };
+      const json = (await res.json()) as { data: { results: CoinSimResult[] } };
       setSimResults(json.data.results);
     } catch (e) {
       setSimError(e instanceof Error ? e.message : "Failed to simulate");
@@ -307,8 +478,10 @@ export default function ExitStrategyPage() {
   const confirmDeleteNow = async () => {
     if (!confirmDelete) return;
     const { id } = confirmDelete;
+
     setDeletingId(id);
     setError(null);
+
     try {
       const res = await fetch(
         `/api/exit-strategies/${encodeURIComponent(id)}`,
@@ -329,8 +502,11 @@ export default function ExitStrategyPage() {
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6">
+      {/* Page header */}
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Exit Strategy</h1>
@@ -356,120 +532,32 @@ export default function ExitStrategyPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border bg-white p-6">
-        <div className="text-lg font-semibold mb-4">Your Strategies</div>
-
-        {loading ? (
-          <div className="h-[220px] w-full rounded-xl bg-gray-100 animate-pulse" />
-        ) : items.length === 0 ? (
-          <div className="text-sm text-gray-600">
-            No exit strategies yet. Click <b>Add Strategy</b> to create one.
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {items.map((s) => {
-              const firstAsset = s.assets[0];
-              if (!firstAsset) return null;
-
-              const isReady = firstAsset.status === "ready";
-              const statusLabel = isReady ? "Ready" : "Pending";
-              const statusClasses = isReady
-                ? "bg-purple-100 text-purple-700"
-                : "bg-gray-100 text-gray-700";
-              const distance = clamp(
-                firstAsset.distanceToTargetPercent,
-                0,
-                100,
-              );
-              const progress = 100 - distance;
-
-              return (
-                <div
-                  key={s.id}
-                  className="rounded-2xl border bg-white overflow-hidden"
-                >
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="text-lg font-semibold">
-                          {s.isAllCoins
-                            ? "All Coins"
-                            : s.coinSymbols.join(", ")}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Sell {num(s.sellPercent, 2)}% every{" "}
-                          {num(s.gainPercent, 2)}% gain
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="h-9 px-4 rounded-xl bg-purple-600 text-white text-sm hover:bg-purple-700"
-                          onClick={() => void openDetails(s.id)}
-                          type="button"
-                        >
-                          View
-                        </button>
-                        <button
-                          className="h-9 w-10 rounded-xl border bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                          onClick={() =>
-                            requestDelete(
-                              s.id,
-                              s.isAllCoins
-                                ? "All Coins"
-                                : s.coinSymbols.join(", "),
-                            )
-                          }
-                          aria-label="Delete strategy"
-                          title="Delete"
-                          type="button"
-                          disabled={deletingId === s.id}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border bg-gray-50 px-4 py-3">
-                      <div className="text-sm text-gray-700">
-                        Next:{" "}
-                        <span className="font-semibold text-gray-900">
-                          Sell{" "}
-                          {num(firstAsset.qtyToSell, 8).replace(/\.?0+$/, "")}{" "}
-                          {firstAsset.coinSymbol} (
-                          {usd(firstAsset.usdValueToSell)}) at $
-                          {Number(firstAsset.targetPriceUsd).toFixed(3)} (+
-                          {num(firstAsset.nextGainPercent, 0)}%)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-3 text-sm">
-                      <div className="text-gray-600">
-                        Distance:{" "}
-                        <span className="text-gray-900">
-                          {num(firstAsset.distanceToTargetPercent, 2)}%
-                        </span>
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs ${statusClasses}`}
-                      >
-                        {statusLabel}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-purple-600"
-                        style={{ width: `${progress.toFixed(2)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-[180px] w-full rounded-2xl bg-gray-100 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-600">
+          No exit strategies yet. Click <b>Add Strategy</b> to create one.
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {items.map((s) => (
+            <StrategyCard
+              key={s.id}
+              s={s}
+              onView={(id) => void openDetails(id)}
+              onDelete={requestDelete}
+              deletingId={deletingId}
+            />
+          ))}
+        </div>
+      )}
 
       {addOpen && (
         <Modal
@@ -513,13 +601,13 @@ export default function ExitStrategyPage() {
                 </div>
               )}
 
-              <label className="grid gap-1">
-                <span className="text-xs text-gray-500">Coins</span>
+              <div className="grid gap-1">
+                <div className="text-xs text-gray-500">Coins</div>
                 <AssetMultiSelect
                   value={coinSelection}
                   onChange={setCoinSelection}
                 />
-              </label>
+              </div>
 
               <label className="grid gap-1">
                 <span className="text-xs text-gray-500">Strategy Type</span>
@@ -566,13 +654,16 @@ export default function ExitStrategyPage() {
               )}
 
               {simResults && simResults.length > 0 && (
-                <div className="mt-2 grid gap-3">
-                  {simResults.map((r) => (
-                    <ScaleOutPlanTable
-                      key={r.coinSymbol}
-                      rows={r.rows}
-                      coinSymbol={r.coinSymbol}
-                    />
+                <div className="mt-2 grid gap-4">
+                  {simResults.map((result) => (
+                    <div key={result.coinSymbol}>
+                      {simResults.length > 1 && (
+                        <div className="text-sm font-medium text-gray-700 mb-1">
+                          {result.coinSymbol}
+                        </div>
+                      )}
+                      <ScaleOutPlanTable rows={result.rows} />
+                    </div>
                   ))}
                 </div>
               )}
@@ -627,9 +718,7 @@ export default function ExitStrategyPage() {
           }}
           title={
             details?.summary
-              ? details.summary.isAllCoins
-                ? "All Coins – Scale-Out Plan"
-                : `${details.summary.coinSymbols.join(", ")} – Scale-Out Plan`
+              ? `${details.summary.isAllCoins ? "All Coins" : details.summary.coinSymbols.join(", ")} – Scale-Out Plan`
               : "Loading…"
           }
           footer={
@@ -650,9 +739,16 @@ export default function ExitStrategyPage() {
           {!details ? (
             <div className="text-sm text-gray-600">Loading…</div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-6">
               {Object.entries(details.rowsByCoin).map(([coin, rows]) => (
-                <ScaleOutPlanTable key={coin} rows={rows} coinSymbol={coin} />
+                <div key={coin}>
+                  {Object.keys(details.rowsByCoin).length > 1 && (
+                    <div className="text-sm font-medium text-gray-700 mb-2">
+                      {coin}
+                    </div>
+                  )}
+                  <ScaleOutPlanTable rows={rows} />
+                </div>
               ))}
             </div>
           )}
