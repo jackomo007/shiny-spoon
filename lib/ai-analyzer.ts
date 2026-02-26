@@ -117,13 +117,20 @@ export async function analyzePriceStructure({
 }) {
   const systemPrompt = await getPrompt("price_structure_system");
   const usedModel = model ?? (process.env.PRICE_STRUCTURE_MODEL ?? "gpt-4o-mini");
+  const contextualPrompt = [
+    `Asset: ${asset}`,
+    `Timeframe: ${timeframe}`,
+    `Last Price: ${lastPrice}`,
+    "",
+    prompt,
+  ].join("\n");
 
   const res = await openai.chat.completions.create({
     model: usedModel,
     temperature: 0.2,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
+      { role: "user", content: contextualPrompt },
     ],
   });
 

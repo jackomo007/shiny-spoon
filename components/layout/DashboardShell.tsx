@@ -43,11 +43,6 @@ export default function DashboardShell({ children }: Props) {
 
   const pathname = usePathname();
 
-  const openComingSoon = (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    setCourseOpen(true);
-  };
-
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);

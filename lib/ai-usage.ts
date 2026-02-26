@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 
 type Price = { inputPerTok: number; outputPerTok: number };
 
@@ -59,4 +58,3 @@ export async function recordAiUsage(opts: {
 
   return cost;
 }
-

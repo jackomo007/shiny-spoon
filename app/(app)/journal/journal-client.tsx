@@ -9,16 +9,17 @@ import React, {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
-import Card from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
-import { Table, Th, Tr, Td } from "@/components/ui/Table";
-import {
-  MoneyInputStandalone,
-  MoneyField,
-  DecimalField,
-} from "@/components/form/MaskedFields";
-
-import DropdownActions from "@/components/journals/DropdownActions";
+import { MoneyField, DecimalField } from "@/components/form/MaskedFields";
+import JournalToolbar from "@/components/journal/ui/JournalToolbar";
+import JournalSummaryCards from "@/components/journal/ui/JournalSummaryCards";
+import JournalDateRangeCard from "@/components/journal/ui/JournalDateRangeCard";
+import JournalTradesCard from "@/components/journal/ui/JournalTradesCard";
+import ExportModal from "@/components/journal/ui/ExportModal";
+import DeleteEntryModal from "@/components/journal/ui/DeleteEntryModal";
+import QuickCloseModal from "@/components/journal/ui/QuickCloseModal";
+import FirstRunJournalModal from "@/components/journal/ui/FirstRunJournalModal";
+import JournalFooter from "@/components/journal/ui/JournalFooter";
 
 type TradeType = 1 | 2;
 type Status = "in_progress" | "win" | "loss" | "break_even";
@@ -285,7 +286,6 @@ export default function JournalPage() {
   const wTags = watch("tags") ?? [];
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
-  const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
 
   const searchParams = useSearchParams();
@@ -339,7 +339,7 @@ export default function JournalPage() {
       const list = Array.isArray(data) ? data : data.items ?? [];
 
       setAvailableTags(list);
-    } catch (e) {
+    } catch {
       setTagsError("Could not load tags");
       setAvailableTags([]);
     } finally {
@@ -521,7 +521,6 @@ useEffect(() => {
       const jnPayload = (await jn.json()) as JournalsPayload;
       const list = jnPayload.items ?? [];
       setJournals(list);
-      setActiveJournalId(jnPayload.activeJournalId ?? null);
 
       const name =
         list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ??
@@ -1020,7 +1019,7 @@ async function fetchAssets(q: string) {
     setAssetOptions(filtered);
     validSymbolsRef.current = new Set(filtered.map((i) => i.symbol.toUpperCase()));
     setShowAssetMenu(filtered.length > 0);
-  } catch (e) {
+  } catch {
     setAssetError("Could not load assets");
     setAssetOptions([]);
     setShowAssetMenu(false);
@@ -1138,458 +1137,210 @@ async function fetchAssets(q: string) {
     setExpandedRowId((prev) => (prev === id ? null : id));
   }
 
+  async function handleQuickClose() {
+    if (!rowToClose) return;
+    setCloseExitError(null);
+    setCloseFeeError(null);
+
+    const exitNum = parseDecimal(closeExit);
+    if (!(exitNum > 0)) {
+      setCloseExitError("Exit price is required");
+      return;
+    }
+
+    const tradingFeeNum = decimalOrZero(closeTradingFee);
+    if (!(tradingFeeNum >= 0)) {
+      setCloseFeeError("Trading fee must be ≥ 0");
+      return;
+    }
+
+    try {
+      setClosing(true);
+      const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
+      const change = (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
+      const notional =
+        rowToClose.trade_type === 2
+          ? rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1)
+          : rowToClose.amount_spent;
+
+      const gross = (longLike ? 1 : -1) * notional * change;
+      const net = gross - tradingFeeNum;
+      const netRounded = Number(net.toFixed(2));
+
+      const computedStatus: Status =
+        Math.abs(netRounded) < 0.01
+          ? "break_even"
+          : netRounded > 0
+            ? "win"
+            : "loss";
+
+      const baseClose: BasePayload = {
+        strategy_id: rowToClose.strategy_id,
+        asset_name: rowToClose.asset_name,
+        trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
+        side: rowToClose.side,
+        status: computedStatus,
+        amount_spent: rowToClose.amount_spent,
+        entry_price: rowToClose.entry_price,
+        exit_price: exitNum,
+        stop_loss_price: rowToClose.stop_loss_price ?? null,
+        strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
+        notes_entry: rowToClose.notes_entry ?? null,
+        notes_review: rowToClose.notes_review ?? null,
+        timeframe_code: rowToClose.timeframe_code,
+        trading_fee: tradingFeeNum,
+        tags: (rowToClose.tags ?? []).map((t) => t.trim()).filter(Boolean),
+      };
+
+      const payloadClose: CreatePayload =
+        rowToClose.trade_type === 2
+          ? {
+              ...baseClose,
+              trade_type: 2,
+              futures: {
+                leverage: rowToClose.leverage ?? 1,
+                liquidation_price: rowToClose.liquidation_price ?? null,
+              },
+            }
+          : { ...baseClose, trade_type: 1 };
+
+      const r = await fetch(`/api/journal/${rowToClose.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadClose),
+      });
+      const saved = await r.json();
+
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === rowToClose.id
+            ? {
+                ...it,
+                status: saved.status ?? it.status,
+                exit_price: saved.exit_price ?? it.exit_price,
+                trading_fee:
+                  typeof saved.trading_fee === "number"
+                    ? saved.trading_fee
+                    : it.trading_fee,
+              }
+            : it
+        )
+      );
+      setCloseOpen(false);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to close");
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function saveFirstRunJournal() {
+    if (!firstRunName.trim()) {
+      setFirstRunError("Please enter a name.");
+      return;
+    }
+    setFirstRunSaving(true);
+    setFirstRunError(null);
+    try {
+      if (journals.length === 0) {
+        const r = await fetch("/api/journals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: firstRunName.trim() }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const created = (await r.json()) as { id: string };
+
+        await fetch("/api/journal/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: created.id }),
+        });
+      } else if (
+        journals.length === 1 &&
+        journals[0].name?.toLowerCase() === "main"
+      ) {
+        const r = await fetch(`/api/journals/${journals[0].id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: firstRunName.trim() }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+      }
+
+      await load();
+      setFirstRunOpen(false);
+    } catch (e) {
+      setFirstRunError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setFirstRunSaving(false);
+    }
+  }
+
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm text-gray-600">
-          Active Journal:
-          <span className="ml-2 inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm border text-gray-700">
-            {activeJournalName || "—"}
-          </span>
-        </div>
+      <JournalToolbar
+        activeJournalName={activeJournalName}
+        movedOutBanner={movedOutBanner}
+        onOpenExport={() => setExportOpen(true)}
+        onOpenCreate={openCreate}
+      />
 
-        <div className="flex items-center gap-3">
-          <a
-            href="/journals"
-            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
-            title="Manage journals"
-          >
-            📒 Manage Journals
-          </a>
-          <button
-            onClick={() => setExportOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
-          >
-            📄 Export
-          </button>
-          <button
-            onClick={openCreate}
-            className="h-10 w-10 rounded-full bg-white text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            ＋
-          </button>
-        </div>
-      </div>
-      {movedOutBanner && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {movedOutBanner}
-        </div>
-      )}
+      <JournalSummaryCards
+        totalTrades={totalTrades}
+        winRate={winRate}
+        earnings={earnings}
+      />
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <Card>
-          <div className="flex justify-between">
-            <div className="flex flex-col">
-              <div className="text-sm text-gray-600">Total Trades</div>
-              <div className="mt-2 text-2xl font-semibold">{totalTrades}</div>
-            </div>
-            <div className="right-0 top-0 h-10 w-10 grid place-items-center rounded-full bg-yellow-400 text-white">
-              👥
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex justify-between">
-            <div className="flex flex-col">
-              <div className="text-sm text-gray-600">Win Rate</div>
-              <div className="mt-2 text-2xl font-semibold">{winRate}%</div>
-            </div>
-            <div className="right-0 top-0  h-10 w-10 grid place-items-center rounded-full bg-purple-500 text-white">
-              👁️
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex justify-between">
-            <div className="flex flex-col">
-              <div className="text-sm text-gray-600">Earnings</div>
-              <div className="mt-2 text-2xl font-semibold">
-                {earnings ? `$${earnings.toFixed(2)}` : "$0.00"}
-              </div>
-            </div>
-            <div className="right-6 top-6 h-10 w-10 grid place-items-center rounded-full bg-orange-500 text-white">
-              $
-            </div>
-          </div>
-        </Card>
-      </div>
+      <JournalDateRangeCard
+        start={start}
+        end={end}
+        onStartChange={setStart}
+        onEndChange={setEnd}
+        onApply={() => {
+          try {
+            localStorage.setItem("jrnl.range", JSON.stringify({ start, end }));
+          } catch {}
+          void load();
+        }}
+        onReset={resetToLast6Months}
+      />
 
-      <Card>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="text-sm text-gray-600">Date range:</div>
-
-          <input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className="rounded-xl border border-gray-200 px-3 py-2"
-          />
-          <span className="text-gray-400">—</span>
-          <input
-            type="date"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            className="rounded-xl border border-gray-200 px-3 py-2"
-          />
-
-          <button
-            className="rounded-xl bg-white px-3 py-2 text-sm border"
-            onClick={() => {
-              try {
-                localStorage.setItem(
-                  "jrnl.range",
-                  JSON.stringify({ start, end })
-                );
-              } catch {}
-              void load();
-            }}
-          >
-            Apply
-          </button>
-          <button
-            className="rounded-xl bg-gray-100 px-3 py-2 text-sm"
-            onClick={resetToLast6Months}
-          >
-            Reset
-          </button>
-        </div>
-      </Card>
-
-      <Card className="p-0 overflow-hidden">
-        {showSearch && (
-          <div className="px-6 py-4 border-b">
-            <div className="flex items-center gap-3">
-              <span className="text-gray-400">🔍</span>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Type and hit enter ..."
-                className="flex-1 outline-none bg-transparent text-gray-700 placeholder:text-gray-400"
-              />
-              <button
-                onClick={() => setShowSearch(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✖
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="px-6 pt-5 pb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-800">Trades</h3>
-          <div className="flex items-center gap-3 relative">
-            <button
-              onClick={() => setShowSearch((s) => !s)}
-              className="p-2 rounded-full hover:bg-gray-100"
-            >
-              🔍
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowFilter((f) => !f);
-                  setShowMenu(false);
-                }}
-                className="p-2 rounded-full hover:bg-gray-100"
-              >
-                🧰
-              </button>
-              {showFilter && (
-                <div
-                  className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                  onMouseLeave={() => setShowFilter(false)}
-                >
-                  <MenuItem
-                    label="Newest"
-                    onClick={() => {
-                      setSort("new");
-                      setShowFilter(false);
-                    }}
-                    icon="🧾"
-                  />
-                  <MenuItem
-                    label="From A-Z"
-                    onClick={() => {
-                      setSort("az");
-                      setShowFilter(false);
-                    }}
-                    icon="🔤"
-                  />
-                  <MenuItem
-                    label="From Z-A"
-                    onClick={() => {
-                      setSort("za");
-                      setShowFilter(false);
-                    }}
-                    icon="🔠"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowMenu((m) => !m);
-                  setShowFilter(false);
-                }}
-                className="p-2 rounded-full hover:bg-gray-100"
-              >
-                ⋯
-              </button>
-              {showMenu && (
-                <div
-                  className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                  onMouseLeave={() => setShowMenu(false)}
-                >
-                  <MenuItem
-                    label="Refresh"
-                    onClick={() => {
-                      void load();
-                      setShowMenu(false);
-                    }}
-                  />
-                  <MenuItem
-                    label="Manage Widgets"
-                    onClick={() => setShowMenu(false)}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 pb-2 overflow-x-auto hidden md:block">
-          {loading ? (
-            <div className="py-10 text-center text-sm text-gray-500">
-              Loading…
-            </div>
-          ) : error ? (
-            <div className="py-10 text-center text-sm text-red-600">
-              {error}
-            </div>
-          ) : (
-            <Table className="min-w-[900px] md:min-w-full text-xs [&_td]:py-1 [&_th]:py-1">
-              <thead>
-                <tr>
-                  <Th className="w-6"></Th>
-                  <Th className="whitespace-nowrap w-28 md:w-36">Asset</Th>
-                  <Th className="whitespace-nowrap w-20 md:w-24">Type</Th>
-                  <Th className="whitespace-nowrap w-28">Entry</Th>
-                  <Th className="whitespace-nowrap w-28">Exit</Th>
-                  <Th className="whitespace-nowrap w-36">
-                    Amount
-                    <br />
-                    Spent
-                  </Th>
-                  <Th className="whitespace-nowrap w-28">PnL</Th>
-                  <Th className="whitespace-nowrap hidden md:table-cell w-56">
-                    Date
-                  </Th>
-                  <Th className="whitespace-nowrap w-16">TF</Th>
-                  <Th className="whitespace-nowrap w-40">Status / Action</Th>
-                  <Th className="w-40"></Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <React.Fragment key={r.id}>
-                    <Tr
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => toggleRow(r.id)}
-                    >
-                      <Td className="w-6">
-                        <span className="">
-                          {expandedRowId === r.id ? "▾" : "▸"}
-                        </span>
-                      </Td>
-
-                      <Td className="whitespace-nowrap w-28 md:w-36">
-                        {r.asset_name}
-                      </Td>
-
-                      <Td className="whitespace-nowrap w-20 md:w-24">
-                        {r.trade_type === 2 ? "Futures" : "Spot"} ({r.side})
-                      </Td>
-
-                      <Td className="font-mono w-28">${fmt4(r.entry_price)}</Td>
-
-                      <Td className="font-mono w-28">
-                        {r.exit_price != null ? `$${fmt4(r.exit_price)}` : "—"}
-                      </Td>
-
-                      <Td className="font-mono w-36">
-                        {money2(r.amount_spent)}
-                      </Td>
-
-                      <Td className="font-mono w-28">
-                        {r.pnl != null ? money2(r.pnl) : "—"}
-                      </Td>
-
-                      <Td className="hidden md:table-cell leading-tight">
-                        {new Date(r.date).toLocaleDateString()},
-                        <br />
-                        {new Date(r.date).toLocaleTimeString()}
-                      </Td>
-
-                      <Td className="w-16">{r.timeframe_code}</Td>
-
-                      <Td className="w-32 relative">{renderStatusButton(r)}</Td>
-
-                      <Td className="w-32 relative">
-                        <DropdownActions
-                          r={r}
-                          openEdit={(j: JournalRow) =>
-                            openEdit(j as JournalRow)
-                          }
-                          askDelete={(id: string) => askDelete(id)}
-                        />
-                      </Td>
-                    </Tr>
-
-                    {expandedRowId === r.id && (
-                      <Tr className="bg-gray-50">
-                        <Td
-                          colSpan={11}
-                          className="px-6 py-2 text-xs text-gray-700"
-                        >
-                          <div className="flex flex-wrap gap-6">
-                            <div>
-                              <span className="font-semibold mr-1">
-                                Quantity:
-                              </span>
-                              <span className="font-mono">
-                                {r.entry_price > 0
-                                  ? fmt4(r.amount_spent / r.entry_price)
-                                  : "—"}
-                              </span>
-                            </div>
-
-                            <div>
-                              <span className="font-semibold mr-1">
-                                Stop Loss:
-                              </span>
-                              <span className="font-mono">
-                                {r.stop_loss_price != null
-                                  ? fmt4(r.stop_loss_price)
-                                  : "—"}
-                              </span>
-                            </div>
-                          </div>
-                        </Td>
-                      </Tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </div>
-
-        <div className="px-6 pb-4 md:hidden">
-          {loading ? (
-            <div className="py-8 text-center text-sm text-gray-500">
-              Loading…
-            </div>
-          ) : error ? (
-            <div className="py-8 text-center text-sm text-red-600">{error}</div>
-          ) : (
-            <div className="grid gap-3">
-              {rows.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-xl border bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">
-                      {r.asset_name}{" "}
-                      <span className="text-xs text-gray-500">
-                        ({r.trade_type === 2 ? "Futures" : "Spot"})
-                      </span>
-                    </div>
-                    <div className="text-xs px-2 py-1 rounded-full bg-gray-100">
-                      {r.timeframe_code}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-gray-500 text-xs">Side</div>
-                      <div className="font-mono">{r.side}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-gray-500 text-xs">Date</div>
-                      <div>{new Date(r.date).toLocaleString()}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-xs">Entry</div>
-                      <div className="font-mono">{fmt4(r.entry_price)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-gray-500 text-xs">Exit</div>
-                      <div className="font-mono">
-                        {r.exit_price != null ? fmt4(r.exit_price) : "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-xs">Amount Spent</div>
-                      <div className="font-mono">{money2(r.amount_spent)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-500 text-xs">Quantity</div>
-                      <div className="font-mono">
-                        {r.entry_price > 0
-                          ? fmt4(r.amount_spent / r.entry_price)
-                          : "—"}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-gray-500 text-xs">PnL</div>
-                      <div className="font-mono">
-                        {r.pnl != null ? money2(r.pnl) : "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between">
-                    {r.status === "in_progress" ? (
-                      <button
-                        title="Close Trade"
-                        onClick={() => openCloseModal(r)}
-                        className="px-3 py-2 rounded bg-red-600 text-white text-xs hover:bg-red-700"
-                      >
-                        Close Trade
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-600">
-                        {r.status.replace("_", " ")}
-                      </span>
-                    )}
-                    <div className="flex gap-3">
-                      <button
-                        title="Edit"
-                        onClick={() => openEdit(r)}
-                        className="text-gray-600 hover:text-gray-800"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        title="Delete"
-                        onClick={() => askDelete(r.id)}
-                        className="text-orange-600 hover:text-orange-700"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
+      <JournalTradesCard
+        loading={loading}
+        error={error}
+        rows={rows}
+        showSearch={showSearch}
+        query={query}
+        showFilter={showFilter}
+        showMenu={showMenu}
+        expandedRowId={expandedRowId}
+        onToggleSearch={() => setShowSearch((s) => !s)}
+        onCloseSearch={() => setShowSearch(false)}
+        onQueryChange={setQuery}
+        onToggleFilter={() => {
+          setShowFilter((f) => !f);
+          setShowMenu(false);
+        }}
+        onCloseFilter={() => setShowFilter(false)}
+        onToggleMenu={() => {
+          setShowMenu((m) => !m);
+          setShowFilter(false);
+        }}
+        onCloseMenu={() => setShowMenu(false)}
+        onSortChange={setSort}
+        onRefresh={() => {
+          void load();
+        }}
+        onToggleRow={toggleRow}
+        onOpenCloseModal={openCloseModal}
+        onOpenEdit={openEdit}
+        onAskDelete={askDelete}
+        renderStatusButton={renderStatusButton}
+        fmt4={fmt4}
+        money2={money2}
+      />
 
       <Modal
         open={open}
@@ -2271,361 +2022,53 @@ async function fetchAssets(q: string) {
         </div>
       </Modal>
 
-      <Modal
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        title="Export"
-        footer={
-          <div className="flex justify-end">
-            <button
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => setExportOpen(false)}
-            >
-              OK
-            </button>
-          </div>
-        }
-      >
-        <div className="text-sm text-gray-700">
-          This feature is coming soon.
-        </div>
-      </Modal>
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
 
-      <Modal
+      <DeleteEntryModal
         open={confirmOpen}
+        deleting={deleting}
         onClose={() => setConfirmOpen(false)}
-        title="Delete entry?"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <button
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => setConfirmOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmDelete}
-              disabled={deleting}
-              className="rounded-xl bg-orange-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              Delete
-            </button>
-          </div>
-        }
-      >
-        <div className="text-sm text-gray-600">
-          This action cannot be undone.
-        </div>
-      </Modal>
+        onConfirm={confirmDelete}
+      />
 
-      <Modal
+      <QuickCloseModal
         open={closeOpen}
+        closing={closing}
+        rowToClose={rowToClose}
+        closeExit={closeExit}
+        closeTradingFee={closeTradingFee}
+        closePnl={closePnl}
+        closeExitError={closeExitError}
+        closeFeeError={closeFeeError}
         onClose={() => setCloseOpen(false)}
-        title="Quick Close"
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              className="rounded bg-gray-100 px-4 py-2 text-sm"
-              onClick={() => setCloseOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={async () => {
-                if (!rowToClose) return;
-                setCloseExitError(null);
-                setCloseFeeError(null);
+        onSubmit={() => {
+          void handleQuickClose();
+        }}
+        onCloseExitChange={(v) => {
+          setCloseExit(v);
+          setCloseExitError(null);
+        }}
+        onCloseTradingFeeChange={(v) => {
+          setCloseTradingFee(v);
+          setCloseFeeError(null);
+        }}
+        fmt4={fmt4}
+        money2={money2}
+      />
 
-                const exitNum = parseDecimal(closeExit);
-                if (!(exitNum > 0)) {
-                  setCloseExitError("Exit price is required");
-                  return;
-                }
-
-                const tradingFeeNum = decimalOrZero(closeTradingFee);
-                if (!(tradingFeeNum >= 0)) {
-                  setCloseFeeError("Trading fee must be ≥ 0");
-                  return;
-                }
-
-                try {
-                  setClosing(true);
-                  const longLike =
-                    rowToClose.side === "buy" || rowToClose.side === "long";
-                  const change =
-                    (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
-                  const notional =
-                    rowToClose.trade_type === 2
-                      ? rowToClose.amount_spent *
-                        Math.max(1, rowToClose.leverage ?? 1)
-                      : rowToClose.amount_spent;
-
-                  const gross = (longLike ? 1 : -1) * notional * change;
-                  const net = gross - tradingFeeNum;
-                  const netRounded = Number(net.toFixed(2));
-
-                  const computedStatus: Status =
-                    Math.abs(netRounded) < 0.01
-                      ? "break_even"
-                      : netRounded > 0
-                        ? "win"
-                        : "loss";
-
-                  const baseClose: BasePayload = {
-                    strategy_id: rowToClose.strategy_id,
-                    asset_name: rowToClose.asset_name,
-                    trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
-                    side: rowToClose.side,
-                    status: computedStatus,
-                    amount_spent: rowToClose.amount_spent,
-                    entry_price: rowToClose.entry_price,
-                    exit_price: exitNum,
-                    stop_loss_price: rowToClose.stop_loss_price ?? null,
-                    strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
-                    notes_entry: rowToClose.notes_entry ?? null,
-                    notes_review: rowToClose.notes_review ?? null,
-                    timeframe_code: rowToClose.timeframe_code,
-                    trading_fee: tradingFeeNum,
-                    tags: (rowToClose.tags ?? []).map((t) => t.trim()).filter(Boolean),
-                  };
-
-                  const payloadClose: CreatePayload =
-                    rowToClose.trade_type === 2
-                      ? {
-                          ...baseClose,
-                          trade_type: 2,
-                          futures: {
-                            leverage: rowToClose.leverage ?? 1,
-                            liquidation_price:
-                              rowToClose.liquidation_price ?? null,
-                          },
-                        }
-                      : { ...baseClose, trade_type: 1 };
-
-                  const r = await fetch(`/api/journal/${rowToClose.id}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payloadClose),
-                  });
-                  const saved = await r.json();
-
-                  setItems((prev) =>
-                    prev.map((it) =>
-                      it.id === rowToClose.id
-                        ? {
-                            ...it,
-                            status: saved.status ?? it.status,
-                            exit_price: saved.exit_price ?? it.exit_price,
-                            trading_fee:
-                              typeof saved.trading_fee === "number"
-                                ? saved.trading_fee
-                                : it.trading_fee,
-                          }
-                        : it
-                    )
-                  );
-                  setCloseOpen(false);
-                  await load();
-                } catch (e) {
-                  alert(e instanceof Error ? e.message : "Failed to close");
-                } finally {
-                  setClosing(false);
-                }
-              }}
-              disabled={closing}
-              className="rounded bg-red-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              Close Trade
-            </button>
-          </div>
-        }
-      >
-        {rowToClose && (
-          <div className="grid gap-3 pr-1">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <div className="text-xs text-gray-500">Entry</div>
-                <div className="font-mono">{fmt4(rowToClose.entry_price)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Exit</div>
-                <MoneyInputStandalone
-                  valueRaw={closeExit}
-                  onChangeRaw={(v) => {
-                    setCloseExit(v);
-                    setCloseExitError(null);
-                  }}
-                  placeholder="0"
-                  maxDecimals={8}
-                  className={`w-full rounded-xl border px-3 py-2 ${
-                    closeExitError ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-
-                {closeExitError && (
-                  <div className="mt-1 text-xs text-red-600">
-                    {closeExitError}
-                  </div>
-                )}
-                {closeExitError && (
-                  <div className="mt-1 text-xs text-red-600">
-                    {closeExitError}
-                  </div>
-                )}
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">PnL (net)</div>
-                <div className="font-mono">
-                  {closePnl != null ? money2(closePnl) : "—"}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <div className="text-xs text-gray-500">
-                  Trading Fee <span className="text-red-600">*</span>
-                </div>
-
-                <MoneyInputStandalone
-                  valueRaw={closeTradingFee}
-                  onChangeRaw={(v) => {
-                    setCloseTradingFee(v);
-                    setCloseFeeError(null);
-                  }}
-                  placeholder="0"
-                  className={`w-full rounded-xl border px-3 py-2 ${closeFeeError ? "border-red-500" : "border-gray-200"}`}
-                  maxDecimals={2}
-                />
-
-                {closeFeeError && (
-                  <div className="mt-1 text-xs text-red-600">
-                    {closeFeeError}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
+      <FirstRunJournalModal
         open={firstRunOpen}
+        firstRunName={firstRunName}
+        firstRunSaving={firstRunSaving}
+        firstRunError={firstRunError}
         onClose={() => setFirstRunOpen(false)}
-        title="Name your journal"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <button
-              className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-              onClick={() => setFirstRunOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={async () => {
-                if (!firstRunName.trim()) {
-                  setFirstRunError("Please enter a name.");
-                  return;
-                }
-                setFirstRunSaving(true);
-                setFirstRunError(null);
-                try {
-                  if (journals.length === 0) {
-                    const r = await fetch("/api/journals", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: firstRunName.trim() }),
-                    });
-                    if (!r.ok) throw new Error(await r.text());
-                    const created = (await r.json()) as { id: string };
+        onNameChange={setFirstRunName}
+        onSave={() => {
+          void saveFirstRunJournal();
+        }}
+      />
 
-                    await fetch("/api/journal/active", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ id: created.id }),
-                    });
-                  } else if (
-                    journals.length === 1 &&
-                    journals[0].name?.toLowerCase() === "main"
-                  ) {
-                    const r = await fetch(`/api/journals/${journals[0].id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: firstRunName.trim() }),
-                    });
-                    if (!r.ok) throw new Error(await r.text());
-                  } else {
-                    // should not happen
-                  }
-
-                  await load();
-                  setFirstRunOpen(false);
-                } catch (e) {
-                  setFirstRunError(
-                    e instanceof Error ? e.message : "Failed to save"
-                  );
-                } finally {
-                  setFirstRunSaving(false);
-                }
-              }}
-              disabled={firstRunSaving}
-              className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {firstRunSaving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        }
-      >
-        <div className="grid gap-2">
-          <p className="text-sm text-gray-600">
-            Choose a name for your first journal. You can manage journals later
-            in “Manage Journals”.
-          </p>
-          <input
-            value={firstRunName}
-            onChange={(e) => setFirstRunName(e.target.value)}
-            placeholder="e.g. Crypto Journal"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-            autoFocus
-          />
-          {firstRunError && (
-            <p className="text-xs text-red-600">{firstRunError}</p>
-          )}
-        </div>
-      </Modal>
-
-      <footer className="text-xs text-gray-500 py-6 flex items-center gap-6">
-        <span>© 2025 Stakk AI. All rights reserved.</span>
-        <a href="#" className="hover:underline">
-          Support
-        </a>
-        <a href="#" className="hover:underline">
-          Terms
-        </a>
-        <a href="#" className="hover:underline">
-          Privacy
-        </a>
-      </footer>
+      <JournalFooter />
     </div>
-  );
-}
-
-function MenuItem({
-  label,
-  onClick,
-  icon,
-}: {
-  label: string;
-  onClick: () => void;
-  icon?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-xl flex items-center gap-3"
-    >
-      {icon && <span>{icon}</span>}
-      <span className="text-sm">{label}</span>
-    </button>
   );
 }

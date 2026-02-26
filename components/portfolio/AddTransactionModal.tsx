@@ -206,12 +206,14 @@ export default function AddTransactionModal(props: {
 
     if (lastEdited.current === "amount") {
       const newTotal = amount * priceUsd;
-      setTotalRaw(amount ? String(newTotal) : "");
+      const next = amount ? String(newTotal) : "";
+      setTotalRaw((prev) => (prev === next ? prev : next));
     } else if (lastEdited.current === "total") {
       const newAmount = total / priceUsd;
-      setAmountRaw(total ? String(newAmount) : "");
+      const next = total ? String(newAmount) : "";
+      setAmountRaw((prev) => (prev === next ? prev : next));
     }
-  }, [priceUsd]);
+  }, [priceUsd, selected, amountRaw, totalRaw]);
 
   const canSave = !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
 

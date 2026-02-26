@@ -111,60 +111,6 @@ async function isValidSymbol(sym: string): Promise<boolean> {
   return (js.data ?? []).some((d) => d.symbol.toUpperCase() === sym.toUpperCase())
 }
 
-function computePnlAndStatus(params: {
-  tradeType: number
-  side: "buy" | "sell" | "long" | "short"
-  entryPrice: number
-  exitPrice: number | null
-  amountSpent: number
-  leverage?: number
-  buyFee?: number
-  sellFee?: number
-  tradingFee?: number
-}): { pnl: number | null; status: Status } {
-  const {
-    tradeType,
-    side,
-    entryPrice,
-    exitPrice,
-    amountSpent,
-    leverage,
-    buyFee,
-    sellFee,
-    tradingFee,
-  } = params
-
-  if (!exitPrice || exitPrice <= 0) {
-    return { pnl: null, status: "in_progress" }
-  }
-
-  const longLike = side === "buy" || side === "long"
-  const notional =
-    tradeType === 2 ? amountSpent * Math.max(1, leverage ?? 1) : amountSpent
-
-  if (entryPrice <= 0 || notional <= 0) {
-    return { pnl: null, status: "in_progress" }
-  }
-
-  const change = (exitPrice - entryPrice) / entryPrice
-  const gross = (longLike ? 1 : -1) * notional * change
-
-  const feeTotal = (tradingFee ?? 0) + (buyFee ?? 0) + (sellFee ?? 0)
-  const net = gross - feeTotal
-  const netRounded = Number(net.toFixed(2))
-
-  let status: Status
-  if (Math.abs(netRounded) < 0.01) {
-    status = "break_even"
-  } else if (netRounded > 0) {
-    status = "win"
-  } else {
-    status = "loss"
-  }
-
-  return { pnl: netRounded, status }
-}
-
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
 

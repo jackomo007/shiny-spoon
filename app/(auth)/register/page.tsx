@@ -10,16 +10,9 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [types, setTypes] = useState<T[]>(["crypto"]);
+  const types: T[] = ["crypto"];
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  function toggle(t: T) {
-    if (t === "crypto") return;
-    setTypes((prev) =>
-      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-    );
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

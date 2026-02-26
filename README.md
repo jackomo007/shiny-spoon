@@ -2,6 +2,16 @@
 
 Stakk AI is a Next.js trading workspace focused on account-scoped workflows: trade journaling, strategy/rule management, spot portfolio tracking, chart tracker automation, AI-assisted trade analysis, and admin operations (users, prompts, AI cost monitoring).
 
+## Recent changes (2026-02-26)
+
+- Journal frontend was componentized: large `/journal` UI sections were extracted into `components/journal/ui/*` (toolbar, summary cards, trades card, and modal components).
+- Build/lint cleanup was completed:
+  - Next.js config updated to use `serverExternalPackages` (instead of deprecated `experimental.serverComponentsExternalPackages`).
+  - Existing ESLint warnings in app/components/lib files were resolved.
+- Unused files were removed after dependency-graph verification and build validation:
+  - Removed orphaned UI/components, unused service/repository files, and stale utility scripts/files.
+  - Updated `tsconfig.json` includes to remove stale references.
+
 ## Feature map (UI routes)
 
 - `/dashboard`: home metrics and summary widgets.
@@ -24,19 +34,19 @@ Stakk AI is a Next.js trading workspace focused on account-scoped workflows: tra
 - Validation: Zod.
 - Database: MySQL + Prisma ORM.
 - AI/automation: OpenAI SDK, `p-limit` worker concurrency.
-- Storage/integrations: AWS S3, CoinGecko, Binance, CoinMarketCap, Resend.
+- Storage/integrations: AWS S3, CoinGecko, Binance, CoinMarketCap.
 
 ## Canonical repository structure
 
 ```text
 app/
   (app)/                 # authenticated app pages
-  (auth)/                # login/register/forgot/reset pages
+  (auth)/                # login/register pages
   api/                   # canonical backend route handlers
 components/              # UI and feature components
-services/                # domain services (tracker, exit strategy, price structure)
+services/                # domain services (tracker, exit strategy, portfolio holdings, price structure)
 lib/                     # auth, prisma, prompts, AI helpers, market clients, utilities
-data/repositories/       # persistence-level portfolio/strategy repository helpers
+data/repositories/       # persistence-level portfolio repository helpers
 prisma/
   schema.prisma
   migrations/
@@ -82,9 +92,6 @@ prisma/
 | `S3_BUCKET` | Yes for S3 features | `lib/s3.ts` | S3 bucket name for uploads. |
 | `AWS_ACCESS_KEY_ID` | Yes for S3 features | `lib/s3.ts` | AWS credential for uploads/signing. |
 | `AWS_SECRET_ACCESS_KEY` | Yes for S3 features | `lib/s3.ts` | AWS credential secret. |
-| `RESEND_API_KEY` | Yes for password-reset email flow | `lib/email.ts` | Resend API authentication. |
-| `RESEND_FROM_EMAIL` | Optional | `lib/email.ts` | Sender address (defaults to `onboarding@resend.dev`). |
-| `NEXT_PUBLIC_APP_URL` | Recommended | `lib/email.ts` | Base URL used in password-reset links. |
 | `NODE_ENV` | Runtime-provided | multiple files | Controls prod/dev branches and safeguards. |
 
 ### Example `.env`
@@ -111,10 +118,6 @@ AWS_REGION="us-east-1"
 S3_BUCKET=""
 AWS_ACCESS_KEY_ID=""
 AWS_SECRET_ACCESS_KEY=""
-
-RESEND_API_KEY=""
-RESEND_FROM_EMAIL="onboarding@resend.dev"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 ## Local setup and runbook
@@ -282,10 +285,7 @@ curl -X POST http://localhost:3000/api/tracker/run \
 ## Known gaps and current inconsistencies
 
 - `npm run seed` points to `prisma/seed.ts`, but that file is not present in this repository.
-- Legacy README endpoint names (`/api/trackers`, `/api/chart-analyses`) were outdated; canonical tracker routes are `/api/tracker/*`.
-- Password reset handlers currently exist under `app/app/api/auth/{forgot-password,reset-password}`, while auth pages call `/api/auth/forgot-password` and `/api/auth/reset-password`.
-- `app/(auth)/reset-password/page.tsx` links to `/auth/forgot-password`, but the page route in this tree is `/forgot-password`.
-- There is a duplicated `app/app/*` route tree with partial divergence from `app/*`; this README documents only canonical `app/api` and primary app routes.
+- Middleware includes `/api/billing` in its rate-limit/matcher patterns, but this repository currently has no `/api/billing/*` handlers.
 
 ## Contribution and safety notes
 

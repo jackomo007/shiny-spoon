@@ -64,7 +64,7 @@ export default function AssetMultiSelect({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isAll = value === "all";
-  const selected: string[] = isAll ? [] : value;
+  const selected = useMemo<string[]>(() => (value === "all" ? [] : value), [value]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

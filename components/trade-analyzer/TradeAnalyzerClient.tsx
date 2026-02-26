@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Card from "@/components/ui/Card";
 import { MoneyInputStandalone } from "@/components/form/MaskedFields";
 import AssetAutocomplete from "@/components/trade-analyzer/AssetAutocomplete";
@@ -22,8 +22,6 @@ type ApiSuccess = {
 
 type ApiError = { error: string | unknown };
 
-type StrategyOpt = { id: string; name: string | null };
-
 function isApiSuccess(x: unknown): x is ApiSuccess {
   if (typeof x !== "object" || x === null) return false;
   const o = x as Record<string, unknown>;
@@ -38,7 +36,7 @@ function isApiError(x: unknown): x is ApiError {
   return typeof x === "object" && x !== null && "error" in (x as Record<string, unknown>);
 }
 
-export default function TradeAnalyzerClient({ strategies: _strategies }: { strategies?: StrategyOpt[] } = {}) {
+export default function TradeAnalyzerClient() {
   const [asset, setAsset] = useState("");
   const [amountSpentRaw, setAmountSpentRaw] = useState<string>("");
   const [entryRaw, setEntryRaw] = useState<string>("");
