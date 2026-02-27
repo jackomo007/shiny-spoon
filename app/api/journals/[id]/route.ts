@@ -64,12 +64,6 @@ export async function DELETE(_req: Request, context: unknown) {
         await tx.spot_trade.deleteMany({
           where: { journal_entry_id: { in: entryIds } },
         })
-        await tx.portfolio_trade.deleteMany({
-          where: {
-            account_id: accountId,
-            note: { in: entryIds.map((id) => `[JE:${id}]`) },
-          },
-        })
         await tx.journal_entry.deleteMany({
           where: { id: { in: entryIds } },
         })

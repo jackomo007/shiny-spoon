@@ -6,6 +6,7 @@ import {
   cgCoinMetaByIdSafe,
   cgPriceUsdByIdSafe,
 } from "@/lib/markets/coingecko";
+import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 
 export const dynamic = "force-dynamic";
 
@@ -76,12 +77,11 @@ async function resolvePrice(
 type DbRow = {
   id: string;
   asset_name: string;
-  side: "buy" | "sell";
-  amount: unknown;
-  entry_price: unknown;
+  kind: string;
+  qty: unknown;
+  price_usd: unknown;
   trade_datetime: Date;
-  buy_fee: unknown;
-  sell_fee: unknown;
+  fee_usd: unknown;
 };
 
 export async function GET() {
@@ -91,24 +91,23 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const accountId = session.accountId;
+    await migrateLegacyPortfolioTrades(accountId);
 
-    const rows = (await prisma.journal_entry.findMany({
+    const rows = (await prisma.portfolio_trade.findMany({
       where: {
         account_id: accountId,
-        spot_trade: { some: {} },
         asset_name: { not: "CASH" },
-        side: { in: ["buy", "sell"] },
+        kind: { in: ["buy", "sell", "init"] },
       },
       orderBy: { trade_datetime: "asc" },
       select: {
         id: true,
         asset_name: true,
-        side: true,
-        amount: true,
-        entry_price: true,
+        kind: true,
+        qty: true,
+        price_usd: true,
         trade_datetime: true,
-        buy_fee: true,
-        sell_fee: true,
+        fee_usd: true,
       },
     })) as DbRow[];
 
@@ -220,9 +219,12 @@ export async function GET() {
         .toUpperCase();
       if (!symbol) continue;
 
-      const qty = Number(r.amount ?? 0);
-      const price = Number(r.entry_price ?? 0);
-      const fee = Number(r.side === "buy" ? r.buy_fee : r.sell_fee) || 0;
+      const kind = String(r.kind || "").toLowerCase();
+      const side: "buy" | "sell" = kind === "sell" ? "sell" : "buy";
+
+      const qty = Number(r.qty ?? 0);
+      const price = Number(r.price_usd ?? 0);
+      const fee = Number(r.fee_usd ?? 0) || 0;
 
       if (!Number.isFinite(qty) || qty <= 0) continue;
       if (!Number.isFinite(price) || price <= 0) continue;
@@ -230,7 +232,7 @@ export async function GET() {
       const s = getState(symbol);
       const totalUsd = qty * price;
 
-      if (r.side === "buy") {
+      if (side === "buy") {
         s.qtyHeld += qty;
         s.costBasisUsd += totalUsd + fee;
         s.totalInvestedUsd += totalUsd + fee;

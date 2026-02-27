@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2";
+import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 
 export const dynamic = "force-dynamic";
 
@@ -29,35 +30,21 @@ export async function PUT(req: Request, context: unknown) {
 
     const { params } = context as RouteContext;
     const tradeId = params.id;
+    await migrateLegacyPortfolioTrades(session.accountId);
 
     const input = Body.parse(await req.json());
 
-    const trade_datetime = input.executedAt
-      ? new Date(input.executedAt)
-      : undefined;
-
-    const data: Record<string, unknown> = {
+    const updated = await PortfolioRepoV2.updateSpotTransaction({
+      accountId: session.accountId,
+      tradeId,
       side: input.side,
-      amount: input.qty,
-      entry_price: input.priceUsd,
-      ...(trade_datetime ? { trade_datetime } : {}),
-    };
-
-    if (input.side === "buy") data.buy_fee = input.feeUsd ?? 0;
-    if (input.side === "sell") data.sell_fee = input.feeUsd ?? 0;
-
-    const result = await prisma.journal_entry.updateMany({
-      where: {
-        id: tradeId,
-        account_id: session.accountId,
-        spot_trade: { some: {} },
-        asset_name: { not: "CASH" },
-        side: { in: ["buy", "sell"] },
-      },
-      data,
+      qty: input.qty,
+      priceUsd: input.priceUsd,
+      feeUsd: input.feeUsd ?? 0,
+      executedAt: input.executedAt ? new Date(input.executedAt) : undefined,
     });
 
-    if (result.count === 0) {
+    if (!updated) {
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }
@@ -74,7 +61,7 @@ export async function PUT(req: Request, context: unknown) {
   }
 }
 
-export async function DELETE(req: Request, context: unknown) {
+export async function DELETE(_req: Request, context: unknown) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
@@ -83,18 +70,14 @@ export async function DELETE(req: Request, context: unknown) {
 
     const { params } = context as RouteContext;
     const tradeId = params.id;
+    await migrateLegacyPortfolioTrades(session.accountId);
 
-    const result = await prisma.journal_entry.deleteMany({
-      where: {
-        id: tradeId,
-        account_id: session.accountId,
-        spot_trade: { some: {} },
-        asset_name: { not: "CASH" },
-        side: { in: ["buy", "sell"] },
-      },
+    const deleted = await PortfolioRepoV2.deleteSpotTransaction({
+      accountId: session.accountId,
+      tradeId,
     });
 
-    if (result.count === 0) {
+    if (!deleted) {
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { PortfolioRepo } from "@/data/repositories/portfolio.repo"
+import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2"
 
 export const dynamic = "force-dynamic"
 
@@ -24,14 +24,14 @@ export async function POST(req: Request) {
     const accountId = session.accountId
     const data = Body.parse(await req.json())
 
-    await PortfolioRepo.createInitPosition({
+    await PortfolioRepoV2.createInitTransaction({
       accountId,
       symbol: data.symbol.toUpperCase(),
-      amount: data.amount,
+      qty: data.amount,
       priceUsd: data.priceUsd,
       feeUsd: data.feeUsd,
-      strategyId: data.strategyId ?? null,
-      tradeAt: new Date(data.executedAt),
+      executedAt: new Date(data.executedAt),
+      notes: "[PORTFOLIO_INIT]",
     })
 
     return NextResponse.json({ ok: true })

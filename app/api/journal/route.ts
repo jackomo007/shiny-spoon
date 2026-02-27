@@ -33,7 +33,6 @@ const BaseSchema = z.object({
     leverage: z.number().int().min(1),
     liquidation_price: z.number().positive().optional().nullable(),
   }).optional(),
-  source: z.enum(["portfolio"]).optional(),
   tags: z.array(z.string().min(1)).optional().default([]),
 })
 .superRefine((v, ctx) => {
@@ -188,8 +187,7 @@ export async function POST(req: Request) {
         amount_spent: data.amount_spent,
         amount: amountQty,
         strategy_id: strategyId,
-        notes_entry:
-          data.source === "portfolio" ? `[JE:PORTFOLIO]` : data.notes_entry ?? null,
+        notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
         timeframe_code: data.timeframe_code,
         buy_fee: Number(data.buy_fee ?? 0),
@@ -253,48 +251,6 @@ export async function POST(req: Request) {
           tag_id: t.id,
         })),
         skipDuplicates: true,
-      })
-    }
-
-    if (data.source === "portfolio") {
-      const when = new Date(data.trade_datetime)
-      const price = Number(data.entry_price)
-      const qty = amountQty
-      const fee =
-        Number(data.buy_fee ?? 0) +
-        Number(data.sell_fee ?? 0) +
-        Number(data.trading_fee ?? 0)
-
-      let kind: "buy" | "sell" | "cash_in" | "cash_out" | "init" = "buy"
-      if (data.asset_name.toUpperCase() === "CASH") {
-        kind = data.side === "buy" ? "cash_in" : "cash_out"
-      } else {
-        kind = data.side === "sell" ? "sell" : "buy"
-      }
-
-      const cashDelta =
-        kind === "sell"
-          ? price * qty - fee
-          : kind === "buy"
-          ? -(price * qty + fee)
-          : kind === "cash_in"
-          ? Number(data.amount_spent)
-          : kind === "cash_out"
-          ? -Number(data.amount_spent)
-          : 0
-
-      await tx.portfolio_trade.create({
-        data: {
-          account_id: accountId,
-          trade_datetime: when,
-          asset_name: data.asset_name.toUpperCase(),
-          kind,
-          qty,
-          price_usd: price,
-          fee_usd: fee,
-          cash_delta_usd: cashDelta,
-          note: `[JE:${je.id}]`,
-        },
       })
     }
 

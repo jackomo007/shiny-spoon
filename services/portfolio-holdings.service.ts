@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 
 export type Holding = {
   symbol: string;
@@ -7,74 +8,122 @@ export type Holding = {
   avgEntryPriceUsd: number;
 };
 
+type TradeRow = {
+  asset_name: string;
+  kind: string;
+  qty: unknown;
+  price_usd: unknown;
+  fee_usd: unknown;
+};
+
+type HoldingState = {
+  qty: number;
+  investedUsd: number;
+};
+
+function applyTrade(state: HoldingState, row: TradeRow): HoldingState {
+  const kind = String(row.kind || "").toLowerCase();
+  const qty = Number(row.qty ?? 0);
+  const priceUsd = Number(row.price_usd ?? 0);
+  const feeUsd = Number(row.fee_usd ?? 0) || 0;
+
+  if (!Number.isFinite(qty) || qty <= 0) return state;
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0) return state;
+
+  if (kind === "buy" || kind === "init") {
+    return {
+      qty: state.qty + qty,
+      investedUsd: state.investedUsd + qty * priceUsd + feeUsd,
+    };
+  }
+
+  if (kind === "sell") {
+    const avg = state.qty > 0 ? state.investedUsd / state.qty : 0;
+    const reduceQty = Math.min(qty, state.qty);
+    const nextQty = state.qty - reduceQty;
+    const nextInvested = state.investedUsd - reduceQty * avg;
+
+    if (nextQty < 1e-10) {
+      return { qty: 0, investedUsd: 0 };
+    }
+
+    return {
+      qty: nextQty,
+      investedUsd: Math.max(nextInvested, 0),
+    };
+  }
+
+  return state;
+}
+
 export async function getOpenSpotHolding(
   accountId: string,
   symbol: string,
 ): Promise<Holding | null> {
+  await migrateLegacyPortfolioTrades(accountId);
   const sym = symbol.trim().toUpperCase();
 
-  const rows = await prisma.journal_entry.findMany({
+  const rows = (await prisma.portfolio_trade.findMany({
     where: {
       account_id: accountId,
-      spot_trade: { some: {} },
-      status: "in_progress",
-      side: "buy",
       asset_name: sym,
+      kind: { in: ["buy", "sell", "init"] },
     },
-    select: { amount: true, entry_price: true },
-  });
+    orderBy: { trade_datetime: "asc" },
+    select: {
+      asset_name: true,
+      kind: true,
+      qty: true,
+      price_usd: true,
+      fee_usd: true,
+    },
+  })) as TradeRow[];
 
   if (!rows.length) return null;
 
-  let qty = 0;
-  let investedUsd = 0;
+  let state: HoldingState = { qty: 0, investedUsd: 0 };
+  for (const row of rows) state = applyTrade(state, row);
 
-  for (const r of rows) {
-    const a = Number(r.amount ?? 0);
-    const p = Number(r.entry_price ?? 0);
-    if (a <= 0 || p <= 0) continue;
-    qty += a;
-    investedUsd += a * p;
-  }
-
-  if (qty <= 0) return null;
+  if (state.qty <= 0) return null;
 
   return {
     symbol: sym,
-    qty,
-    investedUsd,
-    avgEntryPriceUsd: investedUsd / qty,
+    qty: state.qty,
+    investedUsd: state.investedUsd,
+    avgEntryPriceUsd: state.investedUsd / state.qty,
   };
 }
 
 export async function getOpenSpotHoldings(
   accountId: string,
 ): Promise<Holding[]> {
-  const rows = await prisma.journal_entry.findMany({
+  await migrateLegacyPortfolioTrades(accountId);
+  const rows = (await prisma.portfolio_trade.findMany({
     where: {
       account_id: accountId,
-      spot_trade: { some: {} },
-      status: "in_progress",
-      side: "buy",
+      asset_name: { not: "CASH" },
+      kind: { in: ["buy", "sell", "init"] },
     },
-    select: { asset_name: true, amount: true, entry_price: true },
-  });
+    orderBy: { trade_datetime: "asc" },
+    select: {
+      asset_name: true,
+      kind: true,
+      qty: true,
+      price_usd: true,
+      fee_usd: true,
+    },
+  })) as TradeRow[];
 
   if (!rows.length) return [];
 
-  const map = new Map<string, { qty: number; investedUsd: number }>();
+  const map = new Map<string, HoldingState>();
 
-  for (const r of rows) {
-    const sym = r.asset_name.trim().toUpperCase();
-    const a = Number(r.amount ?? 0);
-    const p = Number(r.entry_price ?? 0);
-    if (a <= 0 || p <= 0) continue;
+  for (const row of rows) {
+    const sym = String(row.asset_name || "").trim().toUpperCase();
+    if (!sym || sym === "CASH") continue;
 
-    const existing = map.get(sym) ?? { qty: 0, investedUsd: 0 };
-    map.set(sym, {
-      qty: existing.qty + a,
-      investedUsd: existing.investedUsd + a * p,
-    });
+    const current = map.get(sym) ?? { qty: 0, investedUsd: 0 };
+    map.set(sym, applyTrade(current, row));
   }
 
   return Array.from(map.entries())
