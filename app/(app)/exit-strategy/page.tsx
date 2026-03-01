@@ -118,19 +118,119 @@ function ScaleOutPlanTable({ rows }: { rows: ExitStrategyStepRow[] }) {
 
 const PREVIEW_LIMIT = 3;
 
+function strategyNameLabel(sellPercent: number, gainPercent: number) {
+  return `Sell ${num(sellPercent, 0)}% Every ${num(gainPercent, 0)}% Gain`;
+}
+
+function StrategyAssetsTable({
+  assets,
+  sellPercent,
+  onViewAssetPlan,
+}: {
+  assets: ExitStrategyAssetSummary[];
+  sellPercent: number;
+  onViewAssetPlan: (coinSymbol: string) => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-t border-b bg-gray-50">
+          <tr className="text-left text-gray-500 text-xs uppercase tracking-wide">
+            <th className="px-5 py-2.5">Asset</th>
+            <th className="px-5 py-2.5">Next Sell</th>
+            <th className="px-5 py-2.5">Target Price</th>
+            <th className="px-5 py-2.5">Distance</th>
+            <th className="px-5 py-2.5">Progress</th>
+            <th className="px-5 py-2.5">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {assets.map((asset) => {
+            const distance = clamp(asset.distanceToTargetPercent, 0, 100);
+            const progress = 100 - distance;
+            const isReady = asset.status === "ready";
+
+            return (
+              <tr
+                key={asset.coinSymbol}
+                className="border-b last:border-b-0 hover:bg-gray-50"
+              >
+                <td className="px-5 py-3 font-medium text-gray-900">
+                  {asset.coinSymbol}
+                </td>
+                <td className="px-5 py-3 text-gray-700">
+                  <div>Sell {num(sellPercent, 0)}%</div>
+                  <div className="text-xs text-gray-500">
+                    {num(asset.qtyToSell, 8).replace(/\.?0+$/, "")}{" "}
+                    {asset.coinSymbol} ({usd(asset.usdValueToSell)})
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-gray-700">
+                  ${Number(asset.targetPriceUsd).toFixed(3)}
+                  <span className="text-xs text-gray-500 ml-1">
+                    (+{num(asset.nextGainPercent, 0)}%)
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-gray-700">
+                  {num(asset.distanceToTargetPercent, 2)}%
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-purple-600"
+                        style={{ width: `${progress.toFixed(2)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {progress.toFixed(0)}%
+                    </span>
+                  </div>
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isReady
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {isReady ? "Ready" : "Pending"}
+                    </span>
+                    <button
+                      type="button"
+                      className="h-7 px-2.5 rounded-lg border text-xs text-gray-700 hover:bg-gray-50"
+                      onClick={() => onViewAssetPlan(asset.coinSymbol)}
+                    >
+                      View
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function StrategyCard({
   s,
-  onView,
+  onViewAllAssets,
+  onViewAssetPlan,
   onDelete,
   deletingId,
 }: {
   s: ExitStrategySummary;
-  onView: (id: string) => void;
+  onViewAllAssets: (id: string) => void;
+  onViewAssetPlan: (id: string, coinSymbol: string) => void;
   onDelete: (id: string, label: string) => void;
   deletingId: string | null;
 }) {
-  const label = s.isAllCoins ? "All Coins" : s.coinSymbols.join(", ");
-  const strategyName = `Sell ${num(s.sellPercent, 0)}% Every ${num(s.gainPercent, 0)}% Gain`;
+  const label = s.isAllCoins ? "All Assets" : s.coinSymbols.join(", ");
+  const strategyName = strategyNameLabel(s.sellPercent, s.gainPercent);
   const previewAssets = s.assets.slice(0, PREVIEW_LIMIT);
   const hiddenCount = s.assets.length - PREVIEW_LIMIT;
 
@@ -157,10 +257,10 @@ function StrategyCard({
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             className="h-9 px-4 rounded-xl bg-purple-600 text-white text-sm hover:bg-purple-700"
-            onClick={() => onView(s.id)}
+            onClick={() => onViewAllAssets(s.id)}
             type="button"
           >
-            View
+            View All
           </button>
           <button
             className="h-9 w-9 rounded-xl border bg-white text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-50 flex items-center justify-center transition-colors"
@@ -189,78 +289,11 @@ function StrategyCard({
 
       {s.assets.length > 0 && (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-t border-b bg-gray-50">
-                <tr className="text-left text-gray-500 text-xs uppercase tracking-wide">
-                  <th className="px-5 py-2.5">Asset</th>
-                  <th className="px-5 py-2.5">Next Sell</th>
-                  <th className="px-5 py-2.5">Target Price</th>
-                  <th className="px-5 py-2.5">Distance</th>
-                  <th className="px-5 py-2.5">Progress</th>
-                  <th className="px-5 py-2.5">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewAssets.map((asset) => {
-                  const distance = clamp(asset.distanceToTargetPercent, 0, 100);
-                  const progress = 100 - distance;
-                  const isReady = asset.status === "ready";
-
-                  return (
-                    <tr
-                      key={asset.coinSymbol}
-                      className="border-b last:border-b-0 hover:bg-gray-50"
-                    >
-                      <td className="px-5 py-3 font-medium text-gray-900">
-                        {asset.coinSymbol}
-                      </td>
-                      <td className="px-5 py-3 text-gray-700">
-                        <div>Sell {num(s.sellPercent, 0)}%</div>
-                        <div className="text-xs text-gray-500">
-                          {num(asset.qtyToSell, 8).replace(/\.?0+$/, "")}{" "}
-                          {asset.coinSymbol} ({usd(asset.usdValueToSell)})
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-gray-700">
-                        ${Number(asset.targetPriceUsd).toFixed(3)}
-                        <span className="text-xs text-gray-500 ml-1">
-                          (+{num(asset.nextGainPercent, 0)}%)
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-gray-700">
-                        {num(asset.distanceToTargetPercent, 2)}%
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-purple-600"
-                              style={{ width: `${progress.toFixed(2)}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {progress.toFixed(0)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            isReady
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {isReady ? "Ready" : "Pending"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <StrategyAssetsTable
+            assets={previewAssets}
+            sellPercent={s.sellPercent}
+            onViewAssetPlan={(coinSymbol) => onViewAssetPlan(s.id, coinSymbol)}
+          />
 
           <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
             {hiddenCount > 0 ? (
@@ -273,7 +306,7 @@ function StrategyCard({
             <button
               type="button"
               className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
-              onClick={() => onView(s.id)}
+              onClick={() => onViewAllAssets(s.id)}
             >
               View All
               <svg
@@ -303,8 +336,14 @@ export default function ExitStrategyPage() {
   const [items, setItems] = useState<ExitStrategySummary[]>([]);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [assetsModalOpen, setAssetsModalOpen] = useState(false);
+  const [activeStrategyId, setActiveStrategyId] = useState<string | null>(null);
 
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planStrategyId, setPlanStrategyId] = useState<string | null>(null);
+  const [planCoinSymbol, setPlanCoinSymbol] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [details, setDetails] = useState<Details | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<null | {
@@ -328,6 +367,25 @@ export default function ExitStrategyPage() {
     if (coinSelection === "all") return true;
     return coinSelection.length > 0;
   }, [strategyType, coinSelection]);
+
+  const activeStrategy = useMemo(
+    () => items.find((s) => s.id === activeStrategyId) ?? null,
+    [activeStrategyId, items],
+  );
+
+  const planStrategy = useMemo(
+    () => items.find((s) => s.id === planStrategyId) ?? null,
+    [items, planStrategyId],
+  );
+
+  const planRows = useMemo(() => {
+    if (!details || !planCoinSymbol) return [];
+    if (details.rowsByCoin[planCoinSymbol]) return details.rowsByCoin[planCoinSymbol];
+    const key = Object.keys(details.rowsByCoin).find(
+      (coin) => coin.toUpperCase() === planCoinSymbol.toUpperCase(),
+    );
+    return key ? details.rowsByCoin[key] : [];
+  }, [details, planCoinSymbol]);
 
   const load = async () => {
     setLoading(true);
@@ -363,14 +421,29 @@ export default function ExitStrategyPage() {
     }
   }, [addOpen]);
 
-  const openDetails = async (id: string) => {
-    setDetails(null);
-    setDetailsOpen(true);
-    setError(null);
+  const openViewAllAssets = (id: string) => {
+    setActiveStrategyId(id);
+    setAssetsModalOpen(true);
+  };
 
+  const closePlanModal = () => {
+    setPlanOpen(false);
+    setPlanStrategyId(null);
+    setPlanCoinSymbol(null);
+    setDetails(null);
+    setPlanError(null);
+  };
+
+  const openAssetPlan = async (strategyId: string, coinSymbol: string) => {
+    setPlanOpen(true);
+    setPlanStrategyId(strategyId);
+    setPlanCoinSymbol(coinSymbol);
+    setDetails(null);
+    setPlanLoading(true);
+    setPlanError(null);
     try {
       const res = await fetch(
-        `/api/exit-strategies/${encodeURIComponent(id)}`,
+        `/api/exit-strategies/${encodeURIComponent(strategyId)}`,
         { cache: "no-store" },
       );
       if (!res.ok) {
@@ -382,7 +455,9 @@ export default function ExitStrategyPage() {
       const json = (await res.json()) as { data: Details };
       setDetails(json.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load details");
+      setPlanError(e instanceof Error ? e.message : "Failed to load details");
+    } finally {
+      setPlanLoading(false);
     }
   };
 
@@ -391,7 +466,7 @@ export default function ExitStrategyPage() {
     setAddError(null);
 
     if (coinSelection !== "all" && coinSelection.length === 0) {
-      setAddError("Please select at least one coin.");
+      setAddError("Please select at least one asset.");
       return;
     }
 
@@ -419,7 +494,7 @@ export default function ExitStrategyPage() {
           .catch(() => ({}) as { error?: string })) as { error?: string };
         if (res.status === 409) {
           setAddError(
-            j.error || "An exit strategy for one or more coins already exists.",
+            j.error || "An exit strategy for one or more assets already exists.",
           );
           return;
         }
@@ -551,7 +626,10 @@ export default function ExitStrategyPage() {
             <StrategyCard
               key={s.id}
               s={s}
-              onView={(id) => void openDetails(id)}
+              onViewAllAssets={openViewAllAssets}
+              onViewAssetPlan={(id, coinSymbol) =>
+                void openAssetPlan(id, coinSymbol)
+              }
               onDelete={requestDelete}
               deletingId={deletingId}
             />
@@ -602,10 +680,12 @@ export default function ExitStrategyPage() {
               )}
 
               <div className="grid gap-1">
-                <div className="text-xs text-gray-500">Coins</div>
+                <div className="text-xs text-gray-500">Assets</div>
                 <AssetMultiSelect
                   value={coinSelection}
                   onChange={setCoinSelection}
+                  searchEndpoint="/api/portfolio/symbol"
+                  placeholder="Search assets in your portfolio…"
                 />
               </div>
 
@@ -708,26 +788,22 @@ export default function ExitStrategyPage() {
         </Modal>
       )}
 
-      {detailsOpen && (
+      {assetsModalOpen && activeStrategy && (
         <Modal
           open
           widthClass="max-w-5xl"
           onClose={() => {
-            setDetailsOpen(false);
-            setDetails(null);
+            setAssetsModalOpen(false);
+            setActiveStrategyId(null);
           }}
-          title={
-            details?.summary
-              ? `${details.summary.isAllCoins ? "All Coins" : details.summary.coinSymbols.join(", ")} – Scale-Out Plan`
-              : "Loading…"
-          }
+          title={`${strategyNameLabel(activeStrategy.sellPercent, activeStrategy.gainPercent)} – All Assets`}
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
                 className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm hover:bg-purple-700"
                 onClick={() => {
-                  setDetailsOpen(false);
-                  setDetails(null);
+                  setAssetsModalOpen(false);
+                  setActiveStrategyId(null);
                 }}
                 type="button"
               >
@@ -736,21 +812,72 @@ export default function ExitStrategyPage() {
             </div>
           }
         >
-          {!details ? (
-            <div className="text-sm text-gray-600">Loading…</div>
-          ) : (
-            <div className="grid gap-6">
-              {Object.entries(details.rowsByCoin).map(([coin, rows]) => (
-                <div key={coin}>
-                  {Object.keys(details.rowsByCoin).length > 1 && (
-                    <div className="text-sm font-medium text-gray-700 mb-2">
-                      {coin}
-                    </div>
-                  )}
-                  <ScaleOutPlanTable rows={rows} />
-                </div>
-              ))}
+          <div className="grid gap-4">
+            <div className="text-sm text-gray-500">
+              Applies to:{" "}
+              <span className="font-medium text-gray-700">
+                {activeStrategy.totalAssets}{" "}
+                {activeStrategy.totalAssets === 1 ? "asset" : "assets"}
+              </span>
+              {" · "}
+              Total Profit:{" "}
+              <span className="font-medium text-gray-700">
+                {usd(activeStrategy.totalProfitUsd)}
+              </span>
             </div>
+            <div className="rounded-2xl border bg-white overflow-hidden">
+              <StrategyAssetsTable
+                assets={activeStrategy.assets}
+                sellPercent={activeStrategy.sellPercent}
+                onViewAssetPlan={(coinSymbol) => {
+                  setAssetsModalOpen(false);
+                  setActiveStrategyId(null);
+                  void openAssetPlan(activeStrategy.id, coinSymbol);
+                }}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {planOpen && (
+        <Modal
+          open
+          widthClass="max-w-5xl"
+          onClose={closePlanModal}
+          title={
+            planCoinSymbol
+              ? `${planCoinSymbol} – Scale-Out Plan`
+              : "Scale-Out Plan"
+          }
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <button
+                className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm hover:bg-purple-700"
+                onClick={closePlanModal}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          }
+        >
+          {planStrategy && (
+            <div className="mb-3 text-sm text-gray-500">
+              {strategyNameLabel(planStrategy.sellPercent, planStrategy.gainPercent)}
+            </div>
+          )}
+
+          {planLoading ? (
+            <div className="text-sm text-gray-600">Loading…</div>
+          ) : planError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {planError}
+            </div>
+          ) : planRows.length === 0 ? (
+            <div className="text-sm text-gray-600">No scale-out rows available.</div>
+          ) : (
+            <ScaleOutPlanTable rows={planRows} />
           )}
         </Modal>
       )}

@@ -49,11 +49,13 @@ function parseCoinsApiResponse(x: unknown): CoinsApiResponse {
 export default function AssetMultiSelect({
   value,
   onChange,
-  placeholder = "Search coins…",
+  placeholder = "Search assets…",
+  searchEndpoint = "/api/assets/coins",
 }: {
   value: CoinSelection;
   onChange: (v: CoinSelection) => void;
   placeholder?: string;
+  searchEndpoint?: string;
 }) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<AssetItem[]>([]);
@@ -93,7 +95,7 @@ export default function AssetMultiSelect({
     const id = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/assets/coins?q=${encodeURIComponent(query)}`,
+          `${searchEndpoint}${searchEndpoint.includes("?") ? "&" : "?"}q=${encodeURIComponent(query)}`,
           {
             cache: "no-store",
           },
@@ -117,7 +119,7 @@ export default function AssetMultiSelect({
       cancelled = true;
       clearTimeout(id);
     };
-  }, [q]);
+  }, [q, searchEndpoint]);
 
   const filteredItems = useMemo(
     () => items.filter((it) => !selected.includes(it.symbol)),
@@ -173,7 +175,7 @@ export default function AssetMultiSelect({
       >
         {isAll && (
           <span className="inline-flex items-center gap-1 rounded-lg bg-purple-100 text-purple-700 text-sm px-2 py-0.5 font-medium">
-            All Coins
+            All Assets
             <button
               type="button"
               onClick={(e) => {
@@ -181,7 +183,7 @@ export default function AssetMultiSelect({
                 toggleAll();
               }}
               className="hover:text-purple-900 leading-none"
-              aria-label="Remove All Coins"
+              aria-label="Remove All Assets"
             >
               ×
             </button>
@@ -260,7 +262,7 @@ export default function AssetMultiSelect({
             >
               <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0" />
               <div>
-                <div className="font-medium text-sm">All Coins</div>
+                <div className="font-medium text-sm">All Assets</div>
                 <div className="text-xs text-gray-500">
                   Apply strategy to all assets
                 </div>

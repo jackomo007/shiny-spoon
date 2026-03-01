@@ -110,7 +110,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "An exit strategy already exists for one or more of the selected coins.",
+            "An exit strategy already exists for one or more of the selected assets.",
         },
         { status: 409 },
       );
