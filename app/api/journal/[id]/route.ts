@@ -8,8 +8,6 @@ import { Prisma } from "@prisma/client"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
 
-const TIMEFRAME_RE = /^\d+(S|M|H|D|W|Y)$/
-
 const BaseSchema = z
   .object({
     strategy_id: z.string().min(1),
@@ -23,19 +21,12 @@ const BaseSchema = z
     stop_loss_price: z.number().positive().optional().nullable(),
     amount_spent: z.number().positive().optional(),
     amount: z.number().positive().optional(),
-    timeframe_code: z.string().regex(TIMEFRAME_RE, "Invalid timeframe"),
     buy_fee: z.number().nonnegative().default(0),
     sell_fee: z.number().nonnegative().optional(),
     trading_fee: z.number().nonnegative().optional(),
     strategy_rule_match: z.number().int().min(0).max(999).optional().default(0),
     notes_entry: z.string().optional().nullable(),
     notes_review: z.string().optional().nullable(),
-    futures: z
-      .object({
-        leverage: z.number().int().min(1),
-        liquidation_price: z.number().positive().optional().nullable(),
-      })
-      .optional(),
     tags: z.array(z.string().min(1)).optional().default([]),
   })
   .superRefine((v, ctx) => {
@@ -47,13 +38,6 @@ const BaseSchema = z
       })
     }
     const t = Number(v.trade_type)
-    if (t === 2 && !v.futures) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["futures"],
-        message: "Futures data required",
-      })
-    }
     if (t === 1 && !["buy", "sell"].includes(v.side)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -90,13 +74,10 @@ const UpdateSchema = BaseSchema
 function qtyFrom(params: {
   amountSpent: number
   entryPrice: number
-  tradeType: number
-  leverage?: number
 }): number {
-  const { amountSpent, entryPrice, tradeType, leverage } = params
+  const { amountSpent, entryPrice } = params
   if (entryPrice <= 0) return 0
-  const notional = tradeType === 2 ? amountSpent * Math.max(1, leverage ?? 1) : amountSpent
-  return notional / entryPrice
+  return amountSpent / entryPrice
 }
 
 async function isValidSymbol(sym: string): Promise<boolean> {
@@ -148,8 +129,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const amountQty = qtyFrom({
     amountSpent: data.amount_spent,
     entryPrice: data.entry_price,
-    tradeType,
-    leverage: data.futures?.leverage,
   })
 
   const exitToPersist =
@@ -157,7 +136,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       ? (existing.exit_price as number | null)
       : data.exit_price ?? null
 
- const statusToPersist: Status = data.status as Status
+  const statusToPersist: Status = data.status as Status
 
   const sellFeeToPersist: Prisma.Decimal | undefined =
     data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined
@@ -184,7 +163,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         strategy_id: data.strategy_id,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
-        timeframe_code: data.timeframe_code,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
         ...(sellFeeToPersist !== undefined ? { sell_fee: sellFeeToPersist } : {}),
         trading_fee: Number(data.trading_fee ?? 0),
@@ -204,8 +182,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       if (!hasSpot) await tx.spot_trade.create({ data: { journal_entry_id: id } })
     } else {
       await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } })
-      const f = data.futures!
-      const marginUsed = data.amount_spent
       const existF = await tx.futures_trade.findFirst({
         where: { journal_entry_id: id },
       })
@@ -213,18 +189,14 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         await tx.futures_trade.update({
           where: { id: existF.id },
           data: {
-            leverage: f.leverage,
-            liquidation_price: f.liquidation_price ?? null,
-            margin_used: marginUsed,
+            margin_used: data.amount_spent,
           },
         })
       } else {
         await tx.futures_trade.create({
           data: {
             journal_entry_id: id,
-            leverage: f.leverage,
-            liquidation_price: f.liquidation_price ?? null,
-            margin_used: marginUsed,
+            margin_used: data.amount_spent,
           },
         })
       }

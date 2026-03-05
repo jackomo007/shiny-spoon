@@ -109,7 +109,6 @@ model journal_entry {
   journal_id          String               @db.Char(36)
   buy_fee             Decimal              @default(0.00000000) @db.Decimal(18, 8)
   sell_fee            Decimal              @default(0.00000000) @db.Decimal(18, 8)
-  timeframe_code      String               @default("1D") @db.VarChar(8)
   trading_fee         Float                @default(0)
   futures_trade       futures_trade[]
   account             account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_journal_entry_account")
@@ -153,12 +152,10 @@ model spot_trade {
 }
 
 model futures_trade {
-  id                String        @id @default(uuid()) @db.Char(36)
-  journal_entry_id  String        @db.Char(36)
-  leverage          Int
-  margin_used       Decimal       @db.Decimal(18, 8)
-  liquidation_price Decimal?      @db.Decimal(18, 8)
-  journal_entry     journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "futures_trade_ibfk_1")
+  id               String        @id @default(uuid()) @db.Char(36)
+  journal_entry_id String        @db.Char(36)
+  margin_used      Decimal       @db.Decimal(18, 8)
+  journal_entry    journal_entry @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "futures_trade_ibfk_1")
 
   @@index([journal_entry_id], map: "journal_entry_id")
 }

@@ -10,7 +10,7 @@ import React, {
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import Modal from "@/components/ui/Modal";
-import { MoneyField, DecimalField } from "@/components/form/MaskedFields";
+import { MoneyField } from "@/components/form/MaskedFields";
 import JournalToolbar from "@/components/journal/JournalToolbar";
 import JournalSummaryCards from "@/components/journal/JournalSummaryCards";
 import JournalDateRangeCard from "@/components/journal/JournalDateRangeCard";
@@ -37,10 +37,7 @@ export type JournalRow = {
   date: string | Date;
   strategy_id: string;
   pnl: number | null;
-  leverage: number | null;
   trading_fee: number;
-  timeframe_code: string;
-  liquidation_price: number | null;
   stop_loss_price: number | null;
   strategy_rule_match: number;
   notes_entry: string | null;
@@ -59,16 +56,11 @@ type JournalForm = {
   trade_type: TradeType | string;
   trade_datetime: string;
 
-  timeframe_number?: string;
-  timeframe_unit?: "S" | "M" | "H" | "D" | "W" | "Y";
-
   trading_fee?: string;
   amount_spent?: string;
   entry_price?: string;
   exit_price?: string;
   stop_loss_price?: string;
-  leverage?: string;
-  liquidation_price?: string;
 
   side?: Side;
   status?: Status;
@@ -195,16 +187,12 @@ type BasePayload = {
   strategy_rule_match: number;
   notes_entry: string | null;
   notes_review: string | null;
-  timeframe_code: string;
   trading_fee: number;
   tags?: string[];
 };
 
 type CreateSpotPayload = BasePayload & { trade_type: 1 };
-type CreateFuturesPayload = BasePayload & {
-  trade_type: 2;
-  futures: { leverage: number; liquidation_price: number | null };
-};
+type CreateFuturesPayload = BasePayload & { trade_type: 2 };
 type CreatePayload = CreateSpotPayload | CreateFuturesPayload;
 
 export default function JournalPage() {
@@ -269,8 +257,6 @@ export default function JournalPage() {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
-      timeframe_number: "4",
-      timeframe_unit: "H",
       trading_fee: "0",
       matched_rule_ids: [],
       notes_entry: "",
@@ -405,10 +391,7 @@ useEffect(() => {
     const dir =
       rowToClose.side === "buy" || rowToClose.side === "long" ? 1 : -1;
     const change = (exit - rowToClose.entry_price) / rowToClose.entry_price;
-    const notional =
-      rowToClose.trade_type === 2
-        ? rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1)
-        : rowToClose.amount_spent;
+    const notional = rowToClose.amount_spent;
     const gross = dir * notional * change;
     const net = gross - tradingFeeNum;
     setClosePnl(Number(net.toFixed(2)));
@@ -459,10 +442,6 @@ useEffect(() => {
       date: it.date,
       strategy_id: it.strategy_id,
       pnl: it.pnl == null ? null : Number(it.pnl),
-      leverage: it.leverage == null ? null : Number(it.leverage),
-      timeframe_code: it.timeframe_code,
-      liquidation_price:
-        it.liquidation_price == null ? null : Number(it.liquidation_price),
       stop_loss_price:
         it.stop_loss_price == null ? null : Number(it.stop_loss_price),
       strategy_rule_match: Number(it.strategy_rule_match ?? 0),
@@ -535,24 +514,6 @@ useEffect(() => {
       setLoading(false);
     }
   }, [start, end]);
-
-  const wTfNum = watch("timeframe_number");
-  const wTfUnit = watch("timeframe_unit");
-
-  useEffect(() => {
-    try {
-      if (
-        wTfNum &&
-        /^\d+$/.test(String(wTfNum)) &&
-        ["S", "M", "H", "D", "W", "Y"].includes(String(wTfUnit))
-      ) {
-        localStorage.setItem(
-          "jrnl.lastTf",
-          JSON.stringify({ num: String(wTfNum), unit: String(wTfUnit) })
-        );
-      }
-    } catch {}
-  }, [wTfNum, wTfUnit]);
 
   useEffect(() => {
     void load();
@@ -646,29 +607,6 @@ useEffect(() => {
     });
 
     setValue("side", "buy", { shouldValidate: false, shouldDirty: false });
-
-    let lastTfNum = "4";
-    let lastTfUnit: JournalForm["timeframe_unit"] = "H";
-    try {
-      const saved = JSON.parse(localStorage.getItem("jrnl.lastTf") || "{}");
-      if (
-        saved &&
-        /^\d+$/.test(saved.num) &&
-        ["S", "M", "H", "D", "W", "Y"].includes(saved.unit)
-      ) {
-        lastTfNum = saved.num;
-        lastTfUnit = saved.unit;
-      }
-    } catch {}
-
-    setValue("timeframe_number", lastTfNum, {
-      shouldValidate: false,
-      shouldDirty: false,
-    });
-    setValue("timeframe_unit", lastTfUnit, {
-      shouldValidate: false,
-      shouldDirty: false,
-    });
     setValue("trading_fee", "0", { shouldValidate: false, shouldDirty: false });
 
     setOpen(true);
@@ -696,31 +634,11 @@ useEffect(() => {
       exit_price: row.exit_price != null ? String(row.exit_price) : "",
       stop_loss_price:
         row.stop_loss_price != null ? String(row.stop_loss_price) : "",
-      leverage: row.leverage != null ? String(row.leverage) : "",
-      liquidation_price:
-        row.liquidation_price != null ? String(row.liquidation_price) : "",
       matched_rule_ids: [],
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
       tags: row.tags ?? [],
     });
-    const tf = row.timeframe_code || "";
-    const tfNum = tf.replace(/[A-Z]$/i, "");
-    const tfUnit = tf.slice(-1).toUpperCase() as
-      | "S"
-      | "M"
-      | "H"
-      | "D"
-      | "W"
-      | "Y";
-    setValue("timeframe_number", tfNum || "1", { shouldValidate: false });
-    setValue(
-      "timeframe_unit",
-      (["S", "M", "H", "D", "W", "Y"].includes(tfUnit)
-        ? tfUnit
-        : "H") as JournalForm["timeframe_unit"],
-      { shouldValidate: false }
-    );
     setValue("trading_fee", String(row.trading_fee ?? 0), {
       shouldValidate: false,
       shouldDirty: false,
@@ -829,7 +747,6 @@ useEffect(() => {
         const ok = await trigger([
           "amount_spent",
           "entry_price",
-          "leverage",
           "trading_fee",
           "status",
           "side",
@@ -853,9 +770,6 @@ useEffect(() => {
         : coercedSide === "short"
           ? "short"
           : "long";
-
-    const timeframe_code =
-      `${(form.timeframe_number ?? "").trim()}${form.timeframe_unit ?? ""}`.toUpperCase();
 
     const amt = toNum(form.amount_spent);
     const entry = toNum(form.entry_price);
@@ -885,7 +799,6 @@ useEffect(() => {
       strategy_rule_match: ruleCount,
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
-      timeframe_code,
       trading_fee: fee,
       tags: (form.tags ?? []).map((t) => t.trim()).filter(Boolean),
     };
@@ -893,24 +806,7 @@ useEffect(() => {
     let payload: CreatePayload;
 
     if (tradeType === 2) {
-      const levParsed = parseDecimal(form.leverage ?? "");
-      if (!(levParsed > 0)) {
-        alert("Leverage must be > 0");
-        return;
-      }
-
-      const liqParsed =
-        form.liquidation_price && form.liquidation_price.trim()
-          ? parseDecimal(form.liquidation_price)
-          : NaN;
-      const liq = isNaN(liqParsed) ? null : liqParsed;
-
-      const futures: CreateFuturesPayload["futures"] = {
-        leverage: levParsed,
-        liquidation_price: liq,
-      };
-
-      payload = { ...base, trade_type: 2, futures };
+      payload = { ...base, trade_type: 2 };
     } else {
       payload = { ...base, trade_type: 1 };
     }
@@ -1158,10 +1054,7 @@ async function fetchAssets(q: string) {
       setClosing(true);
       const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
       const change = (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
-      const notional =
-        rowToClose.trade_type === 2
-          ? rowToClose.amount_spent * Math.max(1, rowToClose.leverage ?? 1)
-          : rowToClose.amount_spent;
+      const notional = rowToClose.amount_spent;
 
       const gross = (longLike ? 1 : -1) * notional * change;
       const net = gross - tradingFeeNum;
@@ -1187,21 +1080,13 @@ async function fetchAssets(q: string) {
         strategy_rule_match: rowToClose.strategy_rule_match ?? 0,
         notes_entry: rowToClose.notes_entry ?? null,
         notes_review: rowToClose.notes_review ?? null,
-        timeframe_code: rowToClose.timeframe_code,
         trading_fee: tradingFeeNum,
         tags: (rowToClose.tags ?? []).map((t) => t.trim()).filter(Boolean),
       };
 
       const payloadClose: CreatePayload =
         rowToClose.trade_type === 2
-          ? {
-              ...baseClose,
-              trade_type: 2,
-              futures: {
-                leverage: rowToClose.leverage ?? 1,
-                liquidation_price: rowToClose.liquidation_price ?? null,
-              },
-            }
+          ? { ...baseClose, trade_type: 2 }
           : { ...baseClose, trade_type: 1 };
 
       const r = await fetch(`/api/journal/${rowToClose.id}`, {
@@ -1525,44 +1410,6 @@ async function fetchAssets(q: string) {
                   )}
                 </div>
 
-                <div>
-                  <div className="text-sm mb-1">
-                    Timeframe <span className="text-red-600">*</span>
-                  </div>
-                  <div className="grid grid-cols-[1fr_auto] gap-2">
-                    <input
-                      {...register("timeframe_number", {
-                        required: "Timeframe number is required",
-                        validate: (v) =>
-                          /^\d+$/.test(String(v ?? "")) || "Only digits",
-                      })}
-                      placeholder="e.g. 1"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                    <select
-                      {...register("timeframe_unit", {
-                        required: "Unit is required",
-                      })}
-                      className="rounded-xl border border-gray-200 px-3 py-2"
-                    >
-                      {["S", "M", "H", "D", "W", "Y"].map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {errors.timeframe_number && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {String(errors.timeframe_number.message)}
-                    </p>
-                  )}
-                  {errors.timeframe_unit && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {String(errors.timeframe_unit.message)}
-                    </p>
-                  )}
-                </div>
               </>
             )}
 
@@ -1785,42 +1632,6 @@ async function fetchAssets(q: string) {
                             {String(errors.trading_fee.message)}
                           </p>
                         )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Leverage <span className="text-red-600">*</span>
-                        </div>
-                        <DecimalField<JournalForm>
-                          name="leverage"
-                          control={control}
-                          placeholder="e.g. 10"
-                          maxDecimals={2}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          rules={{
-                            required: "Leverage is required",
-                            validate: (v) =>
-                              parseDecimal((v ?? "").toString() || "0") > 0 ||
-                              "Must be > 0",
-                          }}
-                        />
-                        {errors.leverage && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.leverage.message)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Liquidation Price</div>
-                        <MoneyField<JournalForm>
-                          name="liquidation_price"
-                          control={control}
-                          decimalPlaces={3}
-                          placeholder="e.g. 10000.32"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
                       </div>
                     </div>
 

@@ -21,12 +21,10 @@ function calcPnL(row: {
   entry_price: number
   exit_price: number | null
   amount_spent: number
-  leverage: number | null
 }) {
   if (row.exit_price == null) return 0
   const qtyBase = row.amount_spent / row.entry_price
-  const lev = row.trade_type === 2 ? (row.leverage ?? 1) : 1
-  const qty = qtyBase * lev
+  const qty = qtyBase
   const diff =
     row.side === "buy" || row.side === "long"
       ? row.exit_price - row.entry_price
@@ -87,9 +85,6 @@ export async function GET(req: Request) {
       exit_price: true,
       amount_spent: true,
       stop_loss_price: true,
-      futures_trade: {
-        select: { leverage: true, liquidation_price: true },
-      },
     },
   })
 
@@ -113,10 +108,6 @@ export async function GET(req: Request) {
         entry_price: Number(t.entry_price),
         exit_price: t.exit_price != null ? Number(t.exit_price) : null,
         amount_spent: Number(t.amount_spent),
-        leverage:
-          t.futures_trade && t.futures_trade.length
-            ? Number(t.futures_trade[0].leverage)
-            : null,
       })
     )
 
