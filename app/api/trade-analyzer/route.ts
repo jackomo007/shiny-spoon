@@ -40,7 +40,12 @@ export async function POST(req: Request) {
     if (data.strategy_id) {
       const st = await prisma.strategy.findFirst({
         where: { id: data.strategy_id, account_id: session.accountId },
-        include: { strategy_rules: { include: { rule: true } } },
+        include: {
+          strategy_rules: {
+            include: { rule: true },
+            orderBy: { date_created: "asc" },
+          },
+        },
       });
       if (st) {
         strategy = {

@@ -13,7 +13,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
   const rows = await prisma.strategy.findMany({
     where: { account_id: { in: accIds } },
-    include: { strategy_rules: { include: { rule: true } } },
+    include: {
+      strategy_rules: {
+        include: { rule: true },
+        orderBy: { date_created: "asc" },
+      },
+    },
     orderBy: { date_created: "desc" },
   })
   const items = rows.map(s => ({

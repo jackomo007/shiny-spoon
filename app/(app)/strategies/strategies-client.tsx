@@ -110,6 +110,8 @@ export default function StrategiesClient() {
   const [step, setStep] = useState<"list" | "edit">("list")
   const [rules, setRules] = useState<RuleRow[]>([])
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
+  const [draggedRuleId, setDraggedRuleId] = useState<string | null>(null)
+  const [dropTargetRuleId, setDropTargetRuleId] = useState<string | null>(null)
 
   function uid(): string {
   const maybeCrypto =
@@ -207,6 +209,26 @@ export default function StrategiesClient() {
       setRules(prev => [...prev, { id: newId, title, description: editDesc.trim() || null }])
     }
     setStep("list")
+  }
+
+  function moveRule(dragId: string, targetId: string) {
+    if (dragId === targetId) return
+
+    setRules((prev) => {
+      const dragIndex = prev.findIndex((r) => r.id === dragId)
+      const targetIndex = prev.findIndex((r) => r.id === targetId)
+      if (dragIndex < 0 || targetIndex < 0) return prev
+
+      const next = [...prev]
+      const [dragged] = next.splice(dragIndex, 1)
+      next.splice(targetIndex, 0, dragged)
+      return next
+    })
+  }
+
+  function clearDragState() {
+    setDraggedRuleId(null)
+    setDropTargetRuleId(null)
   }
 
   async function onSubmitNameAndRules() {
@@ -535,6 +557,7 @@ export default function StrategiesClient() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="text-left px-3 py-2 w-24">#</th>
                       <th className="text-left px-3 py-2">Rule Name</th>
                       <th className="text-left px-3 py-2">Description</th>
                       <th className="text-right px-3 py-2">Actions</th>
@@ -542,8 +565,42 @@ export default function StrategiesClient() {
                   </thead>
                   <tbody>
                     {rules.length ? (
-                      rules.map((r) => (
-                        <tr key={r.id} className="border-t">
+                      rules.map((r, index) => (
+                        <tr
+                          key={r.id}
+                          className={`border-t ${dropTargetRuleId === r.id ? "bg-gray-50" : ""}`}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            if (draggedRuleId && draggedRuleId !== r.id) {
+                              setDropTargetRuleId(r.id)
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            if (draggedRuleId) {
+                              moveRule(draggedRuleId, r.id)
+                            }
+                            clearDragState()
+                          }}
+                        >
+                          <td className="px-3 py-2 text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 text-right">{index + 1}.</span>
+                              <button
+                                type="button"
+                                draggable
+                                aria-label={`Drag rule ${index + 1}`}
+                                className="cursor-grab text-gray-400 active:cursor-grabbing"
+                                onDragStart={(e) => {
+                                  setDraggedRuleId(r.id)
+                                  e.dataTransfer.effectAllowed = "move"
+                                }}
+                                onDragEnd={clearDragState}
+                              >
+                                ⋮⋮
+                              </button>
+                            </div>
+                          </td>
                           <td className="px-3 py-2">{r.title}</td>
                           <td className="px-3 py-2 text-gray-600">
                             {r.description || "—"}
@@ -570,7 +627,7 @@ export default function StrategiesClient() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={3} className="px-3 py-8 text-center text-gray-500">
+                        <td colSpan={4} className="px-3 py-8 text-center text-gray-500">
                           No rules yet
                         </td>
                       </tr>

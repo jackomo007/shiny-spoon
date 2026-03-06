@@ -36,7 +36,12 @@ export async function GET(
 
   const st = await prisma.strategy.findFirst({
     where: { id, account_id: accountId },
-    include: { strategy_rules: { include: { rule: true } } },
+    include: {
+      strategy_rules: {
+        include: { rule: true },
+        orderBy: { date_created: "asc" },
+      },
+    },
   });
 
   if (!st) {

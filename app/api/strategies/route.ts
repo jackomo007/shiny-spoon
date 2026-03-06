@@ -59,7 +59,12 @@ export async function GET(req: Request) {
   const strategies = await prisma.strategy.findMany({
     where: { account_id: accountId },
     orderBy: { date_created: "desc" },
-    include: { strategy_rules: { include: { rule: true } } },
+    include: {
+      strategy_rules: {
+        include: { rule: true },
+        orderBy: { date_created: "asc" },
+      },
+    },
   })
 
   if (strategies.length === 0) {
