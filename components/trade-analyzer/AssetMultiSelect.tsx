@@ -83,43 +83,49 @@ export default function AssetMultiSelect({
   }, []);
 
   useEffect(() => {
-    const query = q.trim();
-    if (!query) {
-      setItems([]);
-      return;
-    }
+    if (!open || isAll) return;
 
+    const query = q.trim();
     let cancelled = false;
     setLoading(true);
 
-    const id = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `${searchEndpoint}${searchEndpoint.includes("?") ? "&" : "?"}q=${encodeURIComponent(query)}`,
-          {
+    const id = setTimeout(
+      async () => {
+        try {
+          const hasQuery = query.length > 0;
+          const qParam = hasQuery
+            ? `${searchEndpoint.includes("?") ? "&" : "?"}q=${encodeURIComponent(query)}`
+            : "";
+          const res = await fetch(`${searchEndpoint}${qParam}`, {
             cache: "no-store",
-          },
-        );
-        const parsed = parseCoinsApiResponse(
-          (await res.json().catch(() => null)) as unknown,
-        );
-        const list = (parsed.items ?? [])
-          .map((it) => ({ ...it, symbol: toAssetSymbol(it.symbol) }))
-          .filter((it) => isPureAssetSymbol(it.symbol));
+          });
+          const parsed = parseCoinsApiResponse(
+            (await res.json().catch(() => null)) as unknown,
+          );
 
-        if (!cancelled) setItems(list);
-      } catch {
-        if (!cancelled) setItems([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }, 250);
+          const list = (parsed.items ?? [])
+            .map((it) => ({ ...it, symbol: toAssetSymbol(it.symbol) }))
+            .filter((it) => isPureAssetSymbol(it.symbol));
+
+          const uniqueSorted = Array.from(
+            new Map(list.map((it) => [it.symbol, it])).values(),
+          ).sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+          if (!cancelled) setItems(uniqueSorted);
+        } catch {
+          if (!cancelled) setItems([]);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      },
+      query ? 250 : 0,
+    );
 
     return () => {
       cancelled = true;
       clearTimeout(id);
     };
-  }, [q, searchEndpoint]);
+  }, [isAll, open, q, searchEndpoint]);
 
   const filteredItems = useMemo(
     () => items.filter((it) => !selected.includes(it.symbol)),
