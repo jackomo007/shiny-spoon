@@ -1506,48 +1506,6 @@ async function fetchAssets(q: string) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Total (USD) <span className="text-red-600">*</span>
-                        </div>
-                        <MoneyField<JournalForm>
-                          name="amount_spent"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 500.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          onFocus={() => {
-                            amountSyncRef.current = "amount_spent";
-                          }}
-                          rules={{
-                            required: "Total is required",
-                            validate: (v) =>
-                              parseDecimal((v ?? "").toString() || "0") > 0 ||
-                              "Must be > 0",
-                          }}
-                        />
-                        {errors.amount_spent && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.amount_spent.message)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Quantity</div>
-                        <MoneyField<JournalForm>
-                          name="amount"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 0.018"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          onFocus={() => {
-                            amountSyncRef.current = "amount";
-                          }}
-                        />
-                      </div>
-                    </div>
-
                     <div className="grid grid-cols-1 md:col-span-full gap-4">
                       <div>
                         <div className="text-sm mb-1">
@@ -1574,8 +1532,50 @@ async function fetchAssets(q: string) {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">Quantity</div>
+                        <MoneyField<JournalForm>
+                          name="amount"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 0.018"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          onFocus={() => {
+                            amountSyncRef.current = "amount";
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-sm mb-1">
+                          Total (USD) <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="amount_spent"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 500.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          onFocus={() => {
+                            amountSyncRef.current = "amount_spent";
+                          }}
+                          rules={{
+                            required: "Total is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") > 0 ||
+                              "Must be > 0",
+                          }}
+                        />
+                        {errors.amount_spent && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.amount_spent.message)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     <div>
-                      <div className="text-sm mb-1">Exit Price</div>
+                      <div className="text-sm mb-1">Take Profit Price</div>
                       <MoneyField<JournalForm>
                         name="exit_price"
                         control={control}
@@ -1601,6 +1601,65 @@ async function fetchAssets(q: string) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <div className="text-sm mb-1">
+                          Entry Price <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="entry_price"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 27654.32"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Entry price is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") > 0 ||
+                              "Must be > 0",
+                          }}
+                        />
+                        {errors.entry_price && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.entry_price.message)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm mb-1">Take Profit Price</div>
+                        <MoneyField<JournalForm>
+                          name="exit_price"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 28000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
+                      <div className="md:col-span-full">
+                        <div className="text-sm mb-1">Stop Loss Price</div>
+                        <MoneyField<JournalForm>
+                          name="stop_loss_price"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 25000.00"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm mb-1">Quantity</div>
+                        <MoneyField<JournalForm>
+                          name="amount"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="e.g. 0.018"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          onFocus={() => {
+                            amountSyncRef.current = "amount";
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-sm mb-1">
                           Total (USD) <span className="text-red-600">*</span>
                         </div>
                         <MoneyField<JournalForm>
@@ -1624,65 +1683,6 @@ async function fetchAssets(q: string) {
                             {String(errors.amount_spent.message)}
                           </p>
                         )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Quantity</div>
-                        <MoneyField<JournalForm>
-                          name="amount"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 0.018"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          onFocus={() => {
-                            amountSyncRef.current = "amount";
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm mb-1">
-                          Entry Price <span className="text-red-600">*</span>
-                        </div>
-                        <MoneyField<JournalForm>
-                          name="entry_price"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 27654.32"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          rules={{
-                            required: "Entry price is required",
-                            validate: (v) =>
-                              parseDecimal((v ?? "").toString() || "0") > 0 ||
-                              "Must be > 0",
-                          }}
-                        />
-                        {errors.entry_price && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.entry_price.message)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm mb-1">Exit Price</div>
-                        <MoneyField<JournalForm>
-                          name="exit_price"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 28000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
-                      <div className="md:col-span-full">
-                        <div className="text-sm mb-1">Stop Loss Price</div>
-                        <MoneyField<JournalForm>
-                          name="stop_loss_price"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 25000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
                       </div>
                     </div>
 
