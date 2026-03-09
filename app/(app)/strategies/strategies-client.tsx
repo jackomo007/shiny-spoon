@@ -472,6 +472,7 @@ export default function StrategiesClient() {
       open={open}
       onClose={() => setOpen(false)}
       title={mode === "create" ? "Add Strategy" : "Edit Strategy"}
+      widthClass="max-w-4xl"
       footer={
         step === "list" ? (
           <div className="flex items-center justify-between">
