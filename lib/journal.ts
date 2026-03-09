@@ -12,11 +12,18 @@ const cookieOpts = {
 
 export async function getActiveJournalId(userId: number): Promise<string> {
   const jar = await cookies()
-  const fromCookie = jar.get("active_journal_id")?.value
-  if (fromCookie) return fromCookie
 
   const accountId = await getActiveAccountId(userId)
   if (!accountId) throw new Error("Active account not found")
+
+  const fromCookie = jar.get("active_journal_id")?.value
+  if (fromCookie) {
+    const ok = await prisma.journal.findFirst({
+      where: { id: fromCookie, account_id: accountId },
+      select: { id: true },
+    })
+    if (ok) return ok.id
+  }
 
   const first = await prisma.journal.findFirst({
     where: { account_id: accountId },

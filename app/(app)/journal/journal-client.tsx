@@ -861,7 +861,10 @@ useEffect(() => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) {
+      const body = await r.text();
+      throw new Error(body || `Failed to save trade (${r.status})`);
+    }
 
     if (method === "PUT" && editingId) {
       type PutReturn = {
