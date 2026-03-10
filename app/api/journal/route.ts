@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getActiveAccountId } from "@/lib/account";
 import { getActiveJournalId } from "@/lib/journal";
@@ -141,126 +142,170 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsed = BaseSchema.safeParse(await req.json());
-  if (!parsed.success)
-    return NextResponse.json(
-      { error: parsed.error.flatten() },
-      { status: 400 },
-    );
-  const data = parsed.data;
+    const parsed = BaseSchema.safeParse(await req.json());
+    if (!parsed.success)
+      return NextResponse.json(
+        { error: parsed.error.flatten() },
+        { status: 400 },
+      );
+    const data = parsed.data;
 
-  const tagNames = Array.from(
-    new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean)),
-  );
-
-  const userId = Number(session.user.id);
-  const accountId = await getActiveAccountId(userId);
-  if (!accountId)
-    return NextResponse.json({ error: "Account not found" }, { status: 404 });
-
-  const journalId = await getActiveJournalId(userId);
-  const tradeType = data.trade_type;
-  const strategyId =
-    data.strategy_id ?? (await getDefaultStrategyId(accountId));
-
-  const okStrategy = await prisma.strategy.findFirst({
-    where: { id: strategyId, account_id: accountId },
-    select: { id: true },
-  });
-  if (!okStrategy)
-    return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
-
-  const statusToPersist: Status = data.status as Status;
-  const exitToPersist = data.exit_price ?? null;
-  const sellFeeToPersist = data.sell_fee ?? 0;
-
-  const created = await prisma.$transaction(async (tx) => {
-    const amountQty = qtyFrom({
-      amountSpent: data.amount_spent,
-      entryPrice: data.entry_price,
-      tradeType,
-    });
-
-    const je = await tx.journal_entry.create({
-      data: {
-        account_id: accountId,
-        journal_id: journalId,
-        trade_type: tradeType,
-        asset_name: data.asset_name.toUpperCase(),
-        trade_datetime: new Date(data.trade_datetime),
-        side: data.side,
-        status: statusToPersist,
-        amount_spent: data.amount_spent,
-        amount: amountQty,
-        strategy_id: strategyId,
-        notes_entry: data.notes_entry ?? null,
-        notes_review: data.notes_review ?? null,
-        buy_fee: Number(data.buy_fee ?? 0),
-        sell_fee: Number(sellFeeToPersist),
-        trading_fee: Number(data.trading_fee ?? 0),
-        strategy_rule_match: data.strategy_rule_match ?? 0,
-        entry_price: data.entry_price,
-        exit_price: exitToPersist,
-        stop_loss_price: data.stop_loss_price ?? null,
-      },
-      select: { id: true },
-    });
-
-    if (tradeType === 1) {
-      await tx.spot_trade.create({ data: { journal_entry_id: je.id } });
-    } else {
-      await tx.futures_trade.create({
-        data: {
-          journal_entry_id: je.id,
-          margin_used: data.amount_spent,
-        },
-      });
+    const tradeDate = new Date(data.trade_datetime);
+    if (isNaN(tradeDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid trade date/time" },
+        { status: 400 },
+      );
     }
 
-    if (tagNames.length) {
-      const existingTags = await tx.tag.findMany({
-        where: {
-          account_id: accountId,
-          name: { in: tagNames },
-        },
+    const tagNames = Array.from(
+      new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean)),
+    );
+
+    const userId = Number(session.user.id);
+    const accountId = await getActiveAccountId(userId);
+    if (!accountId)
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+
+    const journalId = await getActiveJournalId(userId);
+    const okJournal = await prisma.journal.findFirst({
+      where: { id: journalId, account_id: accountId },
+      select: { id: true },
+    });
+    if (!okJournal) {
+      return NextResponse.json(
+        { error: "Journal not found for active account" },
+        { status: 404 },
+      );
+    }
+
+    const tradeType = data.trade_type;
+    const strategyId =
+      data.strategy_id ?? (await getDefaultStrategyId(accountId));
+
+    const okStrategy = await prisma.strategy.findFirst({
+      where: { id: strategyId, account_id: accountId },
+      select: { id: true },
+    });
+    if (!okStrategy)
+      return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
+
+    const statusToPersist: Status = data.status as Status;
+    const exitToPersist = data.exit_price ?? null;
+    const sellFeeToPersist = data.sell_fee ?? 0;
+
+    const created = await prisma.$transaction(async (tx) => {
+      const amountQty = qtyFrom({
+        amountSpent: data.amount_spent,
+        entryPrice: data.entry_price,
+        tradeType,
       });
 
-      const existingByName = new Map(existingTags.map((t) => [t.name, t]));
-      const missingNames = tagNames.filter((name) => !existingByName.has(name));
+      const je = await tx.journal_entry.create({
+        data: {
+          account_id: accountId,
+          journal_id: journalId,
+          trade_type: tradeType,
+          asset_name: data.asset_name.toUpperCase(),
+          trade_datetime: tradeDate,
+          side: data.side,
+          status: statusToPersist,
+          amount_spent: data.amount_spent,
+          amount: amountQty,
+          strategy_id: strategyId,
+          notes_entry: data.notes_entry ?? null,
+          notes_review: data.notes_review ?? null,
+          buy_fee: Number(data.buy_fee ?? 0),
+          sell_fee: Number(sellFeeToPersist),
+          trading_fee: Number(data.trading_fee ?? 0),
+          strategy_rule_match: data.strategy_rule_match ?? 0,
+          entry_price: data.entry_price,
+          exit_price: exitToPersist,
+          stop_loss_price: data.stop_loss_price ?? null,
+        },
+        select: { id: true },
+      });
 
-      if (missingNames.length) {
-        await tx.tag.createMany({
-          data: missingNames.map((name) => ({
-            name,
+      if (tradeType === 1) {
+        await tx.spot_trade.create({ data: { journal_entry_id: je.id } });
+      } else {
+        await tx.futures_trade.create({
+          data: {
+            journal_entry_id: je.id,
+            margin_used: data.amount_spent,
+          },
+        });
+      }
+
+      if (tagNames.length) {
+        const existingTags = await tx.tag.findMany({
+          where: {
             account_id: accountId,
+            name: { in: tagNames },
+          },
+        });
+
+        const existingByName = new Map(existingTags.map((t) => [t.name, t]));
+        const missingNames = tagNames.filter((name) => !existingByName.has(name));
+
+        if (missingNames.length) {
+          await tx.tag.createMany({
+            data: missingNames.map((name) => ({
+              name,
+              account_id: accountId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        const allTags = await tx.tag.findMany({
+          where: {
+            account_id: accountId,
+            name: { in: tagNames },
+          },
+          select: { id: true },
+        });
+
+        await tx.journal_entry_tag.createMany({
+          data: allTags.map((t) => ({
+            journal_entry_id: je.id,
+            tag_id: t.id,
           })),
           skipDuplicates: true,
         });
       }
 
-      const allTags = await tx.tag.findMany({
-        where: {
-          account_id: accountId,
-          name: { in: tagNames },
-        },
-        select: { id: true },
-      });
+      return je;
+    });
 
-      await tx.journal_entry_tag.createMany({
-        data: allTags.map((t) => ({
-          journal_entry_id: je.id,
-          tag_id: t.id,
-        })),
-        skipDuplicates: true,
-      });
+    return NextResponse.json({ id: created.id });
+  } catch (e) {
+    console.error("[POST /api/journal]", e);
+
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === "P2003") {
+        return NextResponse.json(
+          { error: "Invalid relation data (account, journal, or strategy)." },
+          { status: 409 },
+        );
+      }
+      if (e.code === "P2002") {
+        return NextResponse.json(
+          { error: "Duplicate data violates a unique constraint." },
+          { status: 409 },
+        );
+      }
     }
 
-    return je;
-  });
-
-  return NextResponse.json({ id: created.id });
+    const msg =
+      e instanceof Error && e.message.trim()
+        ? e.message
+        : "Internal server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

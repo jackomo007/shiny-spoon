@@ -863,7 +863,14 @@ useEffect(() => {
     });
     if (!r.ok) {
       const body = await r.text();
-      throw new Error(body || `Failed to save trade (${r.status})`);
+      let msg = body;
+      try {
+        const parsed = JSON.parse(body) as { error?: unknown };
+        if (typeof parsed.error === "string" && parsed.error.trim()) {
+          msg = parsed.error;
+        }
+      } catch {}
+      throw new Error(msg || `Failed to save trade (${r.status})`);
     }
 
     if (method === "PUT" && editingId) {
