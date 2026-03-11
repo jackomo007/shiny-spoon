@@ -189,6 +189,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         await tx.futures_trade.update({
           where: { id: existF.id },
           data: {
+            leverage: 1,
             margin_used: data.amount_spent,
           },
         })
@@ -196,6 +197,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         await tx.futures_trade.create({
           data: {
             journal_entry_id: id,
+            leverage: 1,
             margin_used: data.amount_spent,
           },
         })

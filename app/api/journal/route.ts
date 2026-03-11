@@ -237,6 +237,7 @@ export async function POST(req: Request) {
         await tx.futures_trade.create({
           data: {
             journal_entry_id: je.id,
+            leverage: 1,
             margin_used: data.amount_spent,
           },
         });
