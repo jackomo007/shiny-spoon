@@ -22,7 +22,7 @@ type StrategyDetail = {
   id: string
   name: string | null
   date_created: string | Date | null
-  notes: string | null   
+  description: string | null
   rules: { id: string; title: string; description: string | null }[]
 }
 
@@ -55,8 +55,8 @@ export default function StrategiesClient() {
   const [summary, setSummary] = useState<{ topPerformingId: string | null; mostUsedId: string | null }>({ topPerformingId: null, mostUsedId: null })
 
   const { register, getValues, formState: { isSubmitting, errors }, reset } =
-    useForm<{ name: string; notes: string }>({
-      defaultValues: { name: "", notes: "" },
+    useForm<{ name: string; description: string }>({
+      defaultValues: { name: "", description: "" },
     })
 
   function buildRangeQS(start: string, end: string) {
@@ -134,7 +134,7 @@ export default function StrategiesClient() {
 
   function openCreate() {
     setMode("create"); setEditingId(null)
-    reset({ name: "", notes: "" }) 
+    reset({ name: "", description: "" })
     setRules([])
     setSelectedRuleId(null)
     setStep("list")
@@ -144,7 +144,7 @@ export default function StrategiesClient() {
   
   async function openEdit(row: Row) {
     setMode("edit"); setEditingId(row.id)
-    reset({ name: row.name ?? "", notes: "" })
+    reset({ name: row.name ?? "", description: "" })
     setSelectedRuleId(null)
     setStep("list")
     setOpen(true)
@@ -165,7 +165,7 @@ export default function StrategiesClient() {
         }))
       )
 
-      reset({ name: data.name ?? "", notes: data.notes ?? "" })
+      reset({ name: data.name ?? "", description: data.description ?? "" })
     } catch (e) {
       console.error(e)
     }
@@ -235,7 +235,7 @@ export default function StrategiesClient() {
     const values = getValues()
     const payload = {
       name: values.name.trim(),
-      notes: (values.notes ?? "").trim() || null,
+      description: (values.description ?? "").trim() || null,
       rules: rules.map(r => ({
         title: r.title.trim(),
         description: (r.description ?? "").trim() || null,
@@ -481,7 +481,7 @@ export default function StrategiesClient() {
               className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
               onClick={addRule}
             >
-              Add New Rule
+              Add New Confluence
             </button>
             <div className="flex items-center gap-3">
               <button className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200" onClick={() => setOpen(false)}>Cancel</button>
@@ -531,27 +531,27 @@ export default function StrategiesClient() {
             </div>
 
             <div className="mt-2">
-              <div className="text-sm mb-1">Notes</div>
+              <div className="text-sm mb-1">Description</div>
               <textarea
-                {...register("notes")}
+                {...register("description")}
                 rows={4}
-                placeholder="Anything you want to remember about this strategy…"
+                placeholder="Describe your strategy in detail"
                 className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
               />
               <div className="text-xs text-gray-500 mt-1">
-                Optional. You can edit these notes anytime.
+                Optional. You can edit this description anytime.
               </div>
             </div>
 
             <div className="mt-2">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-medium">Rules</div>
+                <div className="text-sm font-medium">Confluences</div>
                 <button
                   type="button"
                   className="rounded-xl bg-gray-100 px-3 py-1.5 text-sm hover:bg-gray-200"
                   onClick={addRule}
                 >
-                  ＋ Add rule
+                  ＋ Add confluence
                 </button>
               </div>
               <div className="border rounded-xl overflow-hidden">
@@ -559,7 +559,7 @@ export default function StrategiesClient() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left px-3 py-2 w-24">#</th>
-                      <th className="text-left px-3 py-2">Rule Name</th>
+                      <th className="text-left px-3 py-2">Confluence Name</th>
                       <th className="text-left px-3 py-2">Description</th>
                       <th className="text-right px-3 py-2">Actions</th>
                     </tr>
@@ -590,7 +590,7 @@ export default function StrategiesClient() {
                               <button
                                 type="button"
                                 draggable
-                                aria-label={`Drag rule ${index + 1}`}
+                                aria-label={`Drag confluence ${index + 1}`}
                                 className="cursor-grab text-gray-400 active:cursor-grabbing"
                                 onDragStart={(e) => {
                                   setDraggedRuleId(r.id)
@@ -629,7 +629,7 @@ export default function StrategiesClient() {
                     ) : (
                       <tr>
                         <td colSpan={4} className="px-3 py-8 text-center text-gray-500">
-                          No rules yet
+                          No confluences yet
                         </td>
                       </tr>
                     )}
@@ -642,7 +642,7 @@ export default function StrategiesClient() {
           <div className="grid gap-4">
             <div>
               <div className="text-sm mb-1">
-                Rule Name <span className="text-red-600">*</span>
+                Confluence Name <span className="text-red-600">*</span>
               </div>
               <input
                 value={editTitle}

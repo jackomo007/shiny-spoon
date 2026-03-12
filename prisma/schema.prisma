@@ -46,7 +46,7 @@ model strategy {
   name               String?              @db.VarChar(255)
   date_created       DateTime?            @default(now()) @db.DateTime(0)
   account_id         String               @db.Char(36)
-  notes              String?              @db.Text
+  description        String?              @db.Text
   account            account              @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_strategy_account")
   strategy_rules     strategy_rule[]
   pre_trade_analyses trade_pre_analysis[]
@@ -61,18 +61,20 @@ model rule {
   strategy_rules strategy_rule[]
 
   @@index([title])
+  @@map("confluence")
 }
 
 model strategy_rule {
   id           String    @id @default(uuid()) @db.Char(36)
   strategy_id  String    @db.Char(36)
-  rule_id      String    @db.Char(36)
+  rule_id      String    @map("confluence_id") @db.Char(36)
   date_created DateTime? @default(now()) @db.DateTime(0)
   strategy     strategy  @relation(fields: [strategy_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_1")
   rule         rule      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "strategy_rule_ibfk_2")
 
   @@index([rule_id], map: "rule_id")
   @@index([strategy_id], map: "strategy_id")
+  @@map("strategy_confluence")
 }
 
 model journal {
