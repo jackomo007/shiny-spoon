@@ -551,7 +551,7 @@ export default function StrategiesClient() {
                   className="rounded-xl bg-gray-100 px-3 py-1.5 text-sm hover:bg-gray-200"
                   onClick={addRule}
                 >
-                  ＋ Add confluence
+                  ＋ Add Confluence
                 </button>
               </div>
               <div className="border rounded-xl overflow-hidden">
@@ -647,7 +647,7 @@ export default function StrategiesClient() {
               <input
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="e.g. Break of structure on H1"
+                placeholder="e.g. Stochastic RSI is overbought on 4H"
                 className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
