@@ -125,7 +125,6 @@ function strategyNameLabel(sellPercent: number, gainPercent: number) {
 function StrategyAssetsTable({
   assets,
   sellPercent,
-  isAllCoins,
   onViewAssetPlan,
   onDeleteAsset,
   deletingId,
@@ -133,7 +132,6 @@ function StrategyAssetsTable({
 }: {
   assets: ExitStrategyAssetSummary[];
   sellPercent: number;
-  isAllCoins: boolean;
   onViewAssetPlan: (coinSymbol: string) => void;
   onDeleteAsset: (coinSymbol: string) => void;
   deletingId: string | null;
@@ -213,12 +211,8 @@ function StrategyAssetsTable({
                       type="button"
                       className="h-7 px-2.5 rounded-lg border text-xs text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200"
                       onClick={() => onDeleteAsset(asset.coinSymbol)}
-                      disabled={isAllCoins || deletingId === strategyId}
-                      title={
-                        isAllCoins
-                          ? "Remove per-asset is unavailable for All Assets plans."
-                          : "Delete"
-                      }
+                      disabled={deletingId === strategyId}
+                      title="Delete"
                     >
                       {deletingId === strategyId ? "Deleting…" : "Delete"}
                     </button>
@@ -245,7 +239,7 @@ function StrategyCard({
   onViewAllAssets: (id: string) => void;
   onViewAssetPlan: (id: string, coinSymbol: string) => void;
   onDelete: (id: string, label: string) => void;
-  onDeleteAsset: (id: string, coinSymbol: string, isAllCoins: boolean) => void;
+  onDeleteAsset: (id: string, coinSymbol: string) => void;
   deletingId: string | null;
 }) {
   const label = s.isAllCoins ? "All Assets" : s.coinSymbols.join(", ");
@@ -311,11 +305,8 @@ function StrategyCard({
           <StrategyAssetsTable
             assets={previewAssets}
             sellPercent={s.sellPercent}
-            isAllCoins={s.isAllCoins}
             onViewAssetPlan={(coinSymbol) => onViewAssetPlan(s.id, coinSymbol)}
-            onDeleteAsset={(coinSymbol) =>
-              onDeleteAsset(s.id, coinSymbol, s.isAllCoins)
-            }
+            onDeleteAsset={(coinSymbol) => onDeleteAsset(s.id, coinSymbol)}
             deletingId={deletingId}
             strategyId={s.id}
           />
@@ -375,6 +366,7 @@ export default function ExitStrategyPage() {
     id: string;
     label: string;
     kind: "strategy" | "asset";
+    coinSymbol?: string;
   }>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -573,19 +565,14 @@ export default function ExitStrategyPage() {
     }
   };
 
-  const requestDelete = (id: string, label: string) =>
+  const requestDelete = (id: string, label: string) => {
+    setError(null);
     setConfirmDelete({ id, label, kind: "strategy" });
+  };
 
-  const requestAssetDelete = (
-    id: string,
-    coinSymbol: string,
-    isAllCoins: boolean,
-  ) => {
-    if (isAllCoins) {
-      setError("Removing a single asset from an All Assets exit strategy is not supported.");
-      return;
-    }
-    setConfirmDelete({ id, label: coinSymbol, kind: "asset" });
+  const requestAssetDelete = (id: string, coinSymbol: string) => {
+    setError(null);
+    setConfirmDelete({ id, label: coinSymbol, kind: "asset", coinSymbol });
   };
 
   const confirmDeleteNow = async () => {
@@ -596,8 +583,13 @@ export default function ExitStrategyPage() {
     setError(null);
 
     try {
+      const deleteUrl =
+        confirmDelete.kind === "asset" && confirmDelete.coinSymbol
+          ? `/api/exit-strategies/${encodeURIComponent(id)}?coinSymbol=${encodeURIComponent(confirmDelete.coinSymbol)}`
+          : `/api/exit-strategies/${encodeURIComponent(id)}`;
+
       const res = await fetch(
-        `/api/exit-strategies/${encodeURIComponent(id)}`,
+        deleteUrl,
         { method: "DELETE" },
       );
       if (!res.ok && res.status !== 204) {
@@ -881,18 +873,13 @@ export default function ExitStrategyPage() {
               <StrategyAssetsTable
                 assets={activeStrategy.assets}
                 sellPercent={activeStrategy.sellPercent}
-                isAllCoins={activeStrategy.isAllCoins}
                 onViewAssetPlan={(coinSymbol) => {
                   setAssetsModalOpen(false);
                   setActiveStrategyId(null);
                   void openAssetPlan(activeStrategy.id, coinSymbol);
                 }}
                 onDeleteAsset={(coinSymbol) =>
-                  requestAssetDelete(
-                    activeStrategy.id,
-                    coinSymbol,
-                    activeStrategy.isAllCoins,
-                  )
+                  requestAssetDelete(activeStrategy.id, coinSymbol)
                 }
                 deletingId={deletingId}
                 strategyId={activeStrategy.id}
