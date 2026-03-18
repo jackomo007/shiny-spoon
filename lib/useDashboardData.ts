@@ -50,7 +50,6 @@ type MarketAnalysisData = {
     support: string;
     resistance: string;
     structure: string;
-    keyTakeaway: string;
     dashboardSummary: {
       bullishConfirmation: string;
       neutralRange: string;
@@ -63,7 +62,7 @@ type MarketAnalysisData = {
     scheduleTimezone: string;
     refreshBucket: string;
     source: string;
-    method: "ai" | "heuristic";
+    method: "ai";
     currentTotalMarketCap: string;
     basedOn: string[];
     isEstimated?: boolean;

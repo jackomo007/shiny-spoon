@@ -53,7 +53,6 @@ export type StructuredMarketAnalysis = {
   support: string;
   resistance: string;
   structure: string;
-  keyTakeaway: string;
   dashboardSummary: {
     bullishConfirmation: string;
     neutralRange: string;
@@ -69,7 +68,7 @@ export type AnalysisResponse = {
     scheduleTimezone: string;
     refreshBucket: string;
     source: string;
-    method: "ai" | "heuristic";
+    method: "ai";
     currentTotalMarketCap: string;
     chartPoints: number;
     basedOn: string[];
@@ -78,7 +77,7 @@ export type AnalysisResponse = {
 };
 
 const NEW_YORK_TZ = "America/New_York";
-const REFRESH_HOUR = 9;
+const REFRESH_HOURS = [1, 5, 9, 13, 17, 21];
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -99,10 +98,6 @@ function formatCapUsd(value: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   });
-}
-
-function formatRangeUsd(min: number, max: number): string {
-  return `${formatCapUsd(min)} - ${formatCapUsd(max)}`;
 }
 
 function getFearGreedLabel(score: number): string {
@@ -163,15 +158,26 @@ function shiftDateKey(dateKey: string, days: number): string {
 
 export function getRefreshBucket(now = new Date()): string {
   const parts = getZonedParts(now, NEW_YORK_TZ);
-  const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
+  const currentDateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
     parts.day,
   ).padStart(2, "0")}`;
-  const afterRefresh =
-    parts.hour > REFRESH_HOUR ||
-    (parts.hour === REFRESH_HOUR &&
-      (parts.minute > 0 || parts.second >= 0));
+  const previousDateKey = shiftDateKey(currentDateKey, -1);
+  const currentTotalMinutes = parts.hour * 60 + parts.minute;
 
-  return afterRefresh ? dateKey : shiftDateKey(dateKey, -1);
+  const windows = [
+    { dateKey: previousDateKey, hour: 21 },
+    ...REFRESH_HOURS.map((hour) => ({ dateKey: currentDateKey, hour })),
+  ];
+
+  let activeWindow = windows[0];
+  for (const window of windows) {
+    if (window.dateKey !== currentDateKey) continue;
+    if (currentTotalMinutes >= window.hour * 60) {
+      activeWindow = window;
+    }
+  }
+
+  return `${activeWindow.dateKey}-${String(activeWindow.hour).padStart(2, "0")}00`;
 }
 
 export function getNextRefreshLabel(now = new Date()): string {
@@ -179,17 +185,20 @@ export function getNextRefreshLabel(now = new Date()): string {
   const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
     parts.day,
   ).padStart(2, "0")}`;
-  const afterRefresh =
-    parts.hour > REFRESH_HOUR ||
-    (parts.hour === REFRESH_HOUR &&
-      (parts.minute > 0 || parts.second >= 0));
-  const nextDate = afterRefresh ? shiftDateKey(dateKey, 1) : dateKey;
-  return `${nextDate} 09:00 ET`;
+  const currentTotalMinutes = parts.hour * 60 + parts.minute;
+  const nextHour = REFRESH_HOURS.find((hour) => currentTotalMinutes < hour * 60);
+
+  if (nextHour !== undefined) {
+    return `${dateKey} ${String(nextHour).padStart(2, "0")}:00 ET`;
+  }
+
+  const nextDate = shiftDateKey(dateKey, 1);
+  return `${nextDate} 01:00 ET`;
 }
 
 export function isScheduledRefreshWindow(now = new Date()) {
   const parts = getZonedParts(now, NEW_YORK_TZ);
-  return parts.hour === REFRESH_HOUR;
+  return REFRESH_HOURS.includes(parts.hour);
 }
 
 async function fetchCurrentMarketContext(): Promise<MarketContext> {
@@ -362,165 +371,6 @@ async function loadMarketCapSeries(
   return ordered.slice(-30);
 }
 
-function buildLevels(context: MarketContext, phase: string) {
-  const total = context.totalMarketCapUsd;
-
-  const profile =
-    phase === "Expansion"
-      ? {
-          supportLow: 0.975,
-          supportHigh: 0.99,
-          resistanceLow: 1.025,
-          resistanceHigh: 1.05,
-        }
-      : phase === "Recovery"
-        ? {
-            supportLow: 0.97,
-            supportHigh: 0.985,
-            resistanceLow: 1.02,
-            resistanceHigh: 1.045,
-          }
-        : phase === "Distribution"
-          ? {
-              supportLow: 0.955,
-              supportHigh: 0.975,
-              resistanceLow: 1.01,
-              resistanceHigh: 1.03,
-            }
-          : phase === "Retest"
-            ? {
-                supportLow: 0.96,
-                supportHigh: 0.98,
-                resistanceLow: 1.01,
-                resistanceHigh: 1.035,
-              }
-            : {
-                supportLow: 0.965,
-                supportHigh: 0.985,
-                resistanceLow: 1.015,
-                resistanceHigh: 1.04,
-              };
-
-  const supportLow = total * profile.supportLow;
-  const supportHigh = total * profile.supportHigh;
-  const resistanceLow = total * profile.resistanceLow;
-  const resistanceHigh = total * profile.resistanceHigh;
-
-  return {
-    supportLow,
-    supportHigh,
-    resistanceLow,
-    resistanceHigh,
-    support: formatRangeUsd(supportLow, supportHigh),
-    resistance: formatRangeUsd(resistanceLow, resistanceHigh),
-  };
-}
-
-function analyzeSentiment(context: MarketContext): MarketSentiment {
-  let bullishSignals = 0;
-  let bearishSignals = 0;
-
-  if (context.marketCapChange24hPct >= 2) bullishSignals += 1;
-  if (context.marketCapChange24hPct <= -2) bearishSignals += 1;
-
-  if (context.fearGreedScore !== null && context.fearGreedScore >= 65) {
-    bullishSignals += 1;
-  }
-  if (context.fearGreedScore !== null && context.fearGreedScore <= 35) {
-    bearishSignals += 1;
-  }
-
-  if (context.btcDominance <= 50) bullishSignals += 1;
-  if (context.btcDominance >= 55) bearishSignals += 1;
-
-  if (bullishSignals > bearishSignals) return "Bullish";
-  if (bearishSignals > bullishSignals) return "Bearish";
-  return "Neutral";
-}
-
-function determinePhase(context: MarketContext, sentiment: MarketSentiment) {
-  const absChange = Math.abs(context.marketCapChange24hPct);
-
-  if (sentiment === "Bullish" && absChange >= 2.5) return "Expansion";
-  if (sentiment === "Bullish") return "Recovery";
-  if (sentiment === "Bearish" && absChange >= 2.5) return "Distribution";
-  if (sentiment === "Bearish") return "Retest";
-  return "Consolidation";
-}
-
-function determineStructure(
-  context: MarketContext,
-  sentiment: MarketSentiment,
-  phase: string,
-) {
-  if (sentiment === "Bullish" && context.btcDominance < 52) {
-    return "Broadening participation";
-  }
-  if (sentiment === "Bullish") {
-    return "Higher-lows recovery";
-  }
-  if (sentiment === "Bearish" && phase === "Distribution") {
-    return "Breakdown risk";
-  }
-  if (sentiment === "Bearish") {
-    return "Weak bounce";
-  }
-  return "Range-bound";
-}
-
-function buildHeuristicAnalysis(context: MarketContext): StructuredMarketAnalysis {
-  const sentiment = analyzeSentiment(context);
-  const phase = determinePhase(context, sentiment);
-  const structure = determineStructure(context, sentiment, phase);
-  const levels = buildLevels(context, phase);
-  const direction =
-    context.marketCapChange24hPct > 0
-      ? "holding a positive daily expansion"
-      : context.marketCapChange24hPct < 0
-        ? "absorbing a negative daily move"
-        : "holding flat versus the prior session";
-
-  const headline =
-    sentiment === "Bullish"
-      ? "Bullish"
-      : sentiment === "Bearish"
-        ? "Bearish"
-        : "Neutral";
-
-  const fearGreedSummary =
-    context.fearGreedScore !== null && context.fearGreedLabel
-      ? `Fear & Greed is ${context.fearGreedScore} (${context.fearGreedLabel})`
-      : "Fear & Greed is unavailable";
-
-  const marketTrend = `${headline} — TOTAL is trading around ${context.totalMarketCapFormatted} and ${direction}. BTC dominance sits at ${context.btcDominance.toFixed(
-    1,
-  )}% while ${fearGreedSummary}, keeping the market in a ${phase.toLowerCase()} profile.`;
-
-  const keyTakeaway =
-    sentiment === "Bullish"
-      ? `Bullish continuation improves if TOTAL reclaims ${formatCapUsd(levels.resistanceLow)} with BTC dominance staying contained.`
-      : sentiment === "Bearish"
-        ? `Sellers stay in control if TOTAL loses ${formatCapUsd(levels.supportLow)} and risk appetite keeps fading.`
-        : `TOTAL remains range-bound until price leaves the ${formatRangeUsd(levels.supportHigh, levels.resistanceLow)} area with conviction.`;
-
-  const neutralRange = formatRangeUsd(levels.supportLow, levels.resistanceLow);
-
-  return {
-    sentiment,
-    marketTrend,
-    phase,
-    support: levels.support,
-    resistance: levels.resistance,
-    structure,
-    keyTakeaway,
-    dashboardSummary: {
-      bullishConfirmation: `Break above ${formatCapUsd(levels.resistanceLow)}`,
-      neutralRange,
-      bearishBreakdown: `Below ${formatCapUsd(levels.supportLow)}`,
-    },
-  };
-}
-
 function parseAiPayload(raw: string): StructuredMarketAnalysis | null {
   try {
     const parsed = JSON.parse(raw) as Partial<StructuredMarketAnalysis>;
@@ -553,7 +403,6 @@ function parseAiPayload(raw: string): StructuredMarketAnalysis | null {
       support: parsed.support,
       resistance: parsed.resistance,
       structure: parsed.structure,
-      keyTakeaway: parsed.keyTakeaway ?? "",
       dashboardSummary: {
         bullishConfirmation: parsed.dashboardSummary.bullishConfirmation,
         neutralRange: parsed.dashboardSummary.neutralRange,
@@ -589,7 +438,6 @@ async function maybeGenerateAiAnalysis(
     '  "support": "",',
     '  "resistance": "",',
     '  "structure": "",',
-    '  "keyTakeaway": "",',
     '  "dashboardSummary": {',
     '    "bullishConfirmation": "",',
     '    "neutralRange": "",',
@@ -653,28 +501,28 @@ async function generateDailyAnalysis(): Promise<AnalysisResponse> {
   await persistDailySnapshots(context, refreshBucket);
 
   const series = await loadMarketCapSeries(context);
-  const heuristic = buildHeuristicAnalysis(context);
   const ai = await maybeGenerateAiAnalysis(context, series);
+  if (!ai) {
+    throw new Error("AI market analysis unavailable");
+  }
   const generatedAt = new Date().toISOString();
 
   return {
-    analysis: ai ?? heuristic,
+    analysis: ai,
     meta: {
       generatedAt,
       scheduledRefresh: getNextRefreshLabel(new Date(generatedAt)),
       scheduleTimezone: NEW_YORK_TZ,
       refreshBucket,
-      source: ai
-        ? "TOTAL chart snapshots + live market data + OpenAI"
-        : "TOTAL chart snapshots + live market data",
-      method: ai ? "ai" : "heuristic",
+      source: "TOTAL chart snapshots + live market data + OpenAI",
+      method: "ai",
       currentTotalMarketCap: context.totalMarketCapFormatted,
       chartPoints: series.length,
       basedOn: [
         "coingecko_global_market_data",
         "alternative_me_fear_greed",
         "daily_total_market_snapshots",
-        "scheduled_refresh_09_00_america_new_york",
+        "scheduled_refresh_every_4_hours_from_09_00_america_new_york",
       ],
     },
   };

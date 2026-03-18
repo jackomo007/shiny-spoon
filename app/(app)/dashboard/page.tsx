@@ -30,7 +30,7 @@ const fmtDeltaUsd = (n: number | undefined | null) => {
 
 function parseBucketDate(bucket: string | undefined) {
   if (!bucket) return null;
-  const [year, month, day] = bucket.split("-").map(Number);
+  const [year, month, day] = bucket.split("-").slice(0, 3).map(Number);
   if (!year || !month || !day) return null;
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
@@ -82,75 +82,6 @@ function getMeaningBadgeClass(tone: "bullish" | "neutral" | "bearish") {
   if (tone === "bullish") return "bg-green-50 text-green-700";
   if (tone === "bearish") return "bg-red-50 text-red-700";
   return "bg-gray-100 text-gray-700";
-}
-
-function formatMarketCapLevel(value: number | undefined | null) {
-  if (!value || !Number.isFinite(value) || value <= 0) return "$—";
-
-  if (value >= 1_000_000_000_000) {
-    return `$${(value / 1_000_000_000_000).toFixed(2)}T`;
-  }
-
-  if (value >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(0)}B`;
-  }
-
-  return fmtUSD(value);
-}
-
-function formatMarketCapRange(
-  min: number | undefined | null,
-  max: number | undefined | null,
-) {
-  return `${formatMarketCapLevel(min)} - ${formatMarketCapLevel(max)}`;
-}
-
-function buildFallbackAnalysis(
-  totalMarketCapUsd: number | undefined,
-  totalMarketCapFormatted: string | undefined,
-) {
-  if (!totalMarketCapUsd || !Number.isFinite(totalMarketCapUsd)) {
-    return {
-      sentiment: "Neutral" as const,
-      marketTrend:
-        "Market analysis is currently unavailable. The dashboard will populate again once TOTAL market data is available.",
-      phase: "Unavailable",
-      support: "$—",
-      resistance: "$—",
-      structure: "Unavailable",
-      keyTakeaway: "",
-      dashboardSummary: {
-        bullishConfirmation: "Break above $—",
-        neutralRange: "$—",
-        bearishBreakdown: "Below $—",
-      },
-      currentTotalMarketCap: totalMarketCapFormatted ?? "$—",
-    };
-  }
-
-  const supportLow = totalMarketCapUsd * 0.965;
-  const supportHigh = totalMarketCapUsd * 0.985;
-  const resistanceLow = totalMarketCapUsd * 1.015;
-  const resistanceHigh = totalMarketCapUsd * 1.04;
-
-  return {
-    sentiment: "Neutral" as const,
-    marketTrend: `Neutral — TOTAL is consolidating around ${
-      totalMarketCapFormatted ?? formatMarketCapLevel(totalMarketCapUsd)
-    } after defending support but remains below the next resistance zone needed for expansion.`,
-    phase: "Consolidation",
-    support: formatMarketCapRange(supportLow, supportHigh),
-    resistance: formatMarketCapRange(resistanceLow, resistanceHigh),
-    structure: "Range-bound",
-    keyTakeaway: "",
-    dashboardSummary: {
-      bullishConfirmation: `Break above ${formatMarketCapLevel(resistanceLow)}`,
-      neutralRange: formatMarketCapRange(supportLow, resistanceLow),
-      bearishBreakdown: `Below ${formatMarketCapLevel(supportLow)}`,
-    },
-    currentTotalMarketCap:
-      totalMarketCapFormatted ?? formatMarketCapLevel(totalMarketCapUsd),
-  };
 }
 
 function SnapshotMetric({
@@ -280,25 +211,12 @@ export default function DashboardPage() {
     fearGreed?.current.narrative ??
     "Fear & Greed data is currently unavailable.";
   const fearGreedChange7d = fearGreed?.history.change7d;
-  const fallbackAnalysis = buildFallbackAnalysis(
-    marketGlobal?.totalMarketCap.usd,
-    marketGlobal?.totalMarketCap.formatted ?? marketAnalysis?.meta.currentTotalMarketCap,
-  );
-  const analysis = marketAnalysis?.analysis
-    ? {
-        ...fallbackAnalysis,
-        ...marketAnalysis.analysis,
-        dashboardSummary: {
-          ...fallbackAnalysis.dashboardSummary,
-          ...marketAnalysis.analysis.dashboardSummary,
-        },
-      }
-    : fallbackAnalysis;
+  const analysis = marketAnalysis?.analysis ?? null;
   const analysisMeta = marketAnalysis?.meta;
   const analysisHeadline =
-    analysis?.marketTrend?.split("—")[0]?.trim() ||
-    analysis?.sentiment ||
-    "Neutral";
+    analysis?.marketTrend?.split("—")[0]?.trim() ??
+    analysis?.sentiment ??
+    "—";
   const analysisDate = formatBucketDate(analysisMeta?.refreshBucket);
   const analysisUpdated = formatUpdatedAgo(analysisMeta?.generatedAt);
   const portfolioValueLabel = portfolio ? fmtUSD(totalPortfolioValue) : "$—";
@@ -308,7 +226,7 @@ export default function DashboardPage() {
   const marketCapLabel =
     marketGlobal?.totalMarketCap.formatted ??
     analysisMeta?.currentTotalMarketCap ??
-    fallbackAnalysis.currentTotalMarketCap;
+    "$—";
   const btcSnapshotValue = btcPrice ? fmtUSD(btcPrice.priceUsd) : "$—";
   const btcSnapshotDelta = btcPrice
     ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}`
@@ -404,8 +322,8 @@ export default function DashboardPage() {
               <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
               Alts {Math.round(normalizedAllocation.alts)}%
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[#94A3B8]">
-              <span className="h-2 w-2 rounded-full bg-[#94A3B8]" />
+            <span className="inline-flex items-center gap-1.5 text-[#16A34A]">
+              <span className="h-2 w-2 rounded-full bg-[#16A34A]" />
               Stables {Math.round(normalizedAllocation.stables)}%
             </span>
           </div>
@@ -424,7 +342,7 @@ export default function DashboardPage() {
               style={{ width: `${normalizedAllocation.alts}%` }}
             />
             <div
-              className="bg-[#94A3B8]"
+              className="bg-[#16A34A]"
               style={{ width: `${normalizedAllocation.stables}%` }}
             />
           </div>
@@ -445,23 +363,23 @@ export default function DashboardPage() {
                     AI Daily Market Analysis
                   </h2>
                   <span className="text-[13px] text-[#6B6777]">
-                    {analysisDate}, 9:00 AM ET
+                    {analysisDate}
                   </span>
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span
                     className={getSentimentBadgeClass(
-                      analysis?.sentiment ?? "Neutral",
+                      analysis?.sentiment ?? "Unavailable",
                     )}
                   >
-                    Market Sentiment: {analysis?.sentiment ?? "Neutral"}
+                    Market Sentiment: {analysis?.sentiment ?? "—"}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
                     TOTAL: {marketCapLabel}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
-                    Phase: {analysis?.phase ?? "Consolidation"}
+                    Phase: {analysis?.phase ?? "—"}
                   </span>
                 </div>
               </div>
@@ -478,8 +396,7 @@ export default function DashboardPage() {
                   {analysisHeadline}
                 </div>
                 <p className="max-w-[95%] text-[15px] leading-7 text-[#6B6777]">
-                  {analysis?.marketTrend ??
-                    "Neutral — TOTAL is consolidating while the market waits for a cleaner directional break."}
+                  {analysis?.marketTrend ?? "—"}
                 </p>
               </div>
 
@@ -519,6 +436,9 @@ export default function DashboardPage() {
             <div className="text-[13px] text-[#6B6777]">
               Updated <b>{analysisUpdated}</b>
             </div>
+            <div className="text-[13px] text-[#6B6777]">
+              Next refresh <b>{analysisMeta?.scheduledRefresh ?? "Every 4 hours from 9:00 AM ET"}</b>
+            </div>
           </div>
         </article>
 
@@ -528,7 +448,7 @@ export default function DashboardPage() {
               Today&apos;s Snapshot
             </h3>
             <span className="text-[13px] text-[#6B6777]">
-              Auto-updated mock data
+              Auto-updated market data
             </span>
           </div>
 

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       skipped: true,
-      reason: "Outside 9:00 AM America/New_York window",
+      reason: "Outside scheduled 4-hour America/New_York refresh window",
       refreshBucket: getRefreshBucket(now),
     });
   }
