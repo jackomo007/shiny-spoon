@@ -343,6 +343,19 @@ export async function GET() {
       (s, a) => s + (a.holdingsValueUsd ?? 0),
       0,
     );
+    const previousBalanceUsd = assetsSorted.reduce((sum, asset) => {
+      const currentValue = asset.holdingsValueUsd ?? 0;
+      const change24hPct = asset.change24hPct ?? 0;
+      const ratio = 1 + change24hPct / 100;
+      if (!Number.isFinite(ratio) || ratio <= 0) {
+        return sum + currentValue;
+      }
+
+      return sum + currentValue / ratio;
+    }, 0);
+    const portfolio24hUsd = currentBalanceUsd - previousBalanceUsd;
+    const portfolio24hPct =
+      previousBalanceUsd > 0 ? (portfolio24hUsd / previousBalanceUsd) * 100 : 0;
     const totalInvestedUsd = assetsSorted.reduce(
       (s, a) => s + (a.totalInvestedUsd ?? 0),
       0,
@@ -381,7 +394,7 @@ export async function GET() {
           unrealized: { usd: unrealizedUsd },
           total: { usd: totalProfitUsd, pct: totalPct },
         },
-        portfolio24h: { pct: 0, usd: 0 },
+        portfolio24h: { pct: portfolio24hPct, usd: portfolio24hUsd },
         topPerformer: top
           ? {
               symbol: top.symbol,
