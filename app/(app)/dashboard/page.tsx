@@ -62,14 +62,8 @@ function formatUpdatedAgo(input: string | undefined) {
   return `${days}d ago`;
 }
 
-function getFearGreedBadgeClass(score: number | undefined) {
-  if (score === undefined) {
-    return "bg-[#F1EAFE] border-[#E4D8FB] text-[#6D28D9]";
-  }
-  if (score <= 24) return "bg-red-50 border-red-200 text-red-700";
-  if (score <= 44) return "bg-orange-50 border-orange-200 text-orange-700";
-  if (score <= 55) return "bg-gray-100 border-gray-200 text-gray-700";
-  return "bg-green-50 border-green-200 text-green-700";
+function getFearGreedBadgeClass() {
+  return "bg-[#F1EAFE] border-[rgba(124,58,237,0.18)] text-[#6D28D9]";
 }
 
 function getSentimentBadgeClass(sentiment: string) {
@@ -88,6 +82,75 @@ function getMeaningBadgeClass(tone: "bullish" | "neutral" | "bearish") {
   if (tone === "bullish") return "bg-green-50 text-green-700";
   if (tone === "bearish") return "bg-red-50 text-red-700";
   return "bg-gray-100 text-gray-700";
+}
+
+function formatMarketCapLevel(value: number | undefined | null) {
+  if (!value || !Number.isFinite(value) || value <= 0) return "$—";
+
+  if (value >= 1_000_000_000_000) {
+    return `$${(value / 1_000_000_000_000).toFixed(2)}T`;
+  }
+
+  if (value >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(0)}B`;
+  }
+
+  return fmtUSD(value);
+}
+
+function formatMarketCapRange(
+  min: number | undefined | null,
+  max: number | undefined | null,
+) {
+  return `${formatMarketCapLevel(min)} - ${formatMarketCapLevel(max)}`;
+}
+
+function buildFallbackAnalysis(
+  totalMarketCapUsd: number | undefined,
+  totalMarketCapFormatted: string | undefined,
+) {
+  if (!totalMarketCapUsd || !Number.isFinite(totalMarketCapUsd)) {
+    return {
+      sentiment: "Neutral" as const,
+      marketTrend:
+        "Neutral — TOTAL market analysis is being refreshed. Live levels will appear once market data is available.",
+      phase: "Consolidation",
+      support: "$—",
+      resistance: "$—",
+      structure: "Range-bound",
+      keyTakeaway: "",
+      dashboardSummary: {
+        bullishConfirmation: "Break above $—",
+        neutralRange: "$—",
+        bearishBreakdown: "Below $—",
+      },
+      currentTotalMarketCap: totalMarketCapFormatted ?? "$—",
+    };
+  }
+
+  const supportLow = totalMarketCapUsd * 0.965;
+  const supportHigh = totalMarketCapUsd * 0.985;
+  const resistanceLow = totalMarketCapUsd * 1.015;
+  const resistanceHigh = totalMarketCapUsd * 1.04;
+
+  return {
+    sentiment: "Neutral" as const,
+    marketTrend: `Neutral — TOTAL is consolidating around ${
+      totalMarketCapFormatted ?? formatMarketCapLevel(totalMarketCapUsd)
+    } after defending support but remains below the next resistance zone needed for expansion.`,
+    phase: "Consolidation",
+    support: formatMarketCapRange(supportLow, supportHigh),
+    resistance: formatMarketCapRange(resistanceLow, resistanceHigh),
+    structure: "Range-bound",
+    keyTakeaway: "",
+    dashboardSummary: {
+      bullishConfirmation: `Break above ${formatMarketCapLevel(resistanceLow)}`,
+      neutralRange: formatMarketCapRange(supportLow, resistanceLow),
+      bearishBreakdown: `Below ${formatMarketCapLevel(supportLow)}`,
+    },
+    currentTotalMarketCap:
+      totalMarketCapFormatted ?? formatMarketCapLevel(totalMarketCapUsd),
+  };
 }
 
 function SnapshotMetric({
@@ -217,7 +280,20 @@ export default function DashboardPage() {
     fearGreed?.current.narrative ??
     "Market sentiment is balanced. Traders are split between caution and optimism.";
   const fearGreedChange7d = fearGreed?.history.change7d;
-  const analysis = marketAnalysis?.analysis;
+  const fallbackAnalysis = buildFallbackAnalysis(
+    marketGlobal?.totalMarketCap.usd,
+    marketGlobal?.totalMarketCap.formatted ?? marketAnalysis?.meta.currentTotalMarketCap,
+  );
+  const analysis = marketAnalysis?.analysis
+    ? {
+        ...fallbackAnalysis,
+        ...marketAnalysis.analysis,
+        dashboardSummary: {
+          ...fallbackAnalysis.dashboardSummary,
+          ...marketAnalysis.analysis.dashboardSummary,
+        },
+      }
+    : fallbackAnalysis;
   const analysisMeta = marketAnalysis?.meta;
   const analysisHeadline =
     analysis?.marketTrend?.split("—")[0]?.trim() ||
@@ -225,6 +301,14 @@ export default function DashboardPage() {
     "Neutral";
   const analysisDate = formatBucketDate(analysisMeta?.refreshBucket);
   const analysisUpdated = formatUpdatedAgo(analysisMeta?.generatedAt);
+  const portfolioValueLabel = portfolio ? fmtUSD(totalPortfolioValue) : "$—";
+  const portfolioChangeLabel = portfolio
+    ? `${fmtDeltaUsd(portfolio24hUsd)} (${fmtDeltaPct(portfolio24hPct)})`
+    : "—";
+  const marketCapLabel =
+    marketGlobal?.totalMarketCap.formatted ??
+    analysisMeta?.currentTotalMarketCap ??
+    fallbackAnalysis.currentTotalMarketCap;
 
   const dashboardRows = [
     {
@@ -266,8 +350,8 @@ export default function DashboardPage() {
             <div className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
               Total Portfolio Value
             </div>
-            <div className="text-[32px] font-black text-[#14121A]">
-              {fmtUSD(totalPortfolioValue)}
+            <div className="text-[26px] font-black text-[#14121A]">
+              {portfolioValueLabel}
             </div>
           </div>
 
@@ -280,17 +364,25 @@ export default function DashboardPage() {
                 portfolio24hUsd >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              {`${fmtDeltaUsd(portfolio24hUsd)} (${fmtDeltaPct(portfolio24hPct)})`}
+              {portfolioChangeLabel}
             </div>
           </div>
         </div>
 
         <div className="mt-5 flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-y-2 text-[11px] font-bold text-[#6B6777] sm:grid-cols-4">
-            <span>BTC {Math.round(normalizedAllocation.btc)}%</span>
-            <span>ETH {Math.round(normalizedAllocation.eth)}%</span>
-            <span>Alts {Math.round(normalizedAllocation.alts)}%</span>
-            <span>Stables {Math.round(normalizedAllocation.stables)}%</span>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] font-bold">
+            <span className="text-[#F7931A]">
+              BTC {Math.round(normalizedAllocation.btc)}%
+            </span>
+            <span className="text-[#627EEA]">
+              ETH {Math.round(normalizedAllocation.eth)}%
+            </span>
+            <span className="text-[#7C3AED]">
+              Alts {Math.round(normalizedAllocation.alts)}%
+            </span>
+            <span className="text-[#94A3B8]">
+              Stables {Math.round(normalizedAllocation.stables)}%
+            </span>
           </div>
 
           <div className="flex h-2 overflow-hidden rounded-full bg-[#F3F4F6]">
@@ -341,10 +433,7 @@ export default function DashboardPage() {
                     Market Sentiment: {analysis?.sentiment ?? "Neutral"}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
-                    TOTAL:{" "}
-                    {marketGlobal?.totalMarketCap.formatted ??
-                      analysisMeta?.currentTotalMarketCap ??
-                      "$0"}
+                    TOTAL: {marketCapLabel}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
                     Phase: {analysis?.phase ?? "Consolidation"}
@@ -398,11 +487,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {analysis?.keyTakeaway ? (
-                <p className="mt-4 text-[13px] leading-6 text-[#6B6777]">
-                  {analysis.keyTakeaway}
-                </p>
-              ) : null}
             </div>
           </div>
 
@@ -418,31 +502,39 @@ export default function DashboardPage() {
             <h3 className="m-0 text-[16px] font-semibold tracking-[0.02em] text-[#14121A]">
               Today&apos;s Snapshot
             </h3>
-            <span className="text-[13px] text-[#6B6777]">Live market data</span>
+            <span className="text-[13px] text-[#6B6777]">
+              Auto-updated mock data
+            </span>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <SnapshotMetric
               icon="₿"
               label="BTC Price"
-              value={btcPrice ? fmtUSD(btcPrice.priceUsd) : "$0"}
-              delta={`24H: ${fmtDeltaPct(btcPrice?.change24hPct)}`}
+              value={btcPrice ? fmtUSD(btcPrice.priceUsd) : "$—"}
+              delta={
+                btcPrice ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}` : "24H: —"
+              }
               deltaTone={(btcPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
             />
             <SnapshotMetric
               icon="◎"
               label="ETH Price"
-              value={ethPrice ? fmtUSD(ethPrice.priceUsd) : "$0"}
-              delta={`24H: ${fmtDeltaPct(ethPrice?.change24hPct)}`}
+              value={ethPrice ? fmtUSD(ethPrice.priceUsd) : "$—"}
+              delta={
+                ethPrice ? `24H: ${fmtDeltaPct(ethPrice.change24hPct)}` : "24H: —"
+              }
               deltaTone={(ethPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
             />
             <SnapshotMetric
               icon="Σ"
               label="TOTAL Market Cap"
-              value={marketGlobal?.totalMarketCap.formatted ?? "$0"}
-              delta={`24H: ${fmtDeltaPct(
-                marketGlobal?.totalMarketCap.change24hPct,
-              )}`}
+              value={marketCapLabel}
+              delta={
+                marketGlobal
+                  ? `24H: ${fmtDeltaPct(marketGlobal.totalMarketCap.change24hPct)}`
+                  : "24H: —"
+              }
               deltaTone={
                 (marketGlobal?.totalMarketCap.change24hPct ?? 0) >= 0
                   ? "positive"
@@ -452,8 +544,12 @@ export default function DashboardPage() {
             <SnapshotMetric
               icon="%"
               label="BTC Dominance"
-              value={fmtPct(marketGlobal?.dominance.btc)}
-              delta="Live share of total market cap"
+              value={
+                marketGlobal?.dominance.btc !== undefined
+                  ? fmtPct(marketGlobal.dominance.btc)
+                  : "—%"
+              }
+              delta="24H: —"
             />
           </div>
 
@@ -475,9 +571,7 @@ export default function DashboardPage() {
                 {fearGreedScore}
               </div>
               <span
-                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-extrabold ${getFearGreedBadgeClass(
-                  fearGreedScore,
-                )}`}
+                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-extrabold ${getFearGreedBadgeClass()}`}
               >
                 {fearGreedLabel}
               </span>

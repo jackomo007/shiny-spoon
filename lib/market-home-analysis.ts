@@ -488,7 +488,7 @@ function buildHeuristicAnalysis(context: MarketContext): StructuredMarketAnalysi
         ? `Sellers stay in control if TOTAL loses ${formatCapUsd(levels.supportLow)} and risk appetite keeps fading.`
         : `TOTAL remains range-bound until price leaves the ${formatRangeUsd(levels.supportHigh, levels.resistanceLow)} area with conviction.`;
 
-  const neutralRange = formatRangeUsd(levels.supportHigh, levels.resistanceLow);
+  const neutralRange = formatRangeUsd(levels.supportLow, levels.resistanceLow);
 
   return {
     sentiment,
