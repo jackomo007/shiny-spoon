@@ -37,7 +37,7 @@ function parseBucketDate(bucket: string | undefined) {
 
 function formatBucketDate(bucket: string | undefined) {
   const parsed = parseBucketDate(bucket);
-  if (!parsed) return new Date().toLocaleDateString(undefined);
+  if (!parsed) return "—";
   return parsed.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -46,7 +46,7 @@ function formatBucketDate(bucket: string | undefined) {
 }
 
 function formatUpdatedAgo(input: string | undefined) {
-  if (!input) return "just now";
+  if (!input) return "—";
 
   const diffMs = Date.now() - new Date(input).getTime();
   const safeDiffMs = Number.isFinite(diffMs) ? Math.max(diffMs, 0) : 0;
@@ -113,11 +113,11 @@ function buildFallbackAnalysis(
     return {
       sentiment: "Neutral" as const,
       marketTrend:
-        "Neutral — TOTAL market analysis is being refreshed. Live levels will appear once market data is available.",
-      phase: "Consolidation",
+        "Market analysis is currently unavailable. The dashboard will populate again once TOTAL market data is available.",
+      phase: "Unavailable",
       support: "$—",
       resistance: "$—",
-      structure: "Range-bound",
+      structure: "Unavailable",
       keyTakeaway: "",
       dashboardSummary: {
         bullishConfirmation: "Break above $—",
@@ -274,11 +274,11 @@ export default function DashboardPage() {
     stables: clampAllocation(allocation.stables),
   };
 
-  const fearGreedScore = fearGreed?.current.score ?? 0;
-  const fearGreedLabel = fearGreed?.current.label ?? "Neutral";
+  const fearGreedScore = fearGreed?.current.score;
+  const fearGreedLabel = fearGreed?.current.label ?? "—";
   const fearGreedNarrative =
     fearGreed?.current.narrative ??
-    "Market sentiment is balanced. Traders are split between caution and optimism.";
+    "Fear & Greed data is currently unavailable.";
   const fearGreedChange7d = fearGreed?.history.change7d;
   const fallbackAnalysis = buildFallbackAnalysis(
     marketGlobal?.totalMarketCap.usd,
@@ -309,6 +309,23 @@ export default function DashboardPage() {
     marketGlobal?.totalMarketCap.formatted ??
     analysisMeta?.currentTotalMarketCap ??
     fallbackAnalysis.currentTotalMarketCap;
+  const btcSnapshotValue = btcPrice ? fmtUSD(btcPrice.priceUsd) : "$—";
+  const btcSnapshotDelta = btcPrice
+    ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}`
+    : "24H: —";
+  const ethSnapshotValue = ethPrice ? fmtUSD(ethPrice.priceUsd) : "$—";
+  const ethSnapshotDelta = ethPrice
+    ? `24H: ${fmtDeltaPct(ethPrice.change24hPct)}`
+    : "24H: —";
+  const totalSnapshotValue = marketGlobal?.totalMarketCap.formatted ?? "$—";
+  const totalSnapshotDelta = marketGlobal
+    ? `24H: ${fmtDeltaPct(marketGlobal.totalMarketCap.change24hPct)}`
+    : "24H: —";
+  const btcDominanceValue =
+    marketGlobal?.dominance.btc !== undefined
+      ? fmtPct(marketGlobal.dominance.btc)
+      : "—%";
+  const btcDominanceDelta = "24H: —";
 
   const dashboardRows = [
     {
@@ -317,7 +334,7 @@ export default function DashboardPage() {
       label: "Bullish Confirmation",
       sublabel: "Upside continuation signal",
       level:
-        analysis?.dashboardSummary.bullishConfirmation ?? "Break above $0",
+        analysis?.dashboardSummary.bullishConfirmation ?? "Break above $—",
       tag: "Trigger",
       meaning: "Expansion likely",
     },
@@ -326,7 +343,7 @@ export default function DashboardPage() {
       tone: "neutral" as const,
       label: "Neutral Range",
       sublabel: "Current market condition",
-      level: analysis?.dashboardSummary.neutralRange ?? "$0 - $0",
+      level: analysis?.dashboardSummary.neutralRange ?? "$—",
       tag: "Range",
       meaning: "Consolidation",
     },
@@ -336,7 +353,7 @@ export default function DashboardPage() {
       label: "Bearish Breakdown",
       sublabel: "Loss of key demand",
       level:
-        analysis?.dashboardSummary.bearishBreakdown ?? "Below $0",
+        analysis?.dashboardSummary.bearishBreakdown ?? "Below $—",
       tag: "Breakdown",
       meaning: "Correction risk",
     },
@@ -360,27 +377,35 @@ export default function DashboardPage() {
               24H Change
             </div>
             <div
-              className={`text-[14px] font-extrabold ${
-                portfolio24hUsd >= 0 ? "text-green-600" : "text-red-600"
+              className={`text-[13px] font-extrabold ${
+                portfolio
+                  ? portfolio24hUsd >= 0
+                    ? "text-green-600"
+                    : "text-red-600"
+                  : "text-[#6B6777]"
               }`}
             >
               {portfolioChangeLabel}
             </div>
           </div>
-        </div>
+          </div>
 
         <div className="mt-5 flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] font-bold">
-            <span className="text-[#F7931A]">
+            <span className="inline-flex items-center gap-1.5 text-[#F7931A]">
+              <span className="h-2 w-2 rounded-full bg-[#F7931A]" />
               BTC {Math.round(normalizedAllocation.btc)}%
             </span>
-            <span className="text-[#627EEA]">
+            <span className="inline-flex items-center gap-1.5 text-[#627EEA]">
+              <span className="h-2 w-2 rounded-full bg-[#627EEA]" />
               ETH {Math.round(normalizedAllocation.eth)}%
             </span>
-            <span className="text-[#7C3AED]">
+            <span className="inline-flex items-center gap-1.5 text-[#7C3AED]">
+              <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
               Alts {Math.round(normalizedAllocation.alts)}%
             </span>
-            <span className="text-[#94A3B8]">
+            <span className="inline-flex items-center gap-1.5 text-[#94A3B8]">
+              <span className="h-2 w-2 rounded-full bg-[#94A3B8]" />
               Stables {Math.round(normalizedAllocation.stables)}%
             </span>
           </div>
@@ -464,7 +489,7 @@ export default function DashboardPage() {
                     Support
                   </div>
                   <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.support ?? "$0 - $0"}
+                    {analysis?.support ?? "$—"}
                   </div>
                 </div>
 
@@ -473,7 +498,7 @@ export default function DashboardPage() {
                     Resistance
                   </div>
                   <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.resistance ?? "$0 - $0"}
+                    {analysis?.resistance ?? "$—"}
                   </div>
                 </div>
 
@@ -482,7 +507,7 @@ export default function DashboardPage() {
                     Structure
                   </div>
                   <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.structure ?? "Range-bound"}
+                    {analysis?.structure ?? "—"}
                   </div>
                 </div>
               </div>
@@ -511,30 +536,22 @@ export default function DashboardPage() {
             <SnapshotMetric
               icon="₿"
               label="BTC Price"
-              value={btcPrice ? fmtUSD(btcPrice.priceUsd) : "$—"}
-              delta={
-                btcPrice ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}` : "24H: —"
-              }
+              value={btcSnapshotValue}
+              delta={btcSnapshotDelta}
               deltaTone={(btcPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
             />
             <SnapshotMetric
               icon="◎"
               label="ETH Price"
-              value={ethPrice ? fmtUSD(ethPrice.priceUsd) : "$—"}
-              delta={
-                ethPrice ? `24H: ${fmtDeltaPct(ethPrice.change24hPct)}` : "24H: —"
-              }
+              value={ethSnapshotValue}
+              delta={ethSnapshotDelta}
               deltaTone={(ethPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
             />
             <SnapshotMetric
               icon="Σ"
               label="TOTAL Market Cap"
-              value={marketCapLabel}
-              delta={
-                marketGlobal
-                  ? `24H: ${fmtDeltaPct(marketGlobal.totalMarketCap.change24hPct)}`
-                  : "24H: —"
-              }
+              value={totalSnapshotValue}
+              delta={totalSnapshotDelta}
               deltaTone={
                 (marketGlobal?.totalMarketCap.change24hPct ?? 0) >= 0
                   ? "positive"
@@ -544,12 +561,9 @@ export default function DashboardPage() {
             <SnapshotMetric
               icon="%"
               label="BTC Dominance"
-              value={
-                marketGlobal?.dominance.btc !== undefined
-                  ? fmtPct(marketGlobal.dominance.btc)
-                  : "—%"
-              }
-              delta="24H: —"
+              value={btcDominanceValue}
+              delta={btcDominanceDelta}
+              deltaTone="neutral"
             />
           </div>
 
@@ -568,7 +582,7 @@ export default function DashboardPage() {
 
             <div className="flex items-center gap-3">
               <div className="text-[22px] font-black text-[#14121A]">
-                {fearGreedScore}
+                {fearGreedScore ?? "—"}
               </div>
               <span
                 className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-extrabold ${getFearGreedBadgeClass()}`}
@@ -580,7 +594,10 @@ export default function DashboardPage() {
             <div className="relative h-2 overflow-hidden rounded-full bg-[linear-gradient(90deg,#DC2626_0%,#F59E0B_45%,#16A34A_100%)]">
               <div
                 className="absolute top-[-4px] h-4 w-[2px] rounded-full bg-[#14121A]"
-                style={{ left: `${fearGreedScore}%`, transform: "translateX(-50%)" }}
+                style={{
+                  left: `${fearGreedScore ?? 50}%`,
+                  transform: "translateX(-50%)",
+                }}
               />
             </div>
 
@@ -591,7 +608,7 @@ export default function DashboardPage() {
         </article>
       </section>
 
-      <section className="rounded-[20px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.08),transparent_28%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+      <section className="rounded-[20px] border border-[#E9E6F2] bg-white p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="grid h-[42px] w-[42px] place-items-center rounded-[14px] bg-[#F1EAFE] text-[16px] font-black text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.10)]">

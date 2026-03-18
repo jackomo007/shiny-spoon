@@ -42,8 +42,8 @@ export type MarketContext = {
   ethDominance: number;
   usdtDominance: number;
   totalVolumeUsd: number;
-  fearGreedScore: number;
-  fearGreedLabel: string;
+  fearGreedScore: number | null;
+  fearGreedLabel: string | null;
 };
 
 export type StructuredMarketAnalysis = {
@@ -204,39 +204,40 @@ async function fetchCurrentMarketContext(): Promise<MarketContext> {
     }),
   ]);
 
-  let totalMarketCapUsd = 2_170_000_000_000;
-  let marketCapChange24hPct = 0.9;
-  let btcDominance = 52.1;
-  let ethDominance = 17.8;
-  let usdtDominance = 5;
-  let totalVolumeUsd = 65_000_000_000;
-  let fearGreedScore = 68;
-  let fearGreedLabel = "Greed";
-
-  if (globalRes.status === "fulfilled" && globalRes.value.ok) {
-    const global = await parseJsonIfValid<CoinGeckoGlobalResponse>(
-      globalRes.value,
-    );
-
-    if (typeof global?.data?.total_market_cap?.usd === "number") {
-      totalMarketCapUsd = global.data.total_market_cap.usd;
-    }
-    if (typeof global?.data?.market_cap_change_percentage_24h_usd === "number") {
-      marketCapChange24hPct = global.data.market_cap_change_percentage_24h_usd;
-    }
-    if (typeof global?.data?.market_cap_percentage?.btc === "number") {
-      btcDominance = global.data.market_cap_percentage.btc;
-    }
-    if (typeof global?.data?.market_cap_percentage?.eth === "number") {
-      ethDominance = global.data.market_cap_percentage.eth;
-    }
-    if (typeof global?.data?.market_cap_percentage?.usdt === "number") {
-      usdtDominance = global.data.market_cap_percentage.usdt;
-    }
-    if (typeof global?.data?.total_volume?.usd === "number") {
-      totalVolumeUsd = global.data.total_volume.usd;
-    }
+  if (globalRes.status !== "fulfilled" || !globalRes.value.ok) {
+    throw new Error("Global market data unavailable");
   }
+
+  const global = await parseJsonIfValid<CoinGeckoGlobalResponse>(globalRes.value);
+  const totalMarketCapUsd = global?.data?.total_market_cap?.usd;
+
+  if (!Number.isFinite(totalMarketCapUsd) || !totalMarketCapUsd || totalMarketCapUsd <= 0) {
+    throw new Error("Global market cap missing from CoinGecko response");
+  }
+
+  const marketCapChange24hPct =
+    typeof global?.data?.market_cap_change_percentage_24h_usd === "number"
+      ? global.data.market_cap_change_percentage_24h_usd
+      : 0;
+  const btcDominance =
+    typeof global?.data?.market_cap_percentage?.btc === "number"
+      ? global.data.market_cap_percentage.btc
+      : 0;
+  const ethDominance =
+    typeof global?.data?.market_cap_percentage?.eth === "number"
+      ? global.data.market_cap_percentage.eth
+      : 0;
+  const usdtDominance =
+    typeof global?.data?.market_cap_percentage?.usdt === "number"
+      ? global.data.market_cap_percentage.usdt
+      : 0;
+  const totalVolumeUsd =
+    typeof global?.data?.total_volume?.usd === "number"
+      ? global.data.total_volume.usd
+      : 0;
+
+  let fearGreedScore: number | null = null;
+  let fearGreedLabel: string | null = null;
 
   if (fearGreedRes.status === "fulfilled" && fearGreedRes.value.ok) {
     const fearGreed = await parseJsonIfValid<FearGreedResponse>(
@@ -295,14 +296,19 @@ async function persistDailySnapshots(
   }
 
   if (!existingFearGreed) {
-    await prisma.fear_greed_index.create({
-      data: {
-        score: context.fearGreedScore,
-        value_text: context.fearGreedLabel,
-        recorded_at: recordedAt,
-      },
-      select: { id: true },
-    });
+    if (
+      context.fearGreedScore !== null &&
+      context.fearGreedLabel
+    ) {
+      await prisma.fear_greed_index.create({
+        data: {
+          score: context.fearGreedScore,
+          value_text: context.fearGreedLabel,
+          recorded_at: recordedAt,
+        },
+        select: { id: true },
+      });
+    }
   }
 }
 
@@ -417,8 +423,12 @@ function analyzeSentiment(context: MarketContext): MarketSentiment {
   if (context.marketCapChange24hPct >= 2) bullishSignals += 1;
   if (context.marketCapChange24hPct <= -2) bearishSignals += 1;
 
-  if (context.fearGreedScore >= 65) bullishSignals += 1;
-  if (context.fearGreedScore <= 35) bearishSignals += 1;
+  if (context.fearGreedScore !== null && context.fearGreedScore >= 65) {
+    bullishSignals += 1;
+  }
+  if (context.fearGreedScore !== null && context.fearGreedScore <= 35) {
+    bearishSignals += 1;
+  }
 
   if (context.btcDominance <= 50) bullishSignals += 1;
   if (context.btcDominance >= 55) bearishSignals += 1;
@@ -477,9 +487,14 @@ function buildHeuristicAnalysis(context: MarketContext): StructuredMarketAnalysi
         ? "Bearish"
         : "Neutral";
 
+  const fearGreedSummary =
+    context.fearGreedScore !== null && context.fearGreedLabel
+      ? `Fear & Greed is ${context.fearGreedScore} (${context.fearGreedLabel})`
+      : "Fear & Greed is unavailable";
+
   const marketTrend = `${headline} — TOTAL is trading around ${context.totalMarketCapFormatted} and ${direction}. BTC dominance sits at ${context.btcDominance.toFixed(
     1,
-  )}% while Fear & Greed is ${context.fearGreedScore} (${context.fearGreedLabel}), keeping the market in a ${phase.toLowerCase()} profile.`;
+  )}% while ${fearGreedSummary}, keeping the market in a ${phase.toLowerCase()} profile.`;
 
   const keyTakeaway =
     sentiment === "Bullish"
@@ -587,7 +602,11 @@ async function maybeGenerateAiAnalysis(
     `- BTC dominance: ${context.btcDominance.toFixed(2)}%`,
     `- ETH dominance: ${context.ethDominance.toFixed(2)}%`,
     `- Total volume 24h: ${formatCapUsd(context.totalVolumeUsd)}`,
-    `- Fear & Greed: ${context.fearGreedScore} (${context.fearGreedLabel})`,
+    `- Fear & Greed: ${
+      context.fearGreedScore !== null && context.fearGreedLabel
+        ? `${context.fearGreedScore} (${context.fearGreedLabel})`
+        : "unavailable"
+    }`,
     `- Chart points available: ${series.length}`,
     "",
     "Rules:",

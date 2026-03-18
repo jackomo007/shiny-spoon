@@ -77,22 +77,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[GET /api/market/global] error:", error);
-
-    return NextResponse.json({
-      totalMarketCap: {
-        usd: 2170000000000,
-        change24hPct: 0.9,
-        formatted: "$2.17T",
-      },
-      dominance: {
-        btc: 52.1,
-        eth: 17.8,
-      },
-      volume24h: {
-        usd: 65000000000,
-      },
-      updatedAt: new Date().toISOString(),
-      isEstimated: true,
-    });
+    return NextResponse.json(
+      { error: "Failed to load global market data" },
+      { status: 503 },
+    );
   }
 }

@@ -121,25 +121,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[GET /api/market/fear-greed] error:", error);
-
-    return NextResponse.json({
-      current: {
-        score: 68,
-        label: "Greed",
-        color: "green",
-        description: "68 — Greed",
-        narrative:
-          "Greed is starting to lead sentiment. Traders are leaning risk-on, but strong follow-through is still needed to confirm expansion.",
-      },
-      history: {
-        change7d: -4,
-      },
-      meta: {
-        source: "Alternative.me Fear & Greed Index",
-        updatedAt: new Date().toISOString(),
-        timestamp: new Date().toISOString(),
-        isEstimated: true,
-      },
-    });
+    return NextResponse.json(
+      { error: "Failed to load Fear & Greed data" },
+      { status: 503 },
+    );
   }
 }
