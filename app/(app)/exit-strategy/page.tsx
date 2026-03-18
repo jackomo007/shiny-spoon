@@ -125,11 +125,19 @@ function strategyNameLabel(sellPercent: number, gainPercent: number) {
 function StrategyAssetsTable({
   assets,
   sellPercent,
+  isAllCoins,
   onViewAssetPlan,
+  onDeleteAsset,
+  deletingId,
+  strategyId,
 }: {
   assets: ExitStrategyAssetSummary[];
   sellPercent: number;
+  isAllCoins: boolean;
   onViewAssetPlan: (coinSymbol: string) => void;
+  onDeleteAsset: (coinSymbol: string) => void;
+  deletingId: string | null;
+  strategyId: string;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -141,7 +149,7 @@ function StrategyAssetsTable({
             <th className="px-5 py-2.5">Target Price</th>
             <th className="px-5 py-2.5">Distance</th>
             <th className="px-5 py-2.5">Progress</th>
-            <th className="px-5 py-2.5">Actions</th>
+            <th className="px-5 py-2.5 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -188,22 +196,31 @@ function StrategyAssetsTable({
                   </div>
                 </td>
                 <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        isReady
-                          ? "bg-purple-100 text-purple-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {isReady ? "Ready" : "Pending"}
-                    </span>
+                  <div className="flex items-center justify-end gap-2">
+                    {isReady && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                        Ready
+                      </span>
+                    )}
                     <button
                       type="button"
                       className="h-7 px-2.5 rounded-lg border text-xs text-gray-700 hover:bg-gray-50"
                       onClick={() => onViewAssetPlan(asset.coinSymbol)}
                     >
                       View
+                    </button>
+                    <button
+                      type="button"
+                      className="h-7 px-2.5 rounded-lg border text-xs text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200"
+                      onClick={() => onDeleteAsset(asset.coinSymbol)}
+                      disabled={isAllCoins || deletingId === strategyId}
+                      title={
+                        isAllCoins
+                          ? "Remove per-asset is unavailable for All Assets plans."
+                          : "Delete"
+                      }
+                    >
+                      {deletingId === strategyId ? "Deleting…" : "Delete"}
                     </button>
                   </div>
                 </td>
@@ -221,12 +238,14 @@ function StrategyCard({
   onViewAllAssets,
   onViewAssetPlan,
   onDelete,
+  onDeleteAsset,
   deletingId,
 }: {
   s: ExitStrategySummary;
   onViewAllAssets: (id: string) => void;
   onViewAssetPlan: (id: string, coinSymbol: string) => void;
   onDelete: (id: string, label: string) => void;
+  onDeleteAsset: (id: string, coinSymbol: string, isAllCoins: boolean) => void;
   deletingId: string | null;
 }) {
   const label = s.isAllCoins ? "All Assets" : s.coinSymbols.join(", ");
@@ -292,7 +311,13 @@ function StrategyCard({
           <StrategyAssetsTable
             assets={previewAssets}
             sellPercent={s.sellPercent}
+            isAllCoins={s.isAllCoins}
             onViewAssetPlan={(coinSymbol) => onViewAssetPlan(s.id, coinSymbol)}
+            onDeleteAsset={(coinSymbol) =>
+              onDeleteAsset(s.id, coinSymbol, s.isAllCoins)
+            }
+            deletingId={deletingId}
+            strategyId={s.id}
           />
 
           <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
@@ -349,6 +374,7 @@ export default function ExitStrategyPage() {
   const [confirmDelete, setConfirmDelete] = useState<null | {
     id: string;
     label: string;
+    kind: "strategy" | "asset";
   }>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -548,7 +574,19 @@ export default function ExitStrategyPage() {
   };
 
   const requestDelete = (id: string, label: string) =>
-    setConfirmDelete({ id, label });
+    setConfirmDelete({ id, label, kind: "strategy" });
+
+  const requestAssetDelete = (
+    id: string,
+    coinSymbol: string,
+    isAllCoins: boolean,
+  ) => {
+    if (isAllCoins) {
+      setError("Removing a single asset from an All Assets exit strategy is not supported.");
+      return;
+    }
+    setConfirmDelete({ id, label: coinSymbol, kind: "asset" });
+  };
 
   const confirmDeleteNow = async () => {
     if (!confirmDelete) return;
@@ -631,6 +669,7 @@ export default function ExitStrategyPage() {
                 void openAssetPlan(id, coinSymbol)
               }
               onDelete={requestDelete}
+              onDeleteAsset={requestAssetDelete}
               deletingId={deletingId}
             />
           ))}
@@ -756,7 +795,11 @@ export default function ExitStrategyPage() {
         <Modal
           open
           onClose={() => (deletingId ? null : setConfirmDelete(null))}
-          title="Delete Exit Strategy"
+          title={
+            confirmDelete.kind === "asset"
+              ? "Remove Asset From Plan"
+              : "Delete Exit Strategy"
+          }
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
@@ -779,8 +822,17 @@ export default function ExitStrategyPage() {
           }
         >
           <div className="text-sm text-gray-700">
-            Are you sure you want to delete the exit strategy for{" "}
-            <b>{confirmDelete.label}</b>?
+            {confirmDelete.kind === "asset" ? (
+              <>
+                Are you sure you want to remove <b>{confirmDelete.label}</b>{" "}
+                from the exit plan?
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete the exit strategy for{" "}
+                <b>{confirmDelete.label}</b>?
+              </>
+            )}
             <div className="mt-2 text-xs text-gray-500">
               This will also remove its execution history.
             </div>
@@ -829,11 +881,21 @@ export default function ExitStrategyPage() {
               <StrategyAssetsTable
                 assets={activeStrategy.assets}
                 sellPercent={activeStrategy.sellPercent}
+                isAllCoins={activeStrategy.isAllCoins}
                 onViewAssetPlan={(coinSymbol) => {
                   setAssetsModalOpen(false);
                   setActiveStrategyId(null);
                   void openAssetPlan(activeStrategy.id, coinSymbol);
                 }}
+                onDeleteAsset={(coinSymbol) =>
+                  requestAssetDelete(
+                    activeStrategy.id,
+                    coinSymbol,
+                    activeStrategy.isAllCoins,
+                  )
+                }
+                deletingId={deletingId}
+                strategyId={activeStrategy.id}
               />
             </div>
           </div>
