@@ -55,6 +55,35 @@ export type ExitStrategyDetails = {
   rowsByCoin: Record<string, ExitStrategyStepRow[]>;
 };
 
+function normalizeCoinSymbols(coins: string[]) {
+  return Array.from(
+    new Set(
+      coins
+        .map((coin) => coin.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+export function parseExcludedCoinSymbols(raw: string | null | undefined) {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return normalizeCoinSymbols(
+      parsed.filter((coin): coin is string => typeof coin === "string"),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function serializeExcludedCoinSymbols(coins: string[]) {
+  const normalized = normalizeCoinSymbols(coins);
+  return normalized.length > 0 ? JSON.stringify(normalized) : null;
+}
+
 function round(n: number, digits: number): number {
   const p = 10 ** digits;
   return Math.round(n * p) / p;
@@ -134,6 +163,7 @@ export async function buildExitStrategySummary(
       id: true,
       coin_symbol: true,
       is_all_coins: true,
+      excluded_coin_symbols_json: true,
       strategy_type: true,
       sell_percent: true,
       gain_percent: true,
@@ -148,7 +178,14 @@ export async function buildExitStrategySummary(
   let coins: string[];
   if (s.is_all_coins) {
     const holdings = await getOpenSpotHoldings(accountId);
-    coins = holdings.map((h) => h.symbol.toUpperCase());
+    const excludedCoins = new Set(
+      parseExcludedCoinSymbols(s.excluded_coin_symbols_json),
+    );
+    coins = normalizeCoinSymbols(
+      holdings
+        .map((h) => h.symbol)
+        .filter((coin) => !excludedCoins.has(coin.trim().toUpperCase())),
+    );
   } else {
     coins = [s.coin_symbol.toUpperCase()];
   }

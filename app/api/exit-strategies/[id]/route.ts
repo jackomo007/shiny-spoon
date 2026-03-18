@@ -2,7 +2,11 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { buildExitStrategyDetails } from "@/services/exit-strategy.service"
+import {
+  buildExitStrategyDetails,
+  parseExcludedCoinSymbols,
+  serializeExcludedCoinSymbols,
+} from "@/services/exit-strategy.service"
 import { getOpenSpotHoldings } from "@/services/portfolio-holdings.service"
 
 export const dynamic = "force-dynamic"
@@ -39,22 +43,11 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
         id: true,
         coin_symbol: true,
         is_all_coins: true,
+        excluded_coin_symbols_json: true,
         strategy_type: true,
         sell_percent: true,
         gain_percent: true,
         is_active: true,
-        executions: {
-          orderBy: { step_gain_percent: "asc" },
-          select: {
-            step_gain_percent: true,
-            target_price: true,
-            executed_price: true,
-            quantity_sold: true,
-            proceeds: true,
-            realized_profit: true,
-            executed_at: true,
-          },
-        },
       },
     })
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -74,11 +67,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     const holdings = await getOpenSpotHoldings(accountId)
+    const excludedCoins = new Set(
+      parseExcludedCoinSymbols(row.excluded_coin_symbols_json),
+    )
     const planCoins = Array.from(
       new Set(
         holdings
           .map((holding) => holding.symbol.trim().toUpperCase())
-          .filter(Boolean),
+          .filter((holdingCoin) => holdingCoin && !excludedCoins.has(holdingCoin)),
       ),
     ).sort((a, b) => a.localeCompare(b))
 
@@ -86,62 +82,18 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: "Asset not found in plan" }, { status: 404 })
     }
 
-    const remainingCoins = planCoins.filter((coin) => coin !== coinSymbol)
+    const nextExcludedCoins = [...excludedCoins, coinSymbol]
 
-    await prisma.$transaction(async (tx) => {
-      if (remainingCoins.length > 0) {
-        const existingStrategies = await tx.exit_strategy.findMany({
-          where: {
-            account_id: accountId,
-            is_all_coins: false,
-            strategy_type: row.strategy_type,
-            coin_symbol: { in: remainingCoins },
-          },
-          select: { coin_symbol: true },
-        })
+    if (planCoins.length === 1) {
+      await prisma.exit_strategy.delete({ where: { id } })
+      return new Response(null, { status: 204 })
+    }
 
-        const existingCoins = new Set(
-          existingStrategies.map((strategy) =>
-            strategy.coin_symbol.trim().toUpperCase(),
-          ),
-        )
-
-        const coinsToCreate = remainingCoins.filter(
-          (coin) => !existingCoins.has(coin),
-        )
-
-        for (const coin of coinsToCreate) {
-          const created = await tx.exit_strategy.create({
-            data: {
-              account_id: accountId,
-              coin_symbol: coin,
-              is_all_coins: false,
-              strategy_type: row.strategy_type,
-              sell_percent: row.sell_percent,
-              gain_percent: row.gain_percent,
-              is_active: row.is_active,
-            },
-            select: { id: true },
-          })
-
-          if (row.executions.length > 0) {
-            await tx.exit_strategy_execution.createMany({
-              data: row.executions.map((execution) => ({
-                exit_strategy_id: created.id,
-                step_gain_percent: execution.step_gain_percent,
-                target_price: execution.target_price,
-                executed_price: execution.executed_price,
-                quantity_sold: execution.quantity_sold,
-                proceeds: execution.proceeds,
-                realized_profit: execution.realized_profit,
-                executed_at: execution.executed_at,
-              })),
-            })
-          }
-        }
-      }
-
-      await tx.exit_strategy.delete({ where: { id } })
+    await prisma.exit_strategy.update({
+      where: { id },
+      data: {
+        excluded_coin_symbols_json: serializeExcludedCoinSymbols(nextExcludedCoins),
+      },
     })
 
     return new Response(null, { status: 204 })

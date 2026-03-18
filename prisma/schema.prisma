@@ -335,6 +335,7 @@ model exit_strategy {
   coin_symbol   String                    @db.VarChar(20)
 
   is_all_coins  Boolean                   @default(false)
+  excluded_coin_symbols_json String?      @db.LongText
 
   strategy_type exit_strategy_type        @default(percentage)
   sell_percent  Decimal                   @db.Decimal(5, 2)
