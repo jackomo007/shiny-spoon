@@ -87,6 +87,21 @@ function cleanAnalysisText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function hasMeaningfulAnalysisText(value: string): boolean {
+  const normalized = cleanAnalysisText(value).toLowerCase();
+  return ![
+    "",
+    "none",
+    "n/a",
+    "na",
+    "not available",
+    "unknown",
+    "null",
+    "-",
+    "—",
+  ].includes(normalized);
+}
+
 function normalizeSentiment(value: unknown): MarketSentiment | unknown {
   if (typeof value !== "string") return value;
 
@@ -100,22 +115,28 @@ function normalizeSentiment(value: unknown): MarketSentiment | unknown {
 const analysisTextSchema = z
   .string()
   .transform(cleanAnalysisText)
-  .refine((value) => value.length > 0);
+  .refine(hasMeaningfulAnalysisText);
+
+const marketTrendSchema = analysisTextSchema.refine(
+  (value) => value.split(/\s+/).length >= 8,
+);
+
+const marketLevelSchema = analysisTextSchema.refine((value) => /\$\s*\d/.test(value));
 
 const structuredMarketAnalysisSchema = z.object({
   sentiment: z.preprocess(
     normalizeSentiment,
     z.enum(["Bullish", "Bearish", "Neutral"]),
   ),
-  marketTrend: analysisTextSchema,
+  marketTrend: marketTrendSchema,
   phase: analysisTextSchema,
-  support: analysisTextSchema,
-  resistance: analysisTextSchema,
+  support: marketLevelSchema,
+  resistance: marketLevelSchema,
   structure: analysisTextSchema,
   dashboardSummary: z.object({
-    bullishConfirmation: analysisTextSchema,
-    neutralRange: analysisTextSchema,
-    bearishBreakdown: analysisTextSchema,
+    bullishConfirmation: marketLevelSchema,
+    neutralRange: marketLevelSchema,
+    bearishBreakdown: marketLevelSchema,
   }),
 });
 
@@ -443,7 +464,11 @@ async function maybeGenerateAiAnalysis(
     "Rules:",
     "- Use the chart first, then the context above.",
     "- Be conservative if the chart history is limited.",
+    "- marketTrend must be a real summary of the market in 1-2 full sentences, not a one-word label.",
     "- support and resistance should be concise USD ranges or levels.",
+    "- bullishConfirmation, neutralRange, and bearishBreakdown must always be concrete TOTAL market cap levels or ranges that include dollar values.",
+    "- Even if the market is bearish, still provide the bullish confirmation level that would invalidate the bearish structure.",
+    "- Never return placeholders such as None, N/A, Unknown, or dashes.",
     "- structure should be a short label.",
     "- Return only valid JSON.",
   ].join("\n");

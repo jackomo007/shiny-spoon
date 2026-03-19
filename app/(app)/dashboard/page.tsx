@@ -247,7 +247,7 @@ export default function DashboardPage() {
   const analysis = marketAnalysis?.analysis ?? null;
   const analysisMeta = marketAnalysis?.meta;
   const analysisHeadline =
-    analysis?.marketTrend?.split("—")[0]?.trim() ??
+    analysis?.phase ??
     analysis?.sentiment ??
     "—";
   const analysisDate = formatGeneratedDate(
