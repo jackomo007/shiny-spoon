@@ -1,7 +1,9 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
   generateMarketCapChartPng,
@@ -64,8 +66,6 @@ export type AnalysisResponse = {
   analysis: StructuredMarketAnalysis;
   meta: {
     generatedAt: string;
-    scheduledRefresh: string;
-    scheduleTimezone: string;
     refreshBucket: string;
     source: string;
     method: "ai";
@@ -76,11 +76,48 @@ export type AnalysisResponse = {
   };
 };
 
-const NEW_YORK_TZ = "America/New_York";
-const REFRESH_HOURS = [1, 5, 9, 13, 17, 21];
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
+const MARKET_HOME_ANALYSIS_TAG = "market-home-analysis";
+const NEW_YORK_TZ = "America/New_York";
+const REFRESH_HOURS = [1, 5, 9, 13, 17, 21] as const;
+
+function cleanAnalysisText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeSentiment(value: unknown): MarketSentiment | unknown {
+  if (typeof value !== "string") return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "bullish") return "Bullish";
+  if (normalized === "bearish") return "Bearish";
+  if (normalized === "neutral") return "Neutral";
+  return value;
+}
+
+const analysisTextSchema = z
+  .string()
+  .transform(cleanAnalysisText)
+  .refine((value) => value.length > 0);
+
+const structuredMarketAnalysisSchema = z.object({
+  sentiment: z.preprocess(
+    normalizeSentiment,
+    z.enum(["Bullish", "Bearish", "Neutral"]),
+  ),
+  marketTrend: analysisTextSchema,
+  phase: analysisTextSchema,
+  support: analysisTextSchema,
+  resistance: analysisTextSchema,
+  structure: analysisTextSchema,
+  dashboardSummary: z.object({
+    bullishConfirmation: analysisTextSchema,
+    neutralRange: analysisTextSchema,
+    bearishBreakdown: analysisTextSchema,
+  }),
+});
 
 function formatCapUsd(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "$0";
@@ -121,7 +158,7 @@ async function parseJsonIfValid<T>(response: Response): Promise<T | null> {
   }
 }
 
-export function getZonedParts(date: Date, timeZone: string) {
+function getZonedParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -178,27 +215,6 @@ export function getRefreshBucket(now = new Date()): string {
   }
 
   return `${activeWindow.dateKey}-${String(activeWindow.hour).padStart(2, "0")}00`;
-}
-
-export function getNextRefreshLabel(now = new Date()): string {
-  const parts = getZonedParts(now, NEW_YORK_TZ);
-  const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
-    parts.day,
-  ).padStart(2, "0")}`;
-  const currentTotalMinutes = parts.hour * 60 + parts.minute;
-  const nextHour = REFRESH_HOURS.find((hour) => currentTotalMinutes < hour * 60);
-
-  if (nextHour !== undefined) {
-    return `${dateKey} ${String(nextHour).padStart(2, "0")}:00 ET`;
-  }
-
-  const nextDate = shiftDateKey(dateKey, 1);
-  return `${nextDate} 01:00 ET`;
-}
-
-export function isScheduledRefreshWindow(now = new Date()) {
-  const parts = getZonedParts(now, NEW_YORK_TZ);
-  return REFRESH_HOURS.includes(parts.hour);
 }
 
 async function fetchCurrentMarketContext(): Promise<MarketContext> {
@@ -277,9 +293,10 @@ async function fetchCurrentMarketContext(): Promise<MarketContext> {
 
 async function persistDailySnapshots(
   context: MarketContext,
-  refreshBucket: string,
+  now: Date,
 ): Promise<void> {
-  const recordedAt = new Date(`${refreshBucket}T00:00:00.000Z`);
+  const recordedAt = new Date(now);
+  recordedAt.setUTCHours(0, 0, 0, 0);
 
   const [existingMarket, existingFearGreed] = await Promise.all([
     prisma.global_crypto_market_snapshot.findFirst({
@@ -373,42 +390,8 @@ async function loadMarketCapSeries(
 
 function parseAiPayload(raw: string): StructuredMarketAnalysis | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<StructuredMarketAnalysis>;
-
-    if (
-      parsed.sentiment !== "Bullish" &&
-      parsed.sentiment !== "Bearish" &&
-      parsed.sentiment !== "Neutral"
-    ) {
-      return null;
-    }
-
-    if (
-      !parsed.marketTrend ||
-      !parsed.phase ||
-      !parsed.support ||
-      !parsed.resistance ||
-      !parsed.structure ||
-      !parsed.dashboardSummary?.bullishConfirmation ||
-      !parsed.dashboardSummary?.neutralRange ||
-      !parsed.dashboardSummary?.bearishBreakdown
-    ) {
-      return null;
-    }
-
-    return {
-      sentiment: parsed.sentiment,
-      marketTrend: parsed.marketTrend,
-      phase: parsed.phase,
-      support: parsed.support,
-      resistance: parsed.resistance,
-      structure: parsed.structure,
-      dashboardSummary: {
-        bullishConfirmation: parsed.dashboardSummary.bullishConfirmation,
-        neutralRange: parsed.dashboardSummary.neutralRange,
-        bearishBreakdown: parsed.dashboardSummary.bearishBreakdown,
-      },
-    };
+    const parsed = structuredMarketAnalysisSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     const match = raw.match(/\{[\s\S]*\}/);
     return match ? parseAiPayload(match[0]) : null;
@@ -466,14 +449,18 @@ async function maybeGenerateAiAnalysis(
   ].join("\n");
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await openai.chat.completions.parse({
       model: process.env.MARKET_ANALYSIS_MODEL ?? "gpt-4o-mini",
       temperature: 0.2,
+      response_format: zodResponseFormat(
+        structuredMarketAnalysisSchema,
+        "market_home_analysis",
+      ),
       messages: [
         {
           role: "system",
           content:
-            "You are a professional crypto market analyst. Use the attached TOTAL market cap chart and provided context. Return JSON only.",
+            "You are a professional crypto market analyst. Use the attached TOTAL market cap chart and provided context. Return only the requested JSON object.",
         },
         {
           role: "user",
@@ -485,20 +472,37 @@ async function maybeGenerateAiAnalysis(
       ],
     });
 
-    const raw = response.choices[0]?.message?.content?.trim() ?? "";
-    return parseAiPayload(raw);
+    const message = response.choices[0]?.message;
+    if (message?.parsed) {
+      return message.parsed;
+    }
+
+    const raw = typeof message?.content === "string" ? message.content.trim() : "";
+    const parsed = raw ? parseAiPayload(raw) : null;
+
+    if (!parsed) {
+      console.error("[market-home-analysis] AI response did not match schema", {
+        refusal:
+          typeof message === "object" && message && "refusal" in message
+            ? (message.refusal ?? null)
+            : null,
+        rawPreview: raw.slice(0, 1200),
+      });
+    }
+
+    return parsed;
   } catch (error) {
     console.error("[market-home-analysis] AI generation failed:", error);
     return null;
   }
 }
 
-async function generateDailyAnalysis(): Promise<AnalysisResponse> {
+async function generateLiveAnalysis(): Promise<AnalysisResponse> {
   const now = new Date();
   const refreshBucket = getRefreshBucket(now);
   const context = await fetchCurrentMarketContext();
 
-  await persistDailySnapshots(context, refreshBucket);
+  await persistDailySnapshots(context, now);
 
   const series = await loadMarketCapSeries(context);
   const ai = await maybeGenerateAiAnalysis(context, series);
@@ -511,8 +515,6 @@ async function generateDailyAnalysis(): Promise<AnalysisResponse> {
     analysis: ai,
     meta: {
       generatedAt,
-      scheduledRefresh: getNextRefreshLabel(new Date(generatedAt)),
-      scheduleTimezone: NEW_YORK_TZ,
       refreshBucket,
       source: "TOTAL chart snapshots + live market data + OpenAI",
       method: "ai",
@@ -522,25 +524,30 @@ async function generateDailyAnalysis(): Promise<AnalysisResponse> {
         "coingecko_global_market_data",
         "alternative_me_fear_greed",
         "daily_total_market_snapshots",
-        "scheduled_refresh_every_4_hours_from_09_00_america_new_york",
+        "generated_on_request",
       ],
     },
   };
 }
 
-function getCachedAnalysis(refreshBucket: string) {
-  return unstable_cache(generateDailyAnalysis, ["market-analysis", refreshBucket], {
-    revalidate: false,
-    tags: ["market-home-analysis", `market-home-analysis:${refreshBucket}`],
-  })();
+function getCachedMarketAnalysis(refreshBucket: string) {
+  return unstable_cache(
+    generateLiveAnalysis,
+    ["market-home-analysis", refreshBucket],
+    {
+      revalidate: false,
+      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
+    },
+  )();
 }
 
 export async function getDailyMarketAnalysis(
   now = new Date(),
 ): Promise<AnalysisResponse> {
-  return getCachedAnalysis(getRefreshBucket(now));
+  return getCachedMarketAnalysis(getRefreshBucket(now));
 }
 
 export async function warmDailyMarketAnalysis(now = new Date()) {
-  return getCachedAnalysis(getRefreshBucket(now));
+  revalidateTag(MARKET_HOME_ANALYSIS_TAG);
+  return getCachedMarketAnalysis(getRefreshBucket(now));
 }

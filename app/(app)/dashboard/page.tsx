@@ -28,21 +28,54 @@ const fmtDeltaUsd = (n: number | undefined | null) => {
   return `${n >= 0 ? "▲" : "▼"} ${fmtUSD(Math.abs(n))}`;
 };
 
-function parseBucketDate(bucket: string | undefined) {
-  if (!bucket) return null;
-  const [year, month, day] = bucket.split("-").slice(0, 3).map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+function parseRefreshBucket(input: string | undefined) {
+  if (!input) return null;
+
+  const match = input.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})00$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour] = match;
+  return {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+  };
 }
 
-function formatBucketDate(bucket: string | undefined) {
-  const parsed = parseBucketDate(bucket);
-  if (!parsed) return "—";
-  return parsed.toLocaleDateString(undefined, {
+function formatGeneratedDate(
+  input: string | undefined,
+  refreshBucket: string | undefined,
+) {
+  const bucket = parseRefreshBucket(refreshBucket);
+  if (bucket) {
+    const approxDate = new Date(
+      Date.UTC(bucket.year, bucket.month - 1, bucket.day, 12, 0, 0),
+    );
+    const formattedDate = approxDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+    const bucketHour12 =
+      bucket.hour === 0 ? 12 : bucket.hour > 12 ? bucket.hour - 12 : bucket.hour;
+    const bucketPeriod = bucket.hour >= 12 ? "PM" : "AM";
+    return `— ${formattedDate} ${bucketHour12}:00 ${bucketPeriod} ET`;
+  }
+
+  if (!input) return "—";
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  const formattedDate = parsed.toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "America/New_York",
   });
+  return `— ${formattedDate} ET`;
 }
 
 function formatUpdatedAgo(input: string | undefined) {
@@ -217,7 +250,10 @@ export default function DashboardPage() {
     analysis?.marketTrend?.split("—")[0]?.trim() ??
     analysis?.sentiment ??
     "—";
-  const analysisDate = formatBucketDate(analysisMeta?.refreshBucket);
+  const analysisDate = formatGeneratedDate(
+    analysisMeta?.generatedAt,
+    analysisMeta?.refreshBucket,
+  );
   const analysisUpdated = formatUpdatedAgo(analysisMeta?.generatedAt);
   const portfolioValueLabel = portfolio ? fmtUSD(totalPortfolioValue) : "$—";
   const portfolioChangeLabel = portfolio
@@ -279,7 +315,7 @@ export default function DashboardPage() {
 
   return (
     <main className="flex flex-col gap-4 text-[#14121A]">
-      <section className="rounded-[20px] border border-[#E9E6F2] bg-white px-[18px] py-[14px] shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+      <section className="rounded-[16px] border border-[#E9E6F2] bg-white px-[18px] py-[14px] shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
@@ -308,17 +344,17 @@ export default function DashboardPage() {
           </div>
           </div>
 
-        <div className="mt-5 flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] font-bold">
-            <span className="inline-flex items-center gap-1.5 text-[#F7931A]">
+        <div className="mt-[10px] flex flex-col gap-[6px]">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] font-bold text-[#6B6777]">
+            <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[#F7931A]" />
               BTC {Math.round(normalizedAllocation.btc)}%
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[#627EEA]">
+            <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[#627EEA]" />
               ETH {Math.round(normalizedAllocation.eth)}%
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[#7C3AED]">
+            <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
               Alts {Math.round(normalizedAllocation.alts)}%
             </span>
@@ -349,8 +385,8 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <article className="flex min-h-full flex-col rounded-[20px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_30%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+      <section className="grid gap-[14px] xl:grid-cols-[1.6fr_1fr]">
+        <article className="flex min-h-full flex-col rounded-[16px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_30%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div className="grid h-[46px] w-[46px] place-items-center rounded-[16px] border border-[rgba(124,58,237,0.14)] bg-[linear-gradient(135deg,rgba(124,58,237,0.14),rgba(124,58,237,0.06))] text-[15px] font-black text-[#6D28D9] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
@@ -367,11 +403,9 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="mt-[10px] flex flex-wrap items-center gap-[10px]">
                   <span
-                    className={getSentimentBadgeClass(
-                      analysis?.sentiment ?? "Unavailable",
-                    )}
+                    className={getSentimentBadgeClass(analysis?.sentiment ?? "")}
                   >
                     Market Sentiment: {analysis?.sentiment ?? "—"}
                   </span>
@@ -387,7 +421,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-1 flex-col justify-between rounded-[18px] border border-[rgba(124,58,237,0.12)] bg-[linear-gradient(180deg,rgba(124,58,237,0.05),rgba(124,58,237,0.02))] px-6 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="flex min-h-[280px] flex-1 flex-col justify-between rounded-[18px] border border-[rgba(124,58,237,0.12)] bg-[linear-gradient(180deg,rgba(124,58,237,0.05),rgba(124,58,237,0.02))] px-6 py-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
               <div>
                 <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
                   Market Trend
@@ -400,7 +434,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="mt-5 grid gap-2.5 md:grid-cols-3">
+              <div className="mt-[18px] grid gap-[10px] md:grid-cols-3">
                 <div className="flex min-h-[84px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white/75 p-3 shadow-[0_6px_18px_rgba(20,18,26,0.03)]">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
                     Support
@@ -432,17 +466,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#E9E6F2] pt-4">
+          <div className="mt-4 flex items-center gap-3 border-t border-[#E9E6F2] pt-4">
             <div className="text-[13px] text-[#6B6777]">
               Updated <b>{analysisUpdated}</b>
-            </div>
-            <div className="text-[13px] text-[#6B6777]">
-              Next refresh <b>{analysisMeta?.scheduledRefresh ?? "Every 4 hours from 9:00 AM ET"}</b>
             </div>
           </div>
         </article>
 
-        <article className="rounded-[20px] border border-[#E9E6F2] bg-white p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+        <article className="rounded-[16px] border border-[#E9E6F2] bg-white p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="m-0 text-[16px] font-semibold tracking-[0.02em] text-[#14121A]">
               Today&apos;s Snapshot
@@ -528,14 +559,14 @@ export default function DashboardPage() {
         </article>
       </section>
 
-      <section className="rounded-[20px] border border-[#E9E6F2] bg-white p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+      <section className="rounded-[16px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.08),transparent_28%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="grid h-[42px] w-[42px] place-items-center rounded-[14px] bg-[#F1EAFE] text-[16px] font-black text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.10)]">
               📋
             </div>
             <div>
-              <h3 className="m-0 text-[18px] tracking-[0.02em] text-[#14121A]">
+              <h3 className="m-0 text-[18px] font-semibold tracking-[0.02em] text-[#14121A]">
                 Dashboard Summary
               </h3>
               <div className="mt-1 text-[13px] text-[#6B6777]">
@@ -550,64 +581,79 @@ export default function DashboardPage() {
         </div>
 
         <div className="overflow-hidden rounded-[18px] border border-[#E9E6F2] bg-[linear-gradient(180deg,#FFFFFF,#FCFBFF)] shadow-[0_10px_26px_rgba(20,18,26,0.04)]">
-          <div className="hidden grid-cols-[1.5fr_1fr_1fr] border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777] md:grid">
-            <div>Scenario</div>
-            <div>Level</div>
-            <div>Market Meaning</div>
-          </div>
-
-          <div className="divide-y divide-[#E9E6F2]">
-            {dashboardRows.map((row) => (
-              <div
-                key={row.label}
-                className="grid gap-4 px-[18px] py-[18px] md:grid-cols-[1.5fr_1fr_1fr] md:items-center"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`grid h-[34px] w-[34px] place-items-center rounded-[12px] text-[14px] font-black ${
-                      row.tone === "bullish"
-                        ? "bg-green-50 text-green-700"
-                        : row.tone === "bearish"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-gray-100 text-gray-600"
+          <table className="w-full border-separate border-spacing-0">
+            <thead className="hidden md:table-header-group">
+              <tr>
+                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
+                  Scenario
+                </th>
+                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
+                  Level
+                </th>
+                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
+                  Market Meaning
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboardRows.map((row, index) => (
+                <tr
+                  key={row.label}
+                  className="block border-b border-[#E9E6F2] last:border-b-0 md:table-row md:border-b-0"
+                >
+                  <td className="block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px]">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`grid h-[34px] w-[34px] place-items-center rounded-[12px] text-[14px] font-black ${
+                          row.tone === "bullish"
+                            ? "bg-green-50 text-green-700"
+                            : row.tone === "bearish"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {row.icon}
+                      </span>
+                      <div className="flex flex-col gap-[2px]">
+                        <span className="text-[14px] font-extrabold text-[#14121A]">
+                          {row.label}
+                        </span>
+                        <span className="text-[12px] text-[#6B6777]">
+                          {row.sublabel}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[15px] font-black text-[#14121A]">
+                        {row.level}
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.12)] bg-[#F6F3FD] px-[8px] py-[5px] text-[11px] font-extrabold tracking-[0.02em] text-[#6D28D9]">
+                        {row.tag}
+                      </span>
+                    </div>
+                  </td>
+                  <td
+                    className={`block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px] ${
+                      index === dashboardRows.length - 1 ? "border-b-0" : ""
                     }`}
                   >
-                    {row.icon}
-                  </span>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[14px] font-extrabold text-[#14121A]">
-                      {row.label}
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-[12px] font-extrabold ${getMeaningBadgeClass(
+                        row.tone,
+                      )}`}
+                    >
+                      {row.meaning}
                     </span>
-                    <span className="text-[12px] text-[#6B6777]">
-                      {row.sublabel}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-black text-[#14121A]">
-                    {row.level}
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.12)] bg-[#F6F3FD] px-2 py-1 text-[11px] font-extrabold text-[#6D28D9]">
-                    {row.tag}
-                  </span>
-                </div>
-
-                <div>
-                  <span
-                    className={`inline-flex items-center rounded-full px-3 py-1.5 text-[12px] font-extrabold ${getMeaningBadgeClass(
-                      row.tone,
-                    )}`}
-                  >
-                    {row.meaning}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="mt-[14px] flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-[14px] flex flex-wrap items-center justify-between gap-3 pt-[2px]">
           <div className="text-[12px] font-bold text-[#6B6777]">
             Use these TOTAL levels as the main market roadmap for confirmation,
             range conditions, and breakdown risk.

@@ -58,8 +58,6 @@ type MarketAnalysisData = {
   };
   meta: {
     generatedAt: string;
-    scheduledRefresh: string;
-    scheduleTimezone: string;
     refreshBucket: string;
     source: string;
     method: "ai";
