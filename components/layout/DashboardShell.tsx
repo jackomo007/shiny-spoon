@@ -65,9 +65,7 @@ export default function DashboardShell({ children }: Props) {
   }, []);
 
   const tradingGroupActive =
-    pathname === "/journal" ||
-    pathname === "/strategies" ||
-    pathname === "/trade-analyzer";
+    pathname === "/journal" || pathname === "/strategies";
 
   const portfolioGroupActive =
     pathname === "/portfolio" || pathname === "/exit-strategy";
@@ -136,16 +134,6 @@ export default function DashboardShell({ children }: Props) {
                   }`}
                 >
                   Exit Strategy
-                </Link>
-                <Link
-                  href="/trade-analyzer"
-                  className={`${topNavLinkBase} ${
-                    isTopActive("/trade-analyzer")
-                      ? topNavActive
-                      : topNavInactive
-                  }`}
-                >
-                  Trade Analyzer
                 </Link>
                 {isAdmin && (
                   <Link
@@ -328,28 +316,6 @@ export default function DashboardShell({ children }: Props) {
                         </Link>
                       </li>
 
-                      <li>
-                        <Link
-                          href="/trade-analyzer"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/trade-analyzer")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              📈
-                            </span>
-                            <span className="font-medium">Trade Analyzer</span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/trade-analyzer") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
                       {isAdmin && (
                         <li>
                           <Link
@@ -474,14 +440,6 @@ export default function DashboardShell({ children }: Props) {
                   <NavChildItem
                     href="/strategies"
                     label="Strategy Creator"
-                    icon="🧭"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                  <NavChildItem
-                    href="/trade-analyzer"
-                    label="Trade Analyzer"
-                    icon="📈"
                     showText={sidebarExpanded}
                     pathname={pathname}
                   />
@@ -702,13 +660,11 @@ function NavGroup({
 function NavChildItem({
   href,
   label,
-  icon,
   showText = true,
   pathname,
 }: {
   href: string;
   label: string;
-  icon: string;
   showText?: boolean;
   pathname?: string;
 }) {
@@ -725,7 +681,9 @@ function NavChildItem({
         href={href}
         title={!showText ? label : undefined}
       >
-        <span className="w-5 text-center flex-shrink-0 text-lg">{icon}</span>
+        <span className="w-5 text-center flex-shrink-0 text-base leading-none">
+          -
+        </span>
         <span className="whitespace-nowrap text-sm font-medium">{label}</span>
       </Link>
     </li>
