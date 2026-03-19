@@ -176,7 +176,8 @@ export default function AddTransactionModal(props: {
   }, [query, props.open]);
 
   const priceLabel = useMemo(
-    () => (priceMode === "market" ? "Market Price (USD)" : "Custom Price (USD)"),
+    () =>
+      priceMode === "market" ? "Market Price (USD)" : "Custom Price (USD)",
     [priceMode],
   );
 
@@ -215,9 +216,11 @@ export default function AddTransactionModal(props: {
     }
   }, [priceUsd, selected, amountRaw, totalRaw]);
 
-  const canSave = !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
+  const canSave =
+    !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
 
-  const canDelete = mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
+  const canDelete =
+    mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
 
   async function handleDeleteNow() {
     if (!props.initialTx?.id) return;
@@ -225,13 +228,21 @@ export default function AddTransactionModal(props: {
     try {
       setBusy(true);
 
-      const res = await fetch(`/api/portfolio/transaction/${props.initialTx.id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/portfolio/transaction/${props.initialTx.id}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
-        const msg = typeof j?.error === "string" ? j.error : "Failed to delete transaction";
+        const j = (await res.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        const msg =
+          typeof j?.error === "string"
+            ? j.error
+            : "Failed to delete transaction";
         throw new Error(msg);
       }
 
@@ -259,10 +270,10 @@ export default function AddTransactionModal(props: {
           step === "pick"
             ? mode === "edit"
               ? "Edit Transaction"
-              : "Add Asset"
+              : "Add Transaction"
             : mode === "edit"
               ? `Edit Transaction • ${selected?.symbol ?? ""}`
-              : `Add Asset • ${selected?.symbol ?? ""}`
+              : `Add Transaction • ${selected?.symbol ?? ""}`
         }
         footer={
           <div className="flex items-center justify-between gap-3">
@@ -318,8 +329,14 @@ export default function AddTransactionModal(props: {
                         side,
                         priceMode,
                         priceUsd: priceMode === "custom" ? priceUsd : undefined,
-                        qty: lastEdited.current === "total" ? undefined : amount || undefined,
-                        totalUsd: lastEdited.current === "amount" ? undefined : total || undefined,
+                        qty:
+                          lastEdited.current === "total"
+                            ? undefined
+                            : amount || undefined,
+                        totalUsd:
+                          lastEdited.current === "amount"
+                            ? undefined
+                            : total || undefined,
                         feeUsd: 0,
                         executedAt: new Date().toISOString(),
                       };
@@ -348,9 +365,13 @@ export default function AddTransactionModal(props: {
                       });
 
                       if (!res.ok) {
-                        const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
+                        const j = (await res.json().catch(() => null)) as {
+                          error?: unknown;
+                        } | null;
                         const msg =
-                          typeof j?.error === "string" ? j.error : "Failed to save changes";
+                          typeof j?.error === "string"
+                            ? j.error
+                            : "Failed to save changes";
                         throw new Error(msg);
                       }
 
@@ -385,8 +406,10 @@ export default function AddTransactionModal(props: {
 
             {!hasQuery && (
               <div className="grid gap-2">
-                <div className="text-xs font-semibold text-gray-600">Top by market cap</div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="text-xs font-semibold text-gray-600">
+                  Top by market cap
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 max-h-80 overflow-y-auto">
                   {top.map((a) => (
                     <button
                       key={a.id}
@@ -407,7 +430,9 @@ export default function AddTransactionModal(props: {
                       <div className="flex items-center justify-between gap-3">
                         <div className="grid">
                           <span className="font-semibold">{a.symbol}</span>
-                          <span className="text-xs text-gray-500">{a.name}</span>
+                          <span className="text-xs text-gray-500">
+                            {a.name}
+                          </span>
                         </div>
                         <div className="text-sm text-gray-700">
                           {a.priceUsd != null ? usd(a.priceUsd) : ""}
@@ -421,8 +446,10 @@ export default function AddTransactionModal(props: {
 
             {results.length > 0 && (
               <div className="grid gap-2">
-                <div className="text-xs font-semibold text-gray-600">Search results</div>
-                <div className="grid gap-2">
+                <div className="text-xs font-semibold text-gray-600">
+                  Search results
+                </div>
+                <div className="grid gap-2 max-h-60 overflow-y-auto">
                   {results.map((a) => (
                     <button
                       key={a.id}
@@ -551,7 +578,8 @@ export default function AddTransactionModal(props: {
             </div>
 
             <div className="text-xs text-gray-500">
-              Amount and Total are calculated from each other. In Market Price, the price is automatically retrieved and remains read-only.
+              Amount and Total are calculated from each other. In Market Price,
+              the price is automatically retrieved and remains read-only.
             </div>
 
             <button
@@ -607,7 +635,9 @@ export default function AddTransactionModal(props: {
               </>
             ) : null}
             ?
-            <div className="mt-2 text-xs text-gray-500">This action cannot be undone.</div>
+            <div className="mt-2 text-xs text-gray-500">
+              This action cannot be undone.
+            </div>
           </div>
         </Modal>
       )}
