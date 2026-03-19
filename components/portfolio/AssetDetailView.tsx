@@ -102,7 +102,13 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
     setEditModalOpen(true);
   }
 
+  function closeEditModal() {
+    setEditModalOpen(false);
+    setSelectedTx(null);
+  }
+
   async function handleTransactionUpdated() {
+    closeEditModal();
     await loadData();
   }
 
@@ -420,10 +426,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
 
       <AddTransactionModal
         open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setSelectedTx(null);
-        }}
+        onClose={closeEditModal}
         onDone={handleTransactionUpdated}
         mode="edit"
         initialTx={selectedTx}
