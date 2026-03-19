@@ -421,7 +421,6 @@ export default function DashboardShell({ children }: Props) {
                   <NavChildItem
                     href="/exit-strategy"
                     label="Exit Strategy Simulator"
-                    icon="🚪"
                     showText={sidebarExpanded}
                     pathname={pathname}
                   />
