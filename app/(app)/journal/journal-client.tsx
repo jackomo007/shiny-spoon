@@ -20,6 +20,7 @@ import DeleteEntryModal from "@/components/journal/DeleteEntryModal";
 import QuickCloseModal from "@/components/journal/QuickCloseModal";
 import FirstRunJournalModal from "@/components/journal/FirstRunJournalModal";
 import JournalFooter from "@/components/journal/JournalFooter";
+import RuleMultiSelect from "@/components/journal/RuleMultiSelect";
 
 type TradeType = 1 | 2;
 type Status = "in_progress" | "win" | "loss" | "break_even";
@@ -341,6 +342,7 @@ export default function JournalPage() {
 
   useEffect(() => {
     register("tags");
+    register("matched_rule_ids");
   }, [register]);
 
     useEffect(() => {
@@ -1038,6 +1040,28 @@ async function fetchAssets(q: string) {
       abort = true;
     };
   }, [wStrategyId, open]);
+
+  const watchedMatchedRuleIds = watch("matched_rule_ids");
+  const wMatchedRuleIds = useMemo(
+    () => watchedMatchedRuleIds ?? [],
+    [watchedMatchedRuleIds],
+  );
+
+  useEffect(() => {
+    if (!strategyRules.length) {
+      if (wMatchedRuleIds.length) {
+        setValue("matched_rule_ids", [], { shouldDirty: false });
+      }
+      return;
+    }
+
+    const validIds = new Set(strategyRules.map((rule) => rule.id));
+    const filtered = wMatchedRuleIds.filter((id) => validIds.has(id));
+
+    if (filtered.length !== wMatchedRuleIds.length) {
+      setValue("matched_rule_ids", filtered, { shouldDirty: false });
+    }
+  }, [strategyRules, wMatchedRuleIds, setValue]);
 
   function renderStatusButton(r: JournalRow) {
     if (r.status === "in_progress") {
@@ -1771,16 +1795,21 @@ async function fetchAssets(q: string) {
               <>
                 <div>
                   <div className="text-sm mb-2">
-                    How Many Strategy Rules Did Your Setup Follow? (Optional)
+                    Select all confluences that supported this trade.
                   </div>
                   <div className="grid gap-2">
                     {strategyRules.length ? (
-                      strategyRules.map((r) => (
-                        <label key={r.id} className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" value={r.id} {...register("matched_rule_ids")} />
-                          <span>{r.title}</span>
-                        </label>
-                      ))
+                      <RuleMultiSelect
+                        options={strategyRules}
+                        value={wMatchedRuleIds}
+                        onChange={(next) =>
+                          setValue("matched_rule_ids", next, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                        placeholder="Select confluences"
+                      />
                     ) : (
                       <div className="text-xs text-gray-500">No rules for selected strategy.</div>
                     )}

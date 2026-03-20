@@ -41,8 +41,7 @@
     ".next/types/**/*.ts",
     "next-env.d.ts",
     "scripts/fixStrategies.js",
-    "types",
-    ".next-dev/types/**/*.ts"
+    "types"
   ],
   "exclude": [
     "node_modules"
