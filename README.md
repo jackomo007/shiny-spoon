@@ -154,6 +154,34 @@ npm run lint
 
 `npm run lint` runs ESLint with `--fix` and can modify files.
 
+## Testing strategy
+
+The project now has a layered automated test setup designed to protect business rules, route handlers, client forms, and public-page rendering without affecting the Vercel runtime build.
+
+### Test layers
+
+- Unit tests: pure helpers and schema validation (`utils/`, `lib/`, selected `services/` helpers).
+- Integration tests: route handlers with mocked auth, cookies, and Prisma boundaries.
+- Component tests: client components and form flows with `React Testing Library`.
+- E2E smoke tests: public auth pages in a real Next.js runtime via `Playwright`.
+
+### Test commands
+
+```bash
+npm run test
+npm run test:coverage
+npm run test:e2e
+npm run test:all
+npm run verify
+```
+
+### Tooling
+
+- Test runner: `Vitest`
+- DOM/component assertions: `@testing-library/react` + `@testing-library/jest-dom`
+- Browser smoke tests: `Playwright`
+- Browser install: `npm run playwright:install`
+
 ## Database overview (Prisma)
 
 - Auth and identity: `user`, `password_reset_token`, `account`.
