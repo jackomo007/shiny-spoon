@@ -54,7 +54,7 @@ export default function StrategiesClient() {
 
   const [summary, setSummary] = useState<{ topPerformingId: string | null; mostUsedId: string | null }>({ topPerformingId: null, mostUsedId: null })
 
-  const { register, getValues, formState: { isSubmitting, errors }, reset } =
+  const { register, getValues, trigger, formState: { isSubmitting, errors }, reset } =
     useForm<{ name: string; description: string }>({
       defaultValues: { name: "", description: "" },
     })
@@ -232,6 +232,9 @@ export default function StrategiesClient() {
   }
 
   async function onSubmitNameAndRules() {
+    const isValid = await trigger(["name", "description"])
+    if (!isValid) return
+
     const values = getValues()
     const payload = {
       name: values.name.trim(),
@@ -243,7 +246,6 @@ export default function StrategiesClient() {
     }
 
     if (!payload.name) return
-    if (payload.rules.length < 1) return
 
     try {
       if (mode === "create") {
@@ -531,15 +533,22 @@ export default function StrategiesClient() {
             </div>
 
             <div className="mt-2">
-              <div className="text-sm mb-1">Description</div>
+              <div className="text-sm mb-1">
+                Description <span className="text-red-600">*</span>
+              </div>
               <textarea
-                {...register("description")}
+                {...register("description", {
+                  validate: (value) => value.trim().length > 0 || "Description is required",
+                })}
                 rows={4}
                 placeholder="Describe your strategy in detail"
                 className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30"
               />
+              {"description" in errors && (
+                <div className="mt-1 text-xs text-red-600">Description is required</div>
+              )}
               <div className="text-xs text-gray-500 mt-1">
-                Optional. You can edit this description anytime.
+                Required. Confluences are now optional.
               </div>
             </div>
 

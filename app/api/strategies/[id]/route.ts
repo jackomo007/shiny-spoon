@@ -10,12 +10,12 @@ const UpsertSchema = z.object({
   rules: z
     .array(
       z.object({
-        title: z.string().min(1),
+        title: z.string().trim().min(1),
         description: z.string().optional().nullable(),
       })
     )
     .default([]),
-  description: z.string().max(10000).optional().nullable(),
+  description: z.string().trim().min(1).max(10000),
 });
 
 export async function GET(
