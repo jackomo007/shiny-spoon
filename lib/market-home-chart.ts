@@ -5,9 +5,16 @@ export type MarketCapChartPoint = {
   value: number;
 };
 
+type ChartOptions = {
+  title?: string;
+  subtitle?: string;
+  latestLabel?: string;
+  valueFormatter?: (value: number) => string;
+};
+
 let fontsReady = false;
 
-function formatCapCompact(value: number): string {
+function formatUsdCompact(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "$0";
   if (value >= 1_000_000_000_000) {
     return `$${(value / 1_000_000_000_000).toFixed(2)}T`;
@@ -20,6 +27,7 @@ function formatCapCompact(value: number): string {
 
 export async function generateMarketCapChartPng(
   points: MarketCapChartPoint[],
+  options: ChartOptions = {},
 ): Promise<Buffer> {
   const { createCanvas, GlobalFonts } = await import("@napi-rs/canvas");
 
@@ -58,11 +66,17 @@ export async function generateMarketCapChartPng(
 
   ctx.fillStyle = "#14121A";
   ctx.font = `bold 22px ${familyBold}`;
-  ctx.fillText("TOTAL Crypto Market Cap", paddingX, 34);
+  const formatValue = options.valueFormatter ?? formatUsdCompact;
+
+  ctx.fillText(options.title ?? "TOTAL Crypto Market Cap", paddingX, 34);
 
   ctx.fillStyle = "#6B6777";
   ctx.font = `13px ${family}`;
-  ctx.fillText("Daily snapshot series used for Home Page AI analysis", paddingX, 56);
+  ctx.fillText(
+    options.subtitle ?? "Daily snapshot series used for Home Page AI analysis",
+    paddingX,
+    56,
+  );
 
   const safePoints =
     points.length >= 2
@@ -92,7 +106,7 @@ export async function generateMarketCapChartPng(
     const labelValue = chartMax - (range / 4) * i;
     ctx.fillStyle = "#7C748F";
     ctx.font = `12px ${family}`;
-    ctx.fillText(formatCapCompact(labelValue), paddingX, y - 16);
+    ctx.fillText(formatValue(labelValue), paddingX, y - 16);
   }
 
   const coords = safePoints.map((point, index) => {
@@ -156,10 +170,10 @@ export async function generateMarketCapChartPng(
 
   ctx.fillStyle = "#14121A";
   ctx.font = `bold 18px ${familyBold}`;
-  ctx.fillText(formatCapCompact(last.point.value), width - 220, 38);
+  ctx.fillText(formatValue(last.point.value), width - 220, 38);
   ctx.fillStyle = "#6B6777";
   ctx.font = `12px ${family}`;
-  ctx.fillText("Latest snapshot", width - 220, 58);
+  ctx.fillText(options.latestLabel ?? "Latest snapshot", width - 220, 58);
 
   return canvas.toBuffer("image/png");
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import { Prisma } from "@prisma/client";
 
 import {
   account_type as AccountTypeEnum,
@@ -51,31 +52,56 @@ export async function POST(req: Request) {
 
   const hash = await bcrypt.hash(password, 10);
 
-  const { userId, cryptoId } = await prisma.$transaction(async (tx) => {
-    const u = await tx.user.create({
-      data: { email, username, password_hash: hash },
-      select: { id: true },
+  try {
+    const { userId, cryptoId } = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: { email, username, password_hash: hash },
+        select: { id: true },
+      });
+
+      let cryptoId: string | null = null;
+      for (const t of chosen) {
+        const display = t[0].toUpperCase() + t.slice(1);
+        const a = await tx.account.create({
+          data: {
+            user_id: u.id,
+            type: t,
+            name: `My ${display} Account`,
+          },
+          select: { id: true, type: true },
+        });
+        if (a.type === AccountTypeEnum.crypto) cryptoId = a.id;
+      }
+
+      return { userId: u.id, cryptoId: cryptoId! };
     });
 
-    let cryptoId: string | null = null;
-    for (const t of chosen) {
-      const display = t[0].toUpperCase() + t.slice(1);
-      const a = await tx.account.create({
-        data: {
-          user_id: u.id,
-          type: t,
-          name: `My ${display} Account`,
+    const jar = await cookies();
+    jar.set("active_account_id", cryptoId, cookieOpts);
+
+    return NextResponse.json({ ok: true, userId });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = Array.isArray(error.meta?.target)
+        ? error.meta.target.join(", ")
+        : "email or username";
+
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `An account with this ${target} already exists.`,
         },
-        select: { id: true, type: true },
-      });
-      if (a.type === AccountTypeEnum.crypto) cryptoId = a.id;
+        { status: 409 },
+      );
     }
 
-    return { userId: u.id, cryptoId: cryptoId! };
-  });
-
-  const jar = await cookies();
-  jar.set("active_account_id", cryptoId, cookieOpts);
-
-  return NextResponse.json({ ok: true, userId });
+    console.error("[POST /api/auth/register] error:", error);
+    return NextResponse.json(
+      { ok: false, message: "Registration failed" },
+      { status: 500 },
+    );
+  }
 }

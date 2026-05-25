@@ -19,18 +19,17 @@ const fmtPct = (n: number | undefined | null) => {
 };
 
 const fmtDeltaPct = (n: number | undefined | null) => {
-  if (n === undefined || n === null) return "▲ 0.0%";
-  return `${n >= 0 ? "▲" : "▼"} ${Math.abs(n).toFixed(1)}%`;
+  if (n === undefined || n === null) return "0.0%";
+  return `${n >= 0 ? "+" : "-"}${Math.abs(n).toFixed(1)}%`;
 };
 
 const fmtDeltaUsd = (n: number | undefined | null) => {
-  if (n === undefined || n === null) return "▲ $0";
-  return `${n >= 0 ? "▲" : "▼"} ${fmtUSD(Math.abs(n))}`;
+  if (n === undefined || n === null) return "$0";
+  return `${n >= 0 ? "+" : "-"}${fmtUSD(Math.abs(n))}`;
 };
 
 function parseRefreshBucket(input: string | undefined) {
   if (!input) return null;
-
   const match = input.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})00$/);
   if (!match) return null;
 
@@ -60,13 +59,14 @@ function formatGeneratedDate(
     const bucketHour12 =
       bucket.hour === 0 ? 12 : bucket.hour > 12 ? bucket.hour - 12 : bucket.hour;
     const bucketPeriod = bucket.hour >= 12 ? "PM" : "AM";
-    return `— ${formattedDate} ${bucketHour12}:00 ${bucketPeriod} ET`;
+    return `- ${formattedDate} ${bucketHour12}:00 ${bucketPeriod} ET`;
   }
 
-  if (!input) return "—";
+  if (!input) return "-";
   const parsed = new Date(input);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  const formattedDate = parsed.toLocaleString("en-US", {
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return `- ${parsed.toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -74,12 +74,11 @@ function formatGeneratedDate(
     minute: "2-digit",
     hour12: true,
     timeZone: "America/New_York",
-  });
-  return `— ${formattedDate} ET`;
+  })} ET`;
 }
 
 function formatUpdatedAgo(input: string | undefined) {
-  if (!input) return "—";
+  if (!input) return "-";
 
   const diffMs = Date.now() - new Date(input).getTime();
   const safeDiffMs = Number.isFinite(diffMs) ? Math.max(diffMs, 0) : 0;
@@ -95,63 +94,77 @@ function formatUpdatedAgo(input: string | undefined) {
   return `${days}d ago`;
 }
 
-function getFearGreedBadgeClass() {
-  return "bg-[#F1EAFE] border-[rgba(124,58,237,0.18)] text-[#6D28D9]";
-}
-
-function getSentimentBadgeClass(sentiment: string) {
+function getTrendBadgeClass(trend: string) {
   const base =
     "inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-extrabold";
-  if (sentiment === "Bullish") {
-    return `${base} bg-green-50 border-green-200 text-green-700`;
+  if (trend === "Bullish") {
+    return `${base} border-green-200 bg-green-50 text-green-700`;
   }
-  if (sentiment === "Bearish") {
-    return `${base} bg-red-50 border-red-200 text-red-700`;
+  if (trend === "Bearish") {
+    return `${base} border-red-200 bg-red-50 text-red-700`;
   }
-  return `${base} bg-gray-100 border-gray-200 text-gray-700`;
+  return `${base} border-amber-200 bg-amber-50 text-amber-700`;
 }
 
-function getMeaningBadgeClass(tone: "bullish" | "neutral" | "bearish") {
-  if (tone === "bullish") return "bg-green-50 text-green-700";
-  if (tone === "bearish") return "bg-red-50 text-red-700";
-  return "bg-gray-100 text-gray-700";
+function getThermometerBadgeClass(tone: string) {
+  const base =
+    "inline-flex w-fit items-center rounded-full border px-3.5 py-2.5 text-[15px] font-black";
+  if (tone === "discounted") {
+    return `${base} border-green-200 bg-green-50 text-green-700`;
+  }
+  if (tone === "fair") {
+    return `${base} border-[rgba(124,58,237,0.18)] bg-[#F1EAFE] text-[#6D28D9]`;
+  }
+  if (tone === "overextended") {
+    return `${base} border-amber-200 bg-amber-50 text-amber-700`;
+  }
+  if (tone === "euphoric") {
+    return `${base} border-red-200 bg-red-50 text-red-700`;
+  }
+  return `${base} border-green-200 bg-green-50 text-green-700`;
 }
 
-function SnapshotMetric({
-  icon,
-  label,
-  value,
-  delta,
-  deltaTone = "neutral",
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  delta: string;
-  deltaTone?: "positive" | "negative" | "neutral";
-}) {
-  return (
-    <div className="rounded-[14px] border border-[#E9E6F2] bg-[linear-gradient(180deg,#fff,#FBFAFF)] p-3">
-      <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
-        <span className="grid h-[22px] w-[22px] place-items-center rounded-[8px] bg-[#F1EAFE] text-[12px] font-black text-[#6D28D9]">
-          {icon}
-        </span>
-        <span>{label}</span>
-      </div>
-      <div className="mt-1.5 text-[22px] font-black text-[#14121A]">{value}</div>
-      <div
-        className={`mt-1 text-[12px] ${
-          deltaTone === "positive"
-            ? "text-green-600"
-            : deltaTone === "negative"
-              ? "text-red-600"
-              : "text-[#6B6777]"
-        }`}
-      >
-        {delta}
-      </div>
-    </div>
-  );
+function getSignalBadgeClass(signal: string) {
+  if (signal === "Scale-Out") {
+    return "inline-flex items-center rounded-[12px] border border-red-700/30 bg-red-700 px-3.5 py-2 text-[13px] font-extrabold text-red-50";
+  }
+  if (signal === "Fair Value") {
+    return "inline-flex items-center rounded-[12px] border border-purple-700/30 bg-purple-700 px-3.5 py-2 text-[13px] font-extrabold text-purple-50";
+  }
+
+  return "inline-flex items-center rounded-[12px] border border-green-700/30 bg-green-700 px-3.5 py-2 text-[13px] font-extrabold text-green-50";
+}
+
+function getFearGreedLabel(score: number | undefined) {
+  if (score === undefined) return "-";
+  if (score <= 24) return "Extreme Fear";
+  if (score <= 44) return "Fear";
+  if (score <= 55) return "Neutral";
+  if (score <= 74) return "Greed";
+  return "Extreme Greed";
+}
+
+function getFearGreedDescription(score: number | undefined) {
+  if (score === undefined) {
+    return "Market sentiment is currently unavailable.";
+  }
+  if (score <= 24) {
+    return "Fear is dominant. Traders are highly defensive, which often appears during heavy uncertainty or capitulation-like conditions.";
+  }
+  if (score <= 44) {
+    return "Sentiment is cautious. Traders are still defensive, and confidence remains weak until price strength improves.";
+  }
+  if (score <= 55) {
+    return "Market sentiment is balanced. Traders are split between caution and optimism, which often fits range-bound conditions.";
+  }
+  if (score <= 74) {
+    return "Greed is starting to lead sentiment. Traders are leaning risk-on, but strong follow-through is still needed to confirm expansion.";
+  }
+  return "Sentiment is overheated. Traders are aggressively risk-on, which can support momentum but also raises the chance of short-term excess.";
+}
+
+function clampAllocation(value: number) {
+  return Math.min(100, Math.max(0, value));
 }
 
 export default function DashboardPage() {
@@ -161,53 +174,9 @@ export default function DashboardPage() {
     fearGreed,
     marketAnalysis,
     btcPrice,
-    ethPrice,
     loading,
     error,
   } = useDashboardData();
-
-  if (loading) {
-    return (
-      <main className="flex flex-col gap-4">
-        <div className="rounded-[20px] border border-[#E9E6F2] bg-white p-5 shadow-[0_10px_30px_rgba(20,18,26,0.06)] animate-pulse">
-          <div className="h-3 w-40 rounded bg-gray-200" />
-          <div className="mt-3 h-10 w-52 rounded bg-gray-200" />
-          <div className="mt-6 h-2 w-full rounded-full bg-gray-200" />
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <div className="rounded-[20px] border border-[#E9E6F2] bg-white p-5 shadow-[0_10px_30px_rgba(20,18,26,0.06)] animate-pulse">
-            <div className="h-56 rounded-[18px] bg-gray-200" />
-          </div>
-          <div className="rounded-[20px] border border-[#E9E6F2] bg-white p-5 shadow-[0_10px_30px_rgba(20,18,26,0.06)] animate-pulse">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="h-28 rounded-[14px] bg-gray-200" />
-              <div className="h-28 rounded-[14px] bg-gray-200" />
-              <div className="h-28 rounded-[14px] bg-gray-200" />
-              <div className="h-28 rounded-[14px] bg-gray-200" />
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[20px] border border-[#E9E6F2] bg-white p-5 shadow-[0_10px_30px_rgba(20,18,26,0.06)] animate-pulse">
-          <div className="h-48 rounded-[18px] bg-gray-200" />
-        </div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="flex flex-col gap-4">
-        <div className="rounded-[20px] border border-red-200 bg-red-50 p-6 text-center">
-          <div className="mb-2 font-semibold text-red-600">
-            Error Loading Dashboard
-          </div>
-          <div className="text-sm text-red-500">{error}</div>
-        </div>
-      </main>
-    );
-  }
 
   const totalPortfolioValue = portfolio?.summary.currentBalanceUsd ?? 0;
   const portfolio24hUsd = portfolio?.summary.portfolio24h.usd ?? 0;
@@ -238,91 +207,61 @@ export default function DashboardPage() {
     stables: clampAllocation(allocation.stables),
   };
 
-  const fearGreedScore = fearGreed?.current.score;
-  const fearGreedLabel = fearGreed?.current.label ?? "—";
-  const fearGreedNarrative =
-    fearGreed?.current.narrative ??
-    "Fear & Greed data is currently unavailable.";
-  const fearGreedChange7d = fearGreed?.history.change7d;
   const analysis = marketAnalysis?.analysis ?? null;
+  const thermometer = analysis?.thermometer ?? null;
   const analysisMeta = marketAnalysis?.meta;
-  const analysisHeadline =
-    analysis?.phase ??
-    analysis?.sentiment ??
-    "—";
+  const analysisUnavailable = !loading && !analysis;
+  const fearGreedScore = fearGreed?.current.score;
+  const fearGreedLabel =
+    fearGreed?.current.label ?? getFearGreedLabel(fearGreedScore);
+  const fearGreedNarrative =
+    fearGreed?.current.narrative ?? getFearGreedDescription(fearGreedScore);
+  const fearGreedChange7d = fearGreed?.history.change7d;
+
+  const portfolioValueLabel = portfolio ? fmtUSD(totalPortfolioValue) : "$0";
+  const portfolioChangeLabel = portfolio
+    ? `${fmtDeltaUsd(portfolio24hUsd)} (${fmtDeltaPct(portfolio24hPct)})`
+    : "$0 (0.0%)";
+  const btcSnapshotValue =
+    analysisMeta?.currentBtcPrice ?? (btcPrice ? fmtUSD(btcPrice.priceUsd) : "$0");
+  const btcSnapshotDelta = btcPrice
+    ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}`
+    : "24H: 0.0%";
+  const btcDominanceValue =
+    marketGlobal?.dominance.btc !== undefined
+      ? fmtPct(marketGlobal.dominance.btc)
+      : "-%";
+  const btcDominanceDelta = "24H: -";
   const analysisDate = formatGeneratedDate(
     analysisMeta?.generatedAt,
     analysisMeta?.refreshBucket,
   );
   const analysisUpdated = formatUpdatedAgo(analysisMeta?.generatedAt);
-  const portfolioValueLabel = portfolio ? fmtUSD(totalPortfolioValue) : "$—";
-  const portfolioChangeLabel = portfolio
-    ? `${fmtDeltaUsd(portfolio24hUsd)} (${fmtDeltaPct(portfolio24hPct)})`
-    : "—";
-  const marketCapLabel =
-    marketGlobal?.totalMarketCap.formatted ??
-    analysisMeta?.currentTotalMarketCap ??
-    "$—";
-  const btcSnapshotValue = btcPrice ? fmtUSD(btcPrice.priceUsd) : "$—";
-  const btcSnapshotDelta = btcPrice
-    ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}`
-    : "24H: —";
-  const ethSnapshotValue = ethPrice ? fmtUSD(ethPrice.priceUsd) : "$—";
-  const ethSnapshotDelta = ethPrice
-    ? `24H: ${fmtDeltaPct(ethPrice.change24hPct)}`
-    : "24H: —";
-  const totalSnapshotValue = marketGlobal?.totalMarketCap.formatted ?? "$—";
-  const totalSnapshotDelta = marketGlobal
-    ? `24H: ${fmtDeltaPct(marketGlobal.totalMarketCap.change24hPct)}`
-    : "24H: —";
-  const btcDominanceValue =
-    marketGlobal?.dominance.btc !== undefined
-      ? fmtPct(marketGlobal.dominance.btc)
-      : "—%";
-  const btcDominanceDelta = "24H: —";
+  const markerLeft = `${Math.max(0, Math.min(100, fearGreedScore ?? 50))}%`;
 
-  const dashboardRows = [
-    {
-      icon: "↗",
-      tone: "bullish" as const,
-      label: "Bullish Confirmation",
-      sublabel: "Upside continuation signal",
-      level:
-        analysis?.dashboardSummary.bullishConfirmation ?? "Break above $—",
-      tag: "Trigger",
-      meaning: "Expansion likely",
-    },
-    {
-      icon: "•",
-      tone: "neutral" as const,
-      label: "Neutral Range",
-      sublabel: "Current market condition",
-      level: analysis?.dashboardSummary.neutralRange ?? "$—",
-      tag: "Range",
-      meaning: "Consolidation",
-    },
-    {
-      icon: "↘",
-      tone: "bearish" as const,
-      label: "Bearish Breakdown",
-      sublabel: "Loss of key demand",
-      level:
-        analysis?.dashboardSummary.bearishBreakdown ?? "Below $—",
-      tag: "Breakdown",
-      meaning: "Correction risk",
-    },
-  ];
+  if (error) {
+    return (
+      <main className="flex flex-col gap-4">
+        <div className="rounded-[16px] border border-red-200 bg-red-50 p-6 text-center">
+          <div className="mb-2 font-semibold text-red-600">
+            Error Loading Dashboard
+          </div>
+          <div className="text-sm text-red-500">{error}</div>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="flex flex-col gap-4 text-[#14121A]">
-      <section className="rounded-[16px] border border-[#E9E6F2] bg-white px-[18px] py-[14px] shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+    <main className="flex flex-col gap-[14px] text-[#14121A]">
+      <section className="rounded-[16px] border border-[#E9E6F2] bg-white px-[18px] py-[14px]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <div className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
               Total Portfolio Value
             </div>
             <div className="text-[26px] font-black text-[#14121A]">
-              {portfolioValueLabel}
+              {loading ? "$0" : portfolioValueLabel}
             </div>
           </div>
 
@@ -332,38 +271,21 @@ export default function DashboardPage() {
             </div>
             <div
               className={`text-[13px] font-extrabold ${
-                portfolio
-                  ? portfolio24hUsd >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
-                  : "text-[#6B6777]"
+                portfolio24hUsd >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              {portfolioChangeLabel}
+              {loading ? "$0 (0.0%)" : portfolioChangeLabel}
             </div>
           </div>
-          </div>
+        </div>
 
         <div className="mt-[10px] flex flex-col gap-[6px]">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] font-bold text-[#6B6777]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#F7931A]" />
-              BTC {Math.round(normalizedAllocation.btc)}%
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#627EEA]" />
-              ETH {Math.round(normalizedAllocation.eth)}%
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
-              Alts {Math.round(normalizedAllocation.alts)}%
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[#16A34A]">
-              <span className="h-2 w-2 rounded-full bg-[#16A34A]" />
-              Stables {Math.round(normalizedAllocation.stables)}%
-            </span>
+            <span>BTC {Math.round(normalizedAllocation.btc)}%</span>
+            <span>ETH {Math.round(normalizedAllocation.eth)}%</span>
+            <span>Alts {Math.round(normalizedAllocation.alts)}%</span>
+            <span>Stables {Math.round(normalizedAllocation.stables)}%</span>
           </div>
-
           <div className="flex h-2 overflow-hidden rounded-full bg-[#F3F4F6]">
             <div
               className="bg-[#F7931A]"
@@ -378,7 +300,7 @@ export default function DashboardPage() {
               style={{ width: `${normalizedAllocation.alts}%` }}
             />
             <div
-              className="bg-[#16A34A]"
+              className="bg-[#94A3B8]"
               style={{ width: `${normalizedAllocation.stables}%` }}
             />
           </div>
@@ -386,94 +308,119 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-[14px] xl:grid-cols-[1.6fr_1fr]">
-        <article className="flex min-h-full flex-col rounded-[16px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_30%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+        <article className="flex min-h-full flex-col rounded-[16px] border border-[#E9E6F2] bg-white p-4">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3.5">
-              <div className="grid h-[46px] w-[46px] place-items-center rounded-[16px] border border-[rgba(124,58,237,0.14)] bg-[linear-gradient(135deg,rgba(124,58,237,0.14),rgba(124,58,237,0.06))] text-[15px] font-black text-[#6D28D9] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                AI
+              <div className="grid h-[34px] w-[34px] place-items-center rounded-[12px] border border-[rgba(124,58,237,0.14)] bg-[rgba(124,58,237,0.08)] text-[17px] font-black text-[#6D28D9]">
+                ₿
               </div>
-
               <div>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h2 className="m-0 text-[20px] font-semibold tracking-[-0.02em] text-[#14121A]">
-                    AI Daily Market Analysis
+                    BTC Daily Analysis
                   </h2>
                   <span className="text-[13px] text-[#6B6777]">
                     {analysisDate}
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
 
-                <div className="mt-[10px] flex flex-wrap items-center gap-[10px]">
+          <div className="flex flex-1 flex-col justify-between rounded-[18px] border border-[rgba(124,58,237,0.12)] bg-[#FAFAFD] px-6 py-[22px]">
+            <div>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-5">
+                <div>
+                  <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
+                    Stakk Thermometer
+                  </div>
                   <span
-                    className={getSentimentBadgeClass(analysis?.sentiment ?? "")}
+                    className={getThermometerBadgeClass(
+                      thermometer?.tone ?? "undervalued",
+                    )}
                   >
-                    Market Sentiment: {analysis?.sentiment ?? "—"}
+                    {thermometer?.label ??
+                      (analysisUnavailable
+                        ? "Market data unavailable"
+                        : "Loading market data")}
                   </span>
-                  <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
-                    TOTAL: {marketCapLabel}
+                </div>
+
+                <div className="flex min-w-[280px] items-center justify-between gap-3 rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white px-3.5 py-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
+                      Market Structure
+                    </span>
+                    <span className="text-[13px] font-semibold text-[#6B6777]">
+                      Current BTC structure
+                    </span>
+                  </div>
+                  <span className={getTrendBadgeClass(analysis?.marketTrend ?? "")}>
+                    {analysis?.marketTrend ??
+                      (analysisUnavailable ? "Unavailable" : "Loading")}
                   </span>
-                  <span className="inline-flex items-center rounded-full border border-[#E9E6F2] bg-[#FAFAFD] px-3 py-1.5 text-[12px] font-bold text-[#6B6777]">
-                    Phase: {analysis?.phase ?? "—"}
+                </div>
+              </div>
+
+              <p className="max-w-[95%] text-[15px] leading-7 text-[#6B6777]">
+                {thermometer?.marketTrendCopy ??
+                  (analysisUnavailable
+                    ? "Bitcoin market analysis is currently unavailable."
+                    : "Bitcoin market analysis is loading from live BTC data.")}
+              </p>
+
+              <div className="mt-3 rounded-[14px] border border-[rgba(124,58,237,0.12)] bg-white px-3.5 py-3 text-[14px] leading-[1.55] text-[#6B6777]">
+                <strong className="text-[#14121A]">Stakk Insight:</strong>{" "}
+                {thermometer?.stakkInsight ??
+                  (analysisUnavailable
+                    ? "The Stakk signal could not be generated from the latest BTC data."
+                    : "The Stakk signal will appear as soon as BTC market data is available.")}
+              </div>
+            </div>
+
+            <div className="mt-[18px] grid gap-[10px] md:grid-cols-3">
+              <div className="flex min-h-[82px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white p-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
+                  200W MA
+                </div>
+                <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
+                  {thermometer?.movingAverage ??
+                    (analysisUnavailable ? "Unavailable" : "$0")}
+                </div>
+              </div>
+
+              <div className="flex min-h-[82px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white p-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
+                  Distance
+                </div>
+                <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
+                  {thermometer?.distance ??
+                    (analysisUnavailable ? "Unavailable" : "0.0%")}
+                </div>
+              </div>
+
+              <div className="flex min-h-[82px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white p-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
+                  Stakk Signal
+                </div>
+                <div className="mt-2">
+                  <span className={getSignalBadgeClass(thermometer?.signal ?? "")}>
+                    {thermometer?.signal ??
+                      (analysisUnavailable ? "Unavailable" : "Loading")}
                   </span>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-1 flex-col gap-4">
-            <div className="flex min-h-[280px] flex-1 flex-col justify-between rounded-[18px] border border-[rgba(124,58,237,0.12)] bg-[linear-gradient(180deg,rgba(124,58,237,0.05),rgba(124,58,237,0.02))] px-6 py-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-              <div>
-                <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
-                  Market Trend
-                </div>
-                <div className="mb-2 text-[20px] font-black tracking-[-0.02em] text-[#14121A]">
-                  {analysisHeadline}
-                </div>
-                <p className="max-w-[95%] text-[15px] leading-7 text-[#6B6777]">
-                  {analysis?.marketTrend ?? "—"}
-                </p>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#E9E6F2] pt-4">
+              <div className="text-[13px] text-[#6B6777]">
+                Updated <b>{analysisUpdated}</b>
               </div>
-
-              <div className="mt-[18px] grid gap-[10px] md:grid-cols-3">
-                <div className="flex min-h-[84px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white/75 p-3 shadow-[0_6px_18px_rgba(20,18,26,0.03)]">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
-                    Support
-                  </div>
-                  <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.support ?? "$—"}
-                  </div>
-                </div>
-
-                <div className="flex min-h-[84px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white/75 p-3 shadow-[0_6px_18px_rgba(20,18,26,0.03)]">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
-                    Resistance
-                  </div>
-                  <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.resistance ?? "$—"}
-                  </div>
-                </div>
-
-                <div className="flex min-h-[84px] flex-col justify-between rounded-[14px] border border-[rgba(124,58,237,0.10)] bg-white/75 p-3 shadow-[0_6px_18px_rgba(20,18,26,0.03)]">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#6B6777]">
-                    Structure
-                  </div>
-                  <div className="text-[15px] font-black leading-[1.35] text-[#14121A]">
-                    {analysis?.structure ?? "—"}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-center gap-3 border-t border-[#E9E6F2] pt-4">
-            <div className="text-[13px] text-[#6B6777]">
-              Updated <b>{analysisUpdated}</b>
             </div>
           </div>
         </article>
 
-        <article className="rounded-[16px] border border-[#E9E6F2] bg-white p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
+        <article className="rounded-[16px] border border-[#E9E6F2] bg-white p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="m-0 text-[16px] font-semibold tracking-[0.02em] text-[#14121A]">
               Today&apos;s Snapshot
@@ -483,39 +430,76 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SnapshotMetric
-              icon="₿"
-              label="BTC Price"
-              value={btcSnapshotValue}
-              delta={btcSnapshotDelta}
-              deltaTone={(btcPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
-            />
-            <SnapshotMetric
-              icon="◎"
-              label="ETH Price"
-              value={ethSnapshotValue}
-              delta={ethSnapshotDelta}
-              deltaTone={(ethPrice?.change24hPct ?? 0) >= 0 ? "positive" : "negative"}
-            />
-            <SnapshotMetric
-              icon="Σ"
-              label="TOTAL Market Cap"
-              value={totalSnapshotValue}
-              delta={totalSnapshotDelta}
-              deltaTone={
-                (marketGlobal?.totalMarketCap.change24hPct ?? 0) >= 0
-                  ? "positive"
-                  : "negative"
-              }
-            />
-            <SnapshotMetric
-              icon="%"
-              label="BTC Dominance"
-              value={btcDominanceValue}
-              delta={btcDominanceDelta}
-              deltaTone="neutral"
-            />
+          <div className="rounded-[14px] border border-[#E9E6F2] bg-white p-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
+                  <span className="grid h-[22px] w-[22px] place-items-center rounded-[8px] bg-[#F1EAFE] text-[12px] font-black text-[#6D28D9]">
+                    ₿
+                  </span>
+                  <span>BTC Price</span>
+                </div>
+                <div className="text-[22px] font-black text-[#14121A]">
+                  {btcSnapshotValue}
+                </div>
+                <div
+                  className={`text-[12px] ${
+                    (btcPrice?.change24hPct ?? 0) >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {btcSnapshotDelta}
+                </div>
+              </div>
+
+              <div className="h-[72px] w-px bg-[#E9E6F2]" />
+
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
+                  <span className="grid h-[22px] w-[22px] place-items-center rounded-[8px] bg-[#F1EAFE] text-[12px] font-black text-[#6D28D9]">
+                    %
+                  </span>
+                  <span>BTC Dominance</span>
+                </div>
+                <div className="text-[22px] font-black text-[#14121A]">
+                  {btcDominanceValue}
+                </div>
+                <div className="text-[12px] text-[#6B6777]">
+                  {btcDominanceDelta}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[#E9E6F2] bg-[linear-gradient(180deg,#FFFFFF,#FBFAFF)] p-3.5">
+              <div className="flex flex-col gap-1">
+                <div className="text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
+                  Bullish Confirmation
+                </div>
+                <div className="text-[13px] leading-[1.4] text-[#6B6777]">
+                  BTC needs a clean break above the current range high.
+                </div>
+              </div>
+              <span className="inline-flex shrink-0 items-center rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] font-extrabold text-green-700">
+                {analysis?.dashboardSummary.bullishConfirmation ?? "$0 - $0"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[#E9E6F2] bg-[linear-gradient(180deg,#FFFFFF,#FBFAFF)] p-3.5">
+              <div className="flex flex-col gap-1">
+                <div className="text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#6B6777]">
+                  Bearish Confirmation
+                </div>
+                <div className="text-[13px] leading-[1.4] text-[#6B6777]">
+                  BTC would lose bullish structure on a breakdown below support.
+                </div>
+              </div>
+              <span className="inline-flex shrink-0 items-center rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-extrabold text-red-700">
+                {analysis?.dashboardSummary.bearishBreakdown ?? "$0 - $0"}
+              </span>
+            </div>
           </div>
 
           <div className="mt-[14px] flex flex-col gap-[10px] border-t border-[#E9E6F2] pt-[14px]">
@@ -526,18 +510,16 @@ export default function DashboardPage() {
               <div className="text-[12px] text-[#6B6777]">
                 7D:{" "}
                 {fearGreedChange7d === null || fearGreedChange7d === undefined
-                  ? "—"
+                  ? "-"
                   : `${fearGreedChange7d > 0 ? "+" : ""}${fearGreedChange7d}`}
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="text-[22px] font-black text-[#14121A]">
-                {fearGreedScore ?? "—"}
+                {fearGreedScore ?? "-"}
               </div>
-              <span
-                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[12px] font-extrabold ${getFearGreedBadgeClass()}`}
-              >
+              <span className="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.18)] bg-[#F1EAFE] px-3 py-1.5 text-[12px] font-extrabold text-[#6D28D9]">
                 {fearGreedLabel}
               </span>
             </div>
@@ -546,7 +528,7 @@ export default function DashboardPage() {
               <div
                 className="absolute top-[-4px] h-4 w-[2px] rounded-full bg-[#14121A]"
                 style={{
-                  left: `${fearGreedScore ?? 50}%`,
+                  left: markerLeft,
                   transform: "translateX(-50%)",
                 }}
               />
@@ -558,112 +540,6 @@ export default function DashboardPage() {
           </div>
         </article>
       </section>
-
-      <section className="rounded-[16px] border border-[#E9E6F2] bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.08),transparent_28%),linear-gradient(180deg,#FFFFFF,#FCFBFF)] p-4 shadow-[0_10px_30px_rgba(20,18,26,0.06)]">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="grid h-[42px] w-[42px] place-items-center rounded-[14px] bg-[#F1EAFE] text-[16px] font-black text-[#6D28D9] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.10)]">
-              📋
-            </div>
-            <div>
-              <h3 className="m-0 text-[18px] font-semibold tracking-[0.02em] text-[#14121A]">
-                Dashboard Summary
-              </h3>
-              <div className="mt-1 text-[13px] text-[#6B6777]">
-                Key TOTAL levels that define the next market move
-              </div>
-            </div>
-          </div>
-
-          <span className="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.18)] bg-[#F1EAFE] px-3 py-1.5 text-[12px] font-extrabold text-[#6D28D9]">
-            TOTAL Market Cap
-          </span>
-        </div>
-
-        <div className="overflow-hidden rounded-[18px] border border-[#E9E6F2] bg-[linear-gradient(180deg,#FFFFFF,#FCFBFF)] shadow-[0_10px_26px_rgba(20,18,26,0.04)]">
-          <table className="w-full border-separate border-spacing-0">
-            <thead className="hidden md:table-header-group">
-              <tr>
-                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
-                  Scenario
-                </th>
-                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
-                  Level
-                </th>
-                <th className="border-b border-[#E9E6F2] bg-[#FBFAFE] px-[18px] py-[14px] text-left text-[11px] font-black uppercase tracking-[0.08em] text-[#6B6777]">
-                  Market Meaning
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboardRows.map((row, index) => (
-                <tr
-                  key={row.label}
-                  className="block border-b border-[#E9E6F2] last:border-b-0 md:table-row md:border-b-0"
-                >
-                  <td className="block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px]">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`grid h-[34px] w-[34px] place-items-center rounded-[12px] text-[14px] font-black ${
-                          row.tone === "bullish"
-                            ? "bg-green-50 text-green-700"
-                            : row.tone === "bearish"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {row.icon}
-                      </span>
-                      <div className="flex flex-col gap-[2px]">
-                        <span className="text-[14px] font-extrabold text-[#14121A]">
-                          {row.label}
-                        </span>
-                        <span className="text-[12px] text-[#6B6777]">
-                          {row.sublabel}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px]">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[15px] font-black text-[#14121A]">
-                        {row.level}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.12)] bg-[#F6F3FD] px-[8px] py-[5px] text-[11px] font-extrabold tracking-[0.02em] text-[#6D28D9]">
-                        {row.tag}
-                      </span>
-                    </div>
-                  </td>
-                  <td
-                    className={`block px-[14px] py-[10px] align-middle text-[14px] text-[#14121A] md:table-cell md:px-[18px] md:py-[18px] ${
-                      index === dashboardRows.length - 1 ? "border-b-0" : ""
-                    }`}
-                  >
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-[12px] font-extrabold ${getMeaningBadgeClass(
-                        row.tone,
-                      )}`}
-                    >
-                      {row.meaning}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-[14px] flex flex-wrap items-center justify-between gap-3 pt-[2px]">
-          <div className="text-[12px] font-bold text-[#6B6777]">
-            Use these TOTAL levels as the main market roadmap for confirmation,
-            range conditions, and breakdown risk.
-          </div>
-        </div>
-      </section>
     </main>
   );
-}
-
-function clampAllocation(value: number) {
-  return Math.min(100, Math.max(0, value));
 }

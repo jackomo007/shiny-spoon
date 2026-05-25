@@ -44,12 +44,29 @@ type FearGreedData = {
 
 type MarketAnalysisData = {
   analysis: {
-    sentiment: "Bullish" | "Bearish" | "Neutral";
-    marketTrend: string;
-    phase: string;
-    support: string;
-    resistance: string;
-    structure: string;
+    marketTrend: "Bullish" | "Bearish" | "Range Bound";
+    bullishZone: {
+      low: number;
+      high: number;
+    };
+    bearishZone: {
+      low: number;
+      high: number;
+    };
+    thermometer: {
+      label: string;
+      tone: "undervalued" | "discounted" | "fair" | "overextended" | "euphoric";
+      movingAverage: string;
+      distance: string;
+      marketTrendCopy: string;
+      stakkInsight: string;
+      signal:
+        | "Accumulate"
+        | "Undervalued"
+        | "Undervalued/Fair Value"
+        | "Fair Value"
+        | "Scale-Out";
+    };
     dashboardSummary: {
       bullishConfirmation: string;
       neutralRange: string;
@@ -61,9 +78,8 @@ type MarketAnalysisData = {
     refreshBucket: string;
     source: string;
     method: "ai";
-    currentTotalMarketCap: string;
+    currentBtcPrice: string;
     basedOn: string[];
-    isEstimated?: boolean;
   };
 };
 
