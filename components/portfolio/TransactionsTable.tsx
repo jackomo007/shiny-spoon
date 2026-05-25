@@ -116,14 +116,16 @@ export default function TransactionsTable(props: {
                       >
                         {usd(t.gainLossUsd)}
                       </span>
-                      <span
-                        className={cls(
-                          "text-xs",
-                          pnlUp ? "text-emerald-600" : "text-red-600",
-                        )}
-                      >
-                        {pct(t.gainLossPct)}
-                      </span>
+                      {t.gainLossPct != null ? (
+                        <span
+                          className={cls(
+                            "text-xs",
+                            pnlUp ? "text-emerald-600" : "text-red-600",
+                          )}
+                        >
+                          {pct(t.gainLossPct)}
+                        </span>
+                      ) : null}
                     </div>
                   ) : (
                     <span className="text-gray-400">—</span>

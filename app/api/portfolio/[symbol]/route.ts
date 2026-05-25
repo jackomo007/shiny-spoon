@@ -112,10 +112,10 @@ export async function GET(
         });
       } else {
         const avg = qtyHeld > 0 ? costBasisUsd / qtyHeld : 0;
-        const gainLossUsd = (price - avg) * qty - fee;
-        const gainLossPct = avg > 0 ? ((price - avg) / avg) * 100 : null;
+        const realizedGainLossUsd = (price - avg) * qty - fee;
+        const grossSaleValueUsd = totalUsd - fee;
 
-        realizedProfitUsd += gainLossUsd;
+        realizedProfitUsd += realizedGainLossUsd;
 
         const reduceQty = Math.min(qty, qtyHeld);
         qtyHeld -= reduceQty;
@@ -131,12 +131,11 @@ export async function GET(
           executedAt: r.trade_datetime.toISOString(),
           qty,
           priceUsd: price,
-          totalUsd: totalUsd - fee,
-          gainLossUsd: Number.isFinite(gainLossUsd) ? gainLossUsd : null,
-          gainLossPct:
-            gainLossPct != null && Number.isFinite(gainLossPct)
-              ? gainLossPct
-              : null,
+          totalUsd: grossSaleValueUsd,
+          gainLossUsd: Number.isFinite(grossSaleValueUsd)
+            ? grossSaleValueUsd
+            : null,
+          gainLossPct: null,
         });
       }
     }
