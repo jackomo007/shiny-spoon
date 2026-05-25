@@ -18,9 +18,6 @@ export type ThermometerTone =
   | "euphoric";
 export type StakkSignal =
   | "Accumulate"
-  | "Undervalued"
-  | "Undervalued/Fair Value"
-  | "Fair Value"
   | "Scale-Out";
 
 type CoinGeckoGlobalResponse = {
@@ -534,7 +531,7 @@ function getThermometer(distancePct: number): {
         "Bitcoin is trading moderately above its 200W MA, placing price in the Fair Value zone relative to historical cycle positioning. This range has historically represented balanced market conditions where Bitcoin remains in a healthy long-term uptrend without showing signs of major overextension.",
       stakkInsight:
         "We suggest consistently DCA'ing while maintaining balanced exposure and avoiding emotional over-positioning.",
-      signal: "Fair Value",
+      signal: "Accumulate",
     };
   }
 
@@ -546,7 +543,7 @@ function getThermometer(distancePct: number): {
         "Bitcoin is trading slightly above its 200W MA, placing price in the Discounted Value zone based on historical distance from the long-term cycle trend. Historically, this area has represented a deep value accumulation zone where long-term investors have aggressively accumulated Bitcoin.",
       stakkInsight:
         "We suggest continuing to DCA into Bitcoin, but less aggressively than in deeply undervalued conditions.",
-      signal: "Undervalued/Fair Value",
+      signal: "Accumulate",
     };
   }
 
@@ -557,7 +554,7 @@ function getThermometer(distancePct: number): {
       "Bitcoin is trading below its 200W MA, placing price in the Undervalued zone relative to its long-term cycle trend. Historically, periods below the 200W MA have occurred during deep bear market conditions and have represented some of the strongest long-term accumulation opportunities for patient investors.",
     stakkInsight:
       "We suggest aggressively DCA'ing into Bitcoin during this zone, as historically this has been one of the highest long-term value areas of the cycle.",
-    signal: "Undervalued",
+    signal: "Accumulate",
   };
 }
 

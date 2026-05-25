@@ -60,12 +60,7 @@ type MarketAnalysisData = {
       distance: string;
       marketTrendCopy: string;
       stakkInsight: string;
-      signal:
-        | "Accumulate"
-        | "Undervalued"
-        | "Undervalued/Fair Value"
-        | "Fair Value"
-        | "Scale-Out";
+      signal: "Accumulate" | "Scale-Out";
     };
     dashboardSummary: {
       bullishConfirmation: string;

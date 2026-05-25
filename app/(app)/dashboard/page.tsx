@@ -128,9 +128,6 @@ function getSignalBadgeClass(signal: string) {
   if (signal === "Scale-Out") {
     return "inline-flex items-center rounded-[12px] border border-red-700/30 bg-red-700 px-3.5 py-2 text-[13px] font-extrabold text-red-50";
   }
-  if (signal === "Fair Value") {
-    return "inline-flex items-center rounded-[12px] border border-purple-700/30 bg-purple-700 px-3.5 py-2 text-[13px] font-extrabold text-purple-50";
-  }
 
   return "inline-flex items-center rounded-[12px] border border-green-700/30 bg-green-700 px-3.5 py-2 text-[13px] font-extrabold text-green-50";
 }
