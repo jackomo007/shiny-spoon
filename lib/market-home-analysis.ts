@@ -122,6 +122,7 @@ const openai = process.env.OPENAI_API_KEY
   : null;
 
 const MARKET_HOME_ANALYSIS_TAG = "market-home-analysis";
+const MARKET_HOME_ANALYSIS_CACHE_VERSION = "v2";
 const NEW_YORK_TZ = "America/New_York";
 const REFRESH_HOURS = [1, 5, 9, 13, 17, 21] as const;
 const TWO_HUNDRED_WEEKS = 200;
@@ -237,6 +238,60 @@ function formatRange(zone: { low: number; high: number }): string {
   const low = Math.min(zone.low, zone.high);
   const high = Math.max(zone.low, zone.high);
   return `${formatUsd(low)} - ${formatUsd(high)}`;
+}
+
+function roundToNearest(value: number, nearest: number): number {
+  return Math.round(value / nearest) * nearest;
+}
+
+function normalizeAiPriceLevel(value: number, currentPrice: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+
+  let normalized = value;
+  if (currentPrice >= 10_000 && normalized < 1_000) {
+    normalized *= 1_000;
+  }
+
+  const minPlausible = currentPrice * 0.35;
+  const maxPlausible = currentPrice * 1.75;
+  if (normalized < minPlausible || normalized > maxPlausible) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function fallbackPriceZone(
+  currentPrice: number,
+  direction: "bullish" | "bearish",
+): { low: number; high: number } {
+  const lowPct = direction === "bullish" ? 1.01 : 0.97;
+  const highPct = direction === "bullish" ? 1.03 : 0.99;
+  const low = roundToNearest(currentPrice * lowPct, 100);
+  const high = roundToNearest(currentPrice * highPct, 100);
+
+  return {
+    low: Math.min(low, high),
+    high: Math.max(low, high),
+  };
+}
+
+function normalizeAiPriceZone(
+  zone: { low: number; high: number },
+  currentPrice: number,
+  direction: "bullish" | "bearish",
+): { low: number; high: number } {
+  const low = normalizeAiPriceLevel(zone.low, currentPrice);
+  const high = normalizeAiPriceLevel(zone.high, currentPrice);
+
+  if (low === null || high === null) {
+    return fallbackPriceZone(currentPrice, direction);
+  }
+
+  return {
+    low: Math.min(low, high),
+    high: Math.max(low, high),
+  };
 }
 
 function getUtcWeekKey(timestamp: number): string {
@@ -620,6 +675,8 @@ async function maybeGenerateAiAnalysis(
     "- Use the attached BTC daily chart first, then the context above.",
     "- marketTrend must be exactly Bullish, Range Bound, or Bearish.",
     "- bullishZone and bearishZone must be numeric USD prices, not strings.",
+    "- Return full USD price levels like 74000, not shorthand like 74 or 74k.",
+    "- Never return 0 for bullishZone or bearishZone.",
     "- Return only valid JSON.",
   ].join("\n");
 
@@ -677,28 +734,32 @@ function enrichAnalysis(
   context: BitcoinContext,
 ): StructuredMarketAnalysis {
   const thermometer = getThermometer(context.distanceFromMaPct);
-  const nearestLow = Math.min(ai.bearishZone.low, ai.bullishZone.low);
-  const nearestHigh = Math.max(ai.bearishZone.high, ai.bullishZone.high);
+  const bullishZone = normalizeAiPriceZone(
+    ai.bullishZone,
+    context.btcPriceUsd,
+    "bullish",
+  );
+  const bearishZone = normalizeAiPriceZone(
+    ai.bearishZone,
+    context.btcPriceUsd,
+    "bearish",
+  );
+  const nearestLow = Math.min(bearishZone.low, bullishZone.low);
+  const nearestHigh = Math.max(bearishZone.high, bullishZone.high);
 
   return {
     ...ai,
-    bullishZone: {
-      low: Math.min(ai.bullishZone.low, ai.bullishZone.high),
-      high: Math.max(ai.bullishZone.low, ai.bullishZone.high),
-    },
-    bearishZone: {
-      low: Math.min(ai.bearishZone.low, ai.bearishZone.high),
-      high: Math.max(ai.bearishZone.low, ai.bearishZone.high),
-    },
+    bullishZone,
+    bearishZone,
     thermometer: {
       ...thermometer,
       movingAverage: formatUsd(context.twoHundredWeekMa),
       distance: `${context.distanceFromMaPct >= 0 ? "+" : ""}${context.distanceFromMaPct.toFixed(1)}%`,
     },
     dashboardSummary: {
-      bullishConfirmation: formatRange(ai.bullishZone),
+      bullishConfirmation: formatRange(bullishZone),
       neutralRange: formatRange({ low: nearestLow, high: nearestHigh }),
-      bearishBreakdown: formatRange(ai.bearishZone),
+      bearishBreakdown: formatRange(bearishZone),
     },
   };
 }
@@ -738,7 +799,7 @@ async function generateLiveAnalysis(): Promise<AnalysisResponse> {
 function getCachedMarketAnalysis(refreshBucket: string) {
   return unstable_cache(
     generateLiveAnalysis,
-    ["market-home-analysis", refreshBucket],
+    ["market-home-analysis", MARKET_HOME_ANALYSIS_CACHE_VERSION, refreshBucket],
     {
       revalidate: false,
       tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
