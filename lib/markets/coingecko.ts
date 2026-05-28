@@ -246,11 +246,14 @@ type CgSimplePriceResponse = Record<
   }
 >
 
-export async function cgPriceUsdById(id: string): Promise<CgPrice> {
+export async function cgPriceUsdById(
+  id: string,
+  options: { noCache?: boolean } = {},
+): Promise<CgPrice> {
   const coinId = normalizeIdCandidate(id)
 
   const cacheKey = `cg:price:${coinId}`
-  const cached = getCache<CgPrice>(cacheKey)
+  const cached = options.noCache ? null : getCache<CgPrice>(cacheKey)
   if (cached) return cached
 
   const url =
@@ -275,19 +278,22 @@ export async function cgPriceUsdById(id: string): Promise<CgPrice> {
 
   const out: CgPrice = { id: coinId, priceUsd: usd, change24hPct: chg != null ? chg : null }
 
-  setCache(cacheKey, out, 20_000)
+  if (!options.noCache) {
+    setCache(cacheKey, out, 20_000)
+  }
 
   return out
 }
 
 export async function cgPriceUsdByIdSafe(
-  id: string
+  id: string,
+  options: { noCache?: boolean } = {},
 ): Promise<
   | { ok: true; id: string; priceUsd: number; change24hPct: number | null }
   | { ok: false; error: string }
 > {
   try {
-    const p = await cgPriceUsdById(id)
+    const p = await cgPriceUsdById(id, options)
     return { ok: true, id: p.id, priceUsd: p.priceUsd, change24hPct: p.change24hPct }
   } catch (e: unknown) {
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error" }

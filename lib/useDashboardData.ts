@@ -145,12 +145,14 @@ export function useDashboardData(): DashboardData {
           fearGreedRes,
           marketAnalysisRes,
           btcLevelsRes,
+          btcPriceRes,
         ] = await Promise.allSettled([
           fetch("/api/portfolio"),
-          fetch("/api/market/global"),
+          fetch("/api/market/global", { cache: "no-store" }),
           fetch("/api/market/fear-greed"),
-          fetch("/api/market/analysis"),
+          fetch("/api/market/analysis", { cache: "no-store" }),
           fetch("/api/market/btc-levels"),
+          fetch("/api/portfolio/assets/price?id=bitcoin", { cache: "no-store" }),
         ]);
 
         if (cancelled) return;
@@ -189,6 +191,10 @@ export function useDashboardData(): DashboardData {
         let btcPriceData: AssetPriceData | null = null;
         let ethPriceData: AssetPriceData | null = null;
 
+        if (btcPriceRes.status === "fulfilled" && btcPriceRes.value.ok) {
+          btcPriceData = await btcPriceRes.value.json();
+        }
+
         if (portfolioData?.assets) {
           const btcAsset = portfolioData.assets.find(
             (asset) => asset.symbol === "BTC",
@@ -197,7 +203,7 @@ export function useDashboardData(): DashboardData {
             (asset) => asset.symbol === "ETH",
           );
 
-          if (btcAsset) {
+          if (!btcPriceData && btcAsset) {
             btcPriceData = {
               priceUsd: btcAsset.priceUsd,
               change24hPct: btcAsset.change24hPct ?? 0,

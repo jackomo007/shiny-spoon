@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +63,7 @@ async function fetchFearGreedIndex(): Promise<{
     headers: {
       Accept: "application/json",
     },
-    next: { revalidate: 3600 },
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -93,6 +94,16 @@ async function fetchFearGreedIndex(): Promise<{
   };
 }
 
+function getDailyFearGreedBucket(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+function getCachedFearGreedIndex(bucket: string) {
+  return unstable_cache(fetchFearGreedIndex, ["fear-greed-index", bucket], {
+    revalidate: false,
+  })();
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -100,7 +111,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const fearGreed = await fetchFearGreedIndex();
+    const fearGreed = await getCachedFearGreedIndex(getDailyFearGreedBucket());
 
     return NextResponse.json({
       current: {

@@ -122,7 +122,7 @@ const openai = process.env.OPENAI_API_KEY
   : null;
 
 const MARKET_HOME_ANALYSIS_TAG = "market-home-analysis";
-const MARKET_HOME_ANALYSIS_CACHE_VERSION = "v2";
+const MARKET_HOME_ANALYSIS_CACHE_VERSION = "v3";
 const NEW_YORK_TZ = "America/New_York";
 const REFRESH_HOURS = [1, 5, 9, 13, 17, 21] as const;
 const TWO_HUNDRED_WEEKS = 200;
@@ -384,6 +384,13 @@ export function getRefreshBucket(now = new Date()): string {
   }
 
   return `${activeWindow.dateKey}-${String(activeWindow.hour).padStart(2, "0")}00`;
+}
+
+function getDailyRefreshBucket(now = new Date()): string {
+  const parts = getZonedParts(now, NEW_YORK_TZ);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
+    parts.day,
+  ).padStart(2, "0")}`;
 }
 
 async function fetchCurrentBitcoinContext(): Promise<{
@@ -764,9 +771,11 @@ function enrichAnalysis(
   };
 }
 
-async function generateLiveAnalysis(): Promise<AnalysisResponse> {
-  const now = new Date();
-  const refreshBucket = getRefreshBucket(now);
+async function generateDailyAiAnalysis(): Promise<{
+  ai: AiBitcoinAnalysis;
+  generatedAt: string;
+  chartPoints: number;
+}> {
   const { context, series } = await fetchCurrentBitcoinContext();
   const ai = await maybeGenerateAiAnalysis(context, series);
 
@@ -774,14 +783,40 @@ async function generateLiveAnalysis(): Promise<AnalysisResponse> {
     throw new Error("AI Bitcoin analysis unavailable");
   }
 
+  return {
+    ai,
+    generatedAt: new Date().toISOString(),
+    chartPoints: series.length,
+  };
+}
+
+function getCachedDailyAiAnalysis(refreshBucket: string) {
+  return unstable_cache(
+    generateDailyAiAnalysis,
+    ["market-home-analysis-ai", MARKET_HOME_ANALYSIS_CACHE_VERSION, refreshBucket],
+    {
+      revalidate: false,
+      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
+    },
+  )();
+}
+
+async function generateLiveAnalysis(
+  now = new Date(),
+): Promise<AnalysisResponse> {
+  const refreshBucket = getDailyRefreshBucket(now);
+  const [{ context, series }, dailyAi] = await Promise.all([
+    fetchCurrentBitcoinContext(),
+    getCachedDailyAiAnalysis(refreshBucket),
+  ]);
   const generatedAt = new Date().toISOString();
 
   return {
-    analysis: enrichAnalysis(ai, context),
+    analysis: enrichAnalysis(dailyAi.ai, context),
     meta: {
       generatedAt,
       refreshBucket,
-      source: "Bitcoin daily chart + live market data + OpenAI",
+      source: "Live Bitcoin market data + daily Bitcoin chart AI analysis",
       method: "ai",
       currentBtcPrice: formatUsd(context.btcPriceUsd),
       chartPoints: series.length,
@@ -790,30 +825,20 @@ async function generateLiveAnalysis(): Promise<AnalysisResponse> {
         "coingecko_bitcoin_daily_chart",
         "bitcoin_200w_moving_average",
         "alternative_me_fear_greed",
-        "generated_on_request",
+        "daily_ai_chart_analysis",
+        "live_bitcoin_context",
       ],
     },
   };
 }
 
-function getCachedMarketAnalysis(refreshBucket: string) {
-  return unstable_cache(
-    generateLiveAnalysis,
-    ["market-home-analysis", MARKET_HOME_ANALYSIS_CACHE_VERSION, refreshBucket],
-    {
-      revalidate: false,
-      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
-    },
-  )();
-}
-
 export async function getDailyMarketAnalysis(
   now = new Date(),
 ): Promise<AnalysisResponse> {
-  return getCachedMarketAnalysis(getRefreshBucket(now));
+  return generateLiveAnalysis(now);
 }
 
 export async function warmDailyMarketAnalysis(now = new Date()) {
   revalidateTag(MARKET_HOME_ANALYSIS_TAG);
-  return getCachedMarketAnalysis(getRefreshBucket(now));
+  return generateLiveAnalysis(now);
 }

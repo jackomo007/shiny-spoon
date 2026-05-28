@@ -33,7 +33,7 @@ async function fetchGlobalData(): Promise<{
     headers: {
       Accept: "application/json",
     },
-    next: { revalidate: 300 },
+    cache: "no-store",
   });
 
   if (!res.ok) {

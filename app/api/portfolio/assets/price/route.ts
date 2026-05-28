@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const id = (searchParams.get("id") ?? "").trim()
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
 
-  const result = await cgPriceUsdByIdSafe(id)
+  const result = await cgPriceUsdByIdSafe(id, { noCache: true })
 
   return NextResponse.json(result, { status: 200 })
 }
