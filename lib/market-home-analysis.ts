@@ -122,7 +122,6 @@ const openai = process.env.OPENAI_API_KEY
   : null;
 
 const MARKET_HOME_ANALYSIS_TAG = "market-home-analysis";
-const MARKET_HOME_ANALYSIS_CACHE_VERSION = "v3";
 const NEW_YORK_TZ = "America/New_York";
 const REFRESH_HOURS = [1, 5, 9, 13, 17, 21] as const;
 const TWO_HUNDRED_WEEKS = 200;
@@ -240,60 +239,6 @@ function formatRange(zone: { low: number; high: number }): string {
   return `${formatUsd(low)} - ${formatUsd(high)}`;
 }
 
-function roundToNearest(value: number, nearest: number): number {
-  return Math.round(value / nearest) * nearest;
-}
-
-function normalizeAiPriceLevel(value: number, currentPrice: number): number | null {
-  if (!Number.isFinite(value) || value <= 0) return null;
-
-  let normalized = value;
-  if (currentPrice >= 10_000 && normalized < 1_000) {
-    normalized *= 1_000;
-  }
-
-  const minPlausible = currentPrice * 0.35;
-  const maxPlausible = currentPrice * 1.75;
-  if (normalized < minPlausible || normalized > maxPlausible) {
-    return null;
-  }
-
-  return normalized;
-}
-
-function fallbackPriceZone(
-  currentPrice: number,
-  direction: "bullish" | "bearish",
-): { low: number; high: number } {
-  const lowPct = direction === "bullish" ? 1.01 : 0.97;
-  const highPct = direction === "bullish" ? 1.03 : 0.99;
-  const low = roundToNearest(currentPrice * lowPct, 100);
-  const high = roundToNearest(currentPrice * highPct, 100);
-
-  return {
-    low: Math.min(low, high),
-    high: Math.max(low, high),
-  };
-}
-
-function normalizeAiPriceZone(
-  zone: { low: number; high: number },
-  currentPrice: number,
-  direction: "bullish" | "bearish",
-): { low: number; high: number } {
-  const low = normalizeAiPriceLevel(zone.low, currentPrice);
-  const high = normalizeAiPriceLevel(zone.high, currentPrice);
-
-  if (low === null || high === null) {
-    return fallbackPriceZone(currentPrice, direction);
-  }
-
-  return {
-    low: Math.min(low, high),
-    high: Math.max(low, high),
-  };
-}
-
 function getUtcWeekKey(timestamp: number): string {
   const date = new Date(timestamp);
   const day = date.getUTCDay();
@@ -384,13 +329,6 @@ export function getRefreshBucket(now = new Date()): string {
   }
 
   return `${activeWindow.dateKey}-${String(activeWindow.hour).padStart(2, "0")}00`;
-}
-
-function getDailyRefreshBucket(now = new Date()): string {
-  const parts = getZonedParts(now, NEW_YORK_TZ);
-  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
-    parts.day,
-  ).padStart(2, "0")}`;
 }
 
 async function fetchCurrentBitcoinContext(): Promise<{
@@ -682,8 +620,6 @@ async function maybeGenerateAiAnalysis(
     "- Use the attached BTC daily chart first, then the context above.",
     "- marketTrend must be exactly Bullish, Range Bound, or Bearish.",
     "- bullishZone and bearishZone must be numeric USD prices, not strings.",
-    "- Return full USD price levels like 74000, not shorthand like 74 or 74k.",
-    "- Never return 0 for bullishZone or bearishZone.",
     "- Return only valid JSON.",
   ].join("\n");
 
@@ -741,41 +677,35 @@ function enrichAnalysis(
   context: BitcoinContext,
 ): StructuredMarketAnalysis {
   const thermometer = getThermometer(context.distanceFromMaPct);
-  const bullishZone = normalizeAiPriceZone(
-    ai.bullishZone,
-    context.btcPriceUsd,
-    "bullish",
-  );
-  const bearishZone = normalizeAiPriceZone(
-    ai.bearishZone,
-    context.btcPriceUsd,
-    "bearish",
-  );
-  const nearestLow = Math.min(bearishZone.low, bullishZone.low);
-  const nearestHigh = Math.max(bearishZone.high, bullishZone.high);
+  const nearestLow = Math.min(ai.bearishZone.low, ai.bullishZone.low);
+  const nearestHigh = Math.max(ai.bearishZone.high, ai.bullishZone.high);
 
   return {
     ...ai,
-    bullishZone,
-    bearishZone,
+    bullishZone: {
+      low: Math.min(ai.bullishZone.low, ai.bullishZone.high),
+      high: Math.max(ai.bullishZone.low, ai.bullishZone.high),
+    },
+    bearishZone: {
+      low: Math.min(ai.bearishZone.low, ai.bearishZone.high),
+      high: Math.max(ai.bearishZone.low, ai.bearishZone.high),
+    },
     thermometer: {
       ...thermometer,
       movingAverage: formatUsd(context.twoHundredWeekMa),
       distance: `${context.distanceFromMaPct >= 0 ? "+" : ""}${context.distanceFromMaPct.toFixed(1)}%`,
     },
     dashboardSummary: {
-      bullishConfirmation: formatRange(bullishZone),
+      bullishConfirmation: formatRange(ai.bullishZone),
       neutralRange: formatRange({ low: nearestLow, high: nearestHigh }),
-      bearishBreakdown: formatRange(bearishZone),
+      bearishBreakdown: formatRange(ai.bearishZone),
     },
   };
 }
 
-async function generateDailyAiAnalysis(): Promise<{
-  ai: AiBitcoinAnalysis;
-  generatedAt: string;
-  chartPoints: number;
-}> {
+async function generateLiveAnalysis(): Promise<AnalysisResponse> {
+  const now = new Date();
+  const refreshBucket = getRefreshBucket(now);
   const { context, series } = await fetchCurrentBitcoinContext();
   const ai = await maybeGenerateAiAnalysis(context, series);
 
@@ -783,40 +713,14 @@ async function generateDailyAiAnalysis(): Promise<{
     throw new Error("AI Bitcoin analysis unavailable");
   }
 
-  return {
-    ai,
-    generatedAt: new Date().toISOString(),
-    chartPoints: series.length,
-  };
-}
-
-function getCachedDailyAiAnalysis(refreshBucket: string) {
-  return unstable_cache(
-    generateDailyAiAnalysis,
-    ["market-home-analysis-ai", MARKET_HOME_ANALYSIS_CACHE_VERSION, refreshBucket],
-    {
-      revalidate: false,
-      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
-    },
-  )();
-}
-
-async function generateLiveAnalysis(
-  now = new Date(),
-): Promise<AnalysisResponse> {
-  const refreshBucket = getDailyRefreshBucket(now);
-  const [{ context, series }, dailyAi] = await Promise.all([
-    fetchCurrentBitcoinContext(),
-    getCachedDailyAiAnalysis(refreshBucket),
-  ]);
   const generatedAt = new Date().toISOString();
 
   return {
-    analysis: enrichAnalysis(dailyAi.ai, context),
+    analysis: enrichAnalysis(ai, context),
     meta: {
       generatedAt,
       refreshBucket,
-      source: "Live Bitcoin market data + daily Bitcoin chart AI analysis",
+      source: "Bitcoin daily chart + live market data + OpenAI",
       method: "ai",
       currentBtcPrice: formatUsd(context.btcPriceUsd),
       chartPoints: series.length,
@@ -825,20 +729,30 @@ async function generateLiveAnalysis(
         "coingecko_bitcoin_daily_chart",
         "bitcoin_200w_moving_average",
         "alternative_me_fear_greed",
-        "daily_ai_chart_analysis",
-        "live_bitcoin_context",
+        "generated_on_request",
       ],
     },
   };
 }
 
+function getCachedMarketAnalysis(refreshBucket: string) {
+  return unstable_cache(
+    generateLiveAnalysis,
+    ["market-home-analysis", refreshBucket],
+    {
+      revalidate: false,
+      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
+    },
+  )();
+}
+
 export async function getDailyMarketAnalysis(
   now = new Date(),
 ): Promise<AnalysisResponse> {
-  return generateLiveAnalysis(now);
+  return getCachedMarketAnalysis(getRefreshBucket(now));
 }
 
 export async function warmDailyMarketAnalysis(now = new Date()) {
   revalidateTag(MARKET_HOME_ANALYSIS_TAG);
-  return generateLiveAnalysis(now);
+  return getCachedMarketAnalysis(getRefreshBucket(now));
 }

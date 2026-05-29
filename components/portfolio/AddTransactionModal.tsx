@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { MoneyInputStandalone } from "@/components/form/MaskedFields";
 import { cls, usd } from "@/components/portfolio/format";
@@ -46,6 +46,7 @@ export default function AddTransactionModal(props: {
   onDone: () => Promise<void>;
   mode?: "add" | "edit";
   initialTx?: TxRow | null;
+  initialAsset?: AssetPick | null;
 }) {
   const mode = props.mode ?? "add";
   const [step, setStep] = useState<Step>("pick");
@@ -123,6 +124,43 @@ export default function AddTransactionModal(props: {
     });
   }, [props.open, mode, props.initialTx]);
 
+  const loadMarketPrice = useCallback(async (id: string) => {
+    setConfirmDeleteOpen(false);
+
+    const res = await fetch(
+      `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return;
+    const j = (await res.json()) as PriceResponse;
+    const p = Number(j.priceUsd ?? 0);
+    setPriceRaw(p > 0 ? String(p) : "");
+  }, []);
+
+  useEffect(() => {
+    if (!props.open) return;
+    if (mode !== "add") return;
+    if (!props.initialAsset) return;
+
+    const asset = props.initialAsset;
+    setSelected(asset);
+    setStep("form");
+    setSide("buy");
+    setPriceMode("market");
+    setPriceRaw(
+      asset.priceUsd != null && asset.priceUsd > 0
+        ? String(asset.priceUsd)
+        : "",
+    );
+    setAmountRaw("");
+    setTotalRaw("");
+    lastEdited.current = null;
+
+    if (asset.priceUsd == null || asset.priceUsd <= 0) {
+      void loadMarketPrice(asset.id);
+    }
+  }, [loadMarketPrice, props.open, mode, props.initialAsset]);
+
   useEffect(() => {
     if (!props.open) return;
     (async () => {
@@ -181,19 +219,6 @@ export default function AddTransactionModal(props: {
     [priceMode],
   );
 
-  async function loadMarketPrice(id: string) {
-    revealConfirmDeleteIfOpen(false);
-
-    const res = await fetch(
-      `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return;
-    const j = (await res.json()) as PriceResponse;
-    const p = Number(j.priceUsd ?? 0);
-    setPriceRaw(p > 0 ? String(p) : "");
-  }
-
   function revealConfirmDeleteIfOpen(open: boolean) {
     setConfirmDeleteOpen(open);
   }
@@ -221,6 +246,7 @@ export default function AddTransactionModal(props: {
 
   const canDelete =
     mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
+  const hasLockedInitialAsset = mode === "add" && !!props.initialAsset;
 
   async function handleDeleteNow() {
     if (!props.initialTx?.id) return;
@@ -582,20 +608,22 @@ export default function AddTransactionModal(props: {
               the price is automatically retrieved and remains read-only.
             </div>
 
-            <button
-              className="text-xs text-slate-500 underline justify-self-start"
-              onClick={async () => {
-                setStep("pick");
-                setSelected(null);
-                setAmountRaw("");
-                setTotalRaw("");
-                setPriceRaw("");
-                lastEdited.current = null;
-              }}
-              type="button"
-            >
-              Back to asset selection
-            </button>
+            {!hasLockedInitialAsset && (
+              <button
+                className="text-xs text-slate-500 underline justify-self-start"
+                onClick={async () => {
+                  setStep("pick");
+                  setSelected(null);
+                  setAmountRaw("");
+                  setTotalRaw("");
+                  setPriceRaw("");
+                  lastEdited.current = null;
+                }}
+                type="button"
+              >
+                Back to asset selection
+              </button>
+            )}
           </div>
         )}
       </Modal>

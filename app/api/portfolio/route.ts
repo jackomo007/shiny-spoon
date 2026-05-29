@@ -253,27 +253,20 @@ export async function GET() {
         });
       } else {
         const avg = s.qtyHeld > 0 ? s.costBasisUsd / s.qtyHeld : 0;
-        const realizedGainLossUsd = (price - avg) * qty - fee;
         const grossSaleValueUsd = totalUsd - fee;
 
         const reduceQty = Math.min(qty, s.qtyHeld);
 
-        const investedPerUnit =
-          s.qtyHeld > 0 ? s.totalInvestedUsd / s.qtyHeld : 0;
-        const investedReduced = reduceQty * investedPerUnit;
-
         s.qtyHeld -= reduceQty;
         s.costBasisUsd -= reduceQty * avg;
-        s.totalInvestedUsd -= investedReduced;
 
-        if (Number.isFinite(realizedGainLossUsd)) {
-          s.realizedProfitUsd += realizedGainLossUsd;
+        if (Number.isFinite(grossSaleValueUsd)) {
+          s.realizedProfitUsd += grossSaleValueUsd;
         }
 
         if (s.qtyHeld < 1e-10) {
           s.qtyHeld = 0;
           s.costBasisUsd = 0;
-          s.totalInvestedUsd = 0;
         }
 
         txs.push({

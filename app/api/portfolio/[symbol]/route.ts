@@ -112,10 +112,9 @@ export async function GET(
         });
       } else {
         const avg = qtyHeld > 0 ? costBasisUsd / qtyHeld : 0;
-        const realizedGainLossUsd = (price - avg) * qty - fee;
         const grossSaleValueUsd = totalUsd - fee;
 
-        realizedProfitUsd += realizedGainLossUsd;
+        realizedProfitUsd += grossSaleValueUsd;
 
         const reduceQty = Math.min(qty, qtyHeld);
         qtyHeld -= reduceQty;

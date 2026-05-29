@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
@@ -11,6 +12,12 @@ import { getOpenSpotHoldings } from "@/services/portfolio-holdings.service"
 
 export const dynamic = "force-dynamic"
 
+const UpdateBody = z.object({
+  strategyType: z.literal("percentage"),
+  sellPercent: z.number().positive().max(100),
+  gainPercent: z.number().positive().max(10_000),
+})
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -22,6 +29,40 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ data })
   } catch (e) {
     console.error("[GET /api/exit-strategies/[id]] error:", e)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
+}
+
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+
+    const session = await getServerSession(authOptions)
+    if (!session?.accountId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const body = UpdateBody.parse(await req.json())
+
+    const existing = await prisma.exit_strategy.findFirst({
+      where: { id, account_id: session.accountId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+    await prisma.exit_strategy.update({
+      where: { id },
+      data: {
+        strategy_type: body.strategyType,
+        sell_percent: body.sellPercent,
+        gain_percent: body.gainPercent,
+      },
+    })
+
+    const data = await buildExitStrategyDetails(session.accountId, id, 10)
+    return NextResponse.json({ data })
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError)
+      return NextResponse.json({ error: err.flatten() }, { status: 400 })
+    console.error("[PUT /api/exit-strategies/[id]] error:", err)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

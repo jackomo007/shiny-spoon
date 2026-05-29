@@ -65,10 +65,11 @@ export default function DashboardShell({ children }: Props) {
   }, []);
 
   const tradingGroupActive =
-    pathname === "/journal" || pathname === "/strategies";
+    pathname === "/journal" ||
+    pathname === "/strategies" ||
+    pathname === "/trade-analyzer";
 
-  const portfolioGroupActive =
-    pathname === "/portfolio" || pathname === "/exit-strategy";
+  const portfolioGroupActive = pathname === "/portfolio";
 
   const topNavLinkBase =
     "text-sm px-3 py-2 rounded-xl transition-colors whitespace-nowrap";
@@ -126,14 +127,14 @@ export default function DashboardShell({ children }: Props) {
                   Strategy Creator
                 </Link>
                 <Link
-                  href="/exit-strategy"
+                  href="/trade-analyzer"
                   className={`${topNavLinkBase} ${
-                    isTopActive("/exit-strategy")
+                    isTopActive("/trade-analyzer")
                       ? topNavActive
                       : topNavInactive
                   }`}
                 >
-                  Exit Strategy
+                  Trade Analyzer
                 </Link>
                 {isAdmin && (
                   <Link
@@ -298,7 +299,7 @@ export default function DashboardShell({ children }: Props) {
                         <Link
                           href="/exit-strategy"
                           onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                          className={`hidden items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
                             isTopActive("/exit-strategy")
                               ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
                               : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
@@ -308,10 +309,34 @@ export default function DashboardShell({ children }: Props) {
                             <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
                               🚪
                             </span>
-                            <span className="font-medium">Exit Strategy</span>
+                            <span className="font-medium sr-only">
+                              Exit Strategy
+                            </span>
                           </div>
                           <span className="text-xs text-[#9C92D4]">
                             {isTopActive("/exit-strategy") ? "Current" : ""}
+                          </span>
+                        </Link>
+                      </li>
+
+                      <li>
+                        <Link
+                          href="/trade-analyzer"
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/trade-analyzer")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              📈
+                            </span>
+                            <span className="font-medium">Trade Analyzer</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/trade-analyzer") ? "Current" : ""}
                           </span>
                         </Link>
                       </li>
@@ -417,14 +442,7 @@ export default function DashboardShell({ children }: Props) {
                   open={portfolioGroupOpen}
                   setOpen={setPortfolioGroupOpen}
                   isActiveGroup={portfolioGroupActive}
-                >
-                  <NavChildItem
-                    href="/exit-strategy"
-                    label="Exit Strategy Simulator"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                </NavGroup>
+                />
 
                 <NavGroup
                   href="/journal"
@@ -439,6 +457,14 @@ export default function DashboardShell({ children }: Props) {
                   <NavChildItem
                     href="/strategies"
                     label="Strategy Creator"
+                    icon="-"
+                    showText={sidebarExpanded}
+                    pathname={pathname}
+                  />
+                  <NavChildItem
+                    href="/trade-analyzer"
+                    label="Trade Analyzer"
+                    icon="-"
                     showText={sidebarExpanded}
                     pathname={pathname}
                   />
@@ -591,7 +617,7 @@ function NavGroup({
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isActiveGroup: boolean;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const isActive = pathname === href;
 
@@ -620,7 +646,7 @@ function NavGroup({
           </span>
         </Link>
 
-        {showText && (
+        {showText && label !== "Portfolio Manager" && (
           <button
             type="button"
             onClick={(e) => {
@@ -651,7 +677,9 @@ function NavGroup({
         )}
       </div>
 
-      {showText && open && <ul className="mt-1 grid gap-1">{children}</ul>}
+      {showText && open && label !== "Portfolio Manager" && (
+        <ul className="mt-1 grid gap-1">{children}</ul>
+      )}
     </li>
   );
 }
@@ -659,14 +687,18 @@ function NavGroup({
 function NavChildItem({
   href,
   label,
+  icon,
   showText = true,
   pathname,
 }: {
   href: string;
   label: string;
+  icon: string;
   showText?: boolean;
   pathname?: string;
 }) {
+  if (href === "/exit-strategy") return null;
+
   const isActive = pathname === href;
 
   return (
@@ -680,9 +712,7 @@ function NavChildItem({
         href={href}
         title={!showText ? label : undefined}
       >
-        <span className="w-5 text-center flex-shrink-0 text-base leading-none">
-          -
-        </span>
+        <span className="w-5 text-center flex-shrink-0 text-lg">{icon}</span>
         <span className="whitespace-nowrap text-sm font-medium">{label}</span>
       </Link>
     </li>
