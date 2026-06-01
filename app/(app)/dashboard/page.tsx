@@ -57,7 +57,11 @@ function formatGeneratedDate(
       year: "numeric",
     });
     const bucketHour12 =
-      bucket.hour === 0 ? 12 : bucket.hour > 12 ? bucket.hour - 12 : bucket.hour;
+      bucket.hour === 0
+        ? 12
+        : bucket.hour > 12
+          ? bucket.hour - 12
+          : bucket.hour;
     const bucketPeriod = bucket.hour >= 12 ? "PM" : "AM";
     return `- ${formattedDate} ${bucketHour12}:00 ${bucketPeriod} ET`;
   }
@@ -220,7 +224,8 @@ export default function DashboardPage() {
     ? `${fmtDeltaUsd(portfolio24hUsd)} (${fmtDeltaPct(portfolio24hPct)})`
     : "$0 (0.0%)";
   const btcSnapshotValue =
-    analysisMeta?.currentBtcPrice ?? (btcPrice ? fmtUSD(btcPrice.priceUsd) : "$0");
+    analysisMeta?.currentBtcPrice ??
+    (btcPrice ? fmtUSD(btcPrice.priceUsd) : "$0");
   const btcSnapshotDelta = btcPrice
     ? `24H: ${fmtDeltaPct(btcPrice.change24hPct)}`
     : "24H: 0.0%";
@@ -229,6 +234,12 @@ export default function DashboardPage() {
       ? fmtPct(marketGlobal.dominance.btc)
       : "-%";
   const btcDominanceDelta = "24H: -";
+  const bullishConfirmationLabel =
+    analysis?.dashboardSummary.bullishConfirmation ??
+    (analysisUnavailable ? "Unavailable" : "Loading");
+  const bearishConfirmationLabel =
+    analysis?.dashboardSummary.bearishBreakdown ??
+    (analysisUnavailable ? "Unavailable" : "Loading");
   const analysisDate = formatGeneratedDate(
     analysisMeta?.generatedAt,
     analysisMeta?.refreshBucket,
@@ -352,7 +363,9 @@ export default function DashboardPage() {
                       Current BTC structure
                     </span>
                   </div>
-                  <span className={getTrendBadgeClass(analysis?.marketTrend ?? "")}>
+                  <span
+                    className={getTrendBadgeClass(analysis?.marketTrend ?? "")}
+                  >
                     {analysis?.marketTrend ??
                       (analysisUnavailable ? "Unavailable" : "Loading")}
                   </span>
@@ -401,7 +414,9 @@ export default function DashboardPage() {
                   Stakk Signal
                 </div>
                 <div className="mt-2">
-                  <span className={getSignalBadgeClass(thermometer?.signal ?? "")}>
+                  <span
+                    className={getSignalBadgeClass(thermometer?.signal ?? "")}
+                  >
                     {thermometer?.signal ??
                       (analysisUnavailable ? "Unavailable" : "Loading")}
                   </span>
@@ -480,7 +495,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <span className="inline-flex shrink-0 items-center rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] font-extrabold text-green-700">
-                {analysis?.dashboardSummary.bullishConfirmation ?? "$0 - $0"}
+                {bullishConfirmationLabel}
               </span>
             </div>
 
@@ -494,7 +509,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <span className="inline-flex shrink-0 items-center rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-extrabold text-red-700">
-                {analysis?.dashboardSummary.bearishBreakdown ?? "$0 - $0"}
+                {bearishConfirmationLabel}
               </span>
             </div>
           </div>

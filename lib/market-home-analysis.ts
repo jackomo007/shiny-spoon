@@ -16,9 +16,7 @@ export type ThermometerTone =
   | "fair"
   | "overextended"
   | "euphoric";
-export type StakkSignal =
-  | "Accumulate"
-  | "Scale-Out";
+export type StakkSignal = "Accumulate" | "Scale-Out";
 
 type CoinGeckoGlobalResponse = {
   data?: {
@@ -76,6 +74,8 @@ type AiBitcoinAnalysis = {
     high: number;
   };
 };
+
+type PriceZone = AiBitcoinAnalysis["bullishZone"];
 
 export type BitcoinContext = {
   btcPriceUsd: number;
@@ -210,8 +210,8 @@ function normalizeTrend(value: unknown): MarketTrend | unknown {
 }
 
 const priceZoneSchema = z.object({
-  low: z.coerce.number().finite().nonnegative(),
-  high: z.coerce.number().finite().nonnegative(),
+  low: z.coerce.number().finite(),
+  high: z.coerce.number().finite(),
 });
 
 const aiBitcoinAnalysisSchema = z.object({
@@ -237,6 +237,86 @@ function formatRange(zone: { low: number; high: number }): string {
   const low = Math.min(zone.low, zone.high);
   const high = Math.max(zone.low, zone.high);
   return `${formatUsd(low)} - ${formatUsd(high)}`;
+}
+
+function normalizeAiPriceLevel(
+  value: number,
+  currentPrice: number,
+): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+
+  let normalized = value;
+  if (currentPrice >= 10_000 && value < 1_000) {
+    normalized = value * 1_000;
+  }
+
+  const minReasonable = currentPrice * 0.45;
+  const maxReasonable = currentPrice * 1.6;
+
+  if (normalized < minReasonable || normalized > maxReasonable) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function normalizeAiZone(
+  zone: PriceZone,
+  currentPrice: number,
+): PriceZone | null {
+  const low = normalizeAiPriceLevel(zone.low, currentPrice);
+  const high = normalizeAiPriceLevel(zone.high, currentPrice);
+
+  if (low === null || high === null) return null;
+
+  return {
+    low: Math.min(low, high),
+    high: Math.max(low, high),
+  };
+}
+
+function deriveTechnicalZones(currentPrice: number): {
+  bullishZone: PriceZone;
+  bearishZone: PriceZone;
+} {
+  const baseLevel = Math.round(currentPrice / 1_000) * 1_000;
+  const bullishLow = Math.max(baseLevel + 1_000, currentPrice + 500);
+  const bearishHigh = Math.min(baseLevel - 1_000, currentPrice - 500);
+
+  return {
+    bullishZone: {
+      low: Math.round(bullishLow),
+      high: Math.round(bullishLow + 2_000),
+    },
+    bearishZone: {
+      low: Math.round(bearishHigh - 2_000),
+      high: Math.round(bearishHigh),
+    },
+  };
+}
+
+function sanitizeAiAnalysis(
+  ai: AiBitcoinAnalysis,
+  context: BitcoinContext,
+): AiBitcoinAnalysis {
+  const currentPrice = context.btcPriceUsd;
+  const fallback = deriveTechnicalZones(currentPrice);
+  const bullishZone = normalizeAiZone(ai.bullishZone, currentPrice);
+  const bearishZone = normalizeAiZone(ai.bearishZone, currentPrice);
+  const bullishIsUsable =
+    bullishZone !== null &&
+    bullishZone.high > currentPrice &&
+    bullishZone.low >= currentPrice * 0.95;
+  const bearishIsUsable =
+    bearishZone !== null &&
+    bearishZone.low < currentPrice &&
+    bearishZone.high <= currentPrice * 1.05;
+
+  return {
+    ...ai,
+    bullishZone: bullishIsUsable ? bullishZone : fallback.bullishZone,
+    bearishZone: bearishIsUsable ? bearishZone : fallback.bearishZone,
+  };
 }
 
 function getUtcWeekKey(timestamp: number): string {
@@ -344,8 +424,7 @@ async function fetchCurrentBitcoinContext(): Promise<{
     binanceWeeklyRes,
     globalRes,
     fearGreedRes,
-  ] =
-    await Promise.allSettled([
+  ] = await Promise.allSettled([
     coinGeckoFetch(
       `${cgBase}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true`,
     ),
@@ -355,9 +434,7 @@ async function fetchCurrentBitcoinContext(): Promise<{
     coinGeckoFetch(
       `${cgBase}/coins/bitcoin/market_chart?vs_currency=usd&days=max`,
     ),
-    binanceFetch(
-      "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
-    ),
+    binanceFetch("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"),
     binanceFetch(
       "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1w&limit=200",
     ),
@@ -430,7 +507,7 @@ async function fetchCurrentBitcoinContext(): Promise<{
       ? price.bitcoin.usd
       : Number.isFinite(binancePrice) && binancePrice > 0
         ? binancePrice
-      : latestChartPrice;
+        : latestChartPrice;
 
   if (!Number.isFinite(btcPriceUsd) || !btcPriceUsd || btcPriceUsd <= 0) {
     throw new Error("Bitcoin price unavailable");
@@ -481,7 +558,7 @@ async function fetchCurrentBitcoinContext(): Promise<{
           ? price.bitcoin.usd_24h_change
           : previousChartPrice && previousChartPrice > 0
             ? ((btcPriceUsd - previousChartPrice) / previousChartPrice) * 100
-          : 0,
+            : 0,
       btcDominance,
       twoHundredWeekMa,
       distanceFromMaPct,
@@ -592,12 +669,12 @@ async function maybeGenerateAiAnalysis(
     "{",
     '  "marketTrend": "(only 3 options, Bearish, Range Bound or Bullish on the daily)",',
     '  "bullishZone": {',
-    '    "low": 0,',
-    '    "high": 0',
+    '    "low": 74000,',
+    '    "high": 76000',
     "  },",
     '  "bearishZone": {',
-    '    "low": 0,',
-    '    "high": 0',
+    '    "low": 71000,',
+    '    "high": 73000',
     "  }",
     "}",
     "",
@@ -619,7 +696,8 @@ async function maybeGenerateAiAnalysis(
     "Rules:",
     "- Use the attached BTC daily chart first, then the context above.",
     "- marketTrend must be exactly Bullish, Range Bound, or Bearish.",
-    "- bullishZone and bearishZone must be numeric USD prices, not strings.",
+    "- bullishZone and bearishZone must be full numeric USD prices, not strings or abbreviated values.",
+    "- Never return 0 for any price level.",
     "- Return only valid JSON.",
   ].join("\n");
 
@@ -652,7 +730,8 @@ async function maybeGenerateAiAnalysis(
       return message.parsed;
     }
 
-    const raw = typeof message?.content === "string" ? message.content.trim() : "";
+    const raw =
+      typeof message?.content === "string" ? message.content.trim() : "";
     const parsed = raw ? parseAiPayload(raw) : null;
 
     if (!parsed) {
@@ -676,19 +755,38 @@ function enrichAnalysis(
   ai: AiBitcoinAnalysis,
   context: BitcoinContext,
 ): StructuredMarketAnalysis {
+  const normalizedAi = sanitizeAiAnalysis(ai, context);
   const thermometer = getThermometer(context.distanceFromMaPct);
-  const nearestLow = Math.min(ai.bearishZone.low, ai.bullishZone.low);
-  const nearestHigh = Math.max(ai.bearishZone.high, ai.bullishZone.high);
+  const nearestLow = Math.min(
+    normalizedAi.bearishZone.low,
+    normalizedAi.bullishZone.low,
+  );
+  const nearestHigh = Math.max(
+    normalizedAi.bearishZone.high,
+    normalizedAi.bullishZone.high,
+  );
 
   return {
-    ...ai,
+    ...normalizedAi,
     bullishZone: {
-      low: Math.min(ai.bullishZone.low, ai.bullishZone.high),
-      high: Math.max(ai.bullishZone.low, ai.bullishZone.high),
+      low: Math.min(
+        normalizedAi.bullishZone.low,
+        normalizedAi.bullishZone.high,
+      ),
+      high: Math.max(
+        normalizedAi.bullishZone.low,
+        normalizedAi.bullishZone.high,
+      ),
     },
     bearishZone: {
-      low: Math.min(ai.bearishZone.low, ai.bearishZone.high),
-      high: Math.max(ai.bearishZone.low, ai.bearishZone.high),
+      low: Math.min(
+        normalizedAi.bearishZone.low,
+        normalizedAi.bearishZone.high,
+      ),
+      high: Math.max(
+        normalizedAi.bearishZone.low,
+        normalizedAi.bearishZone.high,
+      ),
     },
     thermometer: {
       ...thermometer,
@@ -696,9 +794,9 @@ function enrichAnalysis(
       distance: `${context.distanceFromMaPct >= 0 ? "+" : ""}${context.distanceFromMaPct.toFixed(1)}%`,
     },
     dashboardSummary: {
-      bullishConfirmation: formatRange(ai.bullishZone),
+      bullishConfirmation: formatRange(normalizedAi.bullishZone),
       neutralRange: formatRange({ low: nearestLow, high: nearestHigh }),
-      bearishBreakdown: formatRange(ai.bearishZone),
+      bearishBreakdown: formatRange(normalizedAi.bearishZone),
     },
   };
 }
@@ -741,7 +839,10 @@ function getCachedMarketAnalysis(refreshBucket: string) {
     ["market-home-analysis", refreshBucket],
     {
       revalidate: false,
-      tags: [MARKET_HOME_ANALYSIS_TAG, `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`],
+      tags: [
+        MARKET_HOME_ANALYSIS_TAG,
+        `${MARKET_HOME_ANALYSIS_TAG}:${refreshBucket}`,
+      ],
     },
   )();
 }
