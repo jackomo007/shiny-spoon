@@ -62,6 +62,7 @@ export default function AddTransactionModal(props: {
 
   const [amountRaw, setAmountRaw] = useState<string>("");
   const [totalRaw, setTotalRaw] = useState<string>("");
+  const [feeRaw, setFeeRaw] = useState<string>("0");
   const [busy, setBusy] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -90,6 +91,7 @@ export default function AddTransactionModal(props: {
 
     setAmountRaw("");
     setTotalRaw("");
+    setFeeRaw("0");
     setBusy(false);
 
     setConfirmDeleteOpen(false);
@@ -114,6 +116,7 @@ export default function AddTransactionModal(props: {
     setPriceRaw(String(t.priceUsd ?? ""));
     setAmountRaw(String(Math.abs(t.qty ?? 0)));
     setTotalRaw(String(Math.abs(t.totalUsd ?? 0)));
+    setFeeRaw(String(t.feeUsd ?? 0));
     lastEdited.current = "amount";
 
     setSelected({
@@ -154,6 +157,7 @@ export default function AddTransactionModal(props: {
     );
     setAmountRaw("");
     setTotalRaw("");
+    setFeeRaw("0");
     lastEdited.current = null;
 
     if (asset.priceUsd == null || asset.priceUsd <= 0) {
@@ -242,7 +246,11 @@ export default function AddTransactionModal(props: {
   }, [priceUsd, selected, amountRaw, totalRaw]);
 
   const canSave =
-    !!selected && priceUsd > 0 && (!!amountRaw || !!totalRaw) && !busy;
+    !!selected &&
+    priceUsd > 0 &&
+    (!!amountRaw || !!totalRaw) &&
+    numFromRaw(feeRaw) >= 0 &&
+    !busy;
 
   const canDelete =
     mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
@@ -336,6 +344,7 @@ export default function AddTransactionModal(props: {
                       setBusy(true);
                       const amount = numFromRaw(amountRaw);
                       const total = numFromRaw(totalRaw);
+                      const fee = numFromRaw(feeRaw);
 
                       const payload: {
                         asset: { id: string; symbol: string; name: string };
@@ -363,7 +372,7 @@ export default function AddTransactionModal(props: {
                           lastEdited.current === "amount"
                             ? undefined
                             : total || undefined,
-                        feeUsd: 0,
+                        feeUsd: fee,
                         executedAt: new Date().toISOString(),
                       };
 
@@ -383,7 +392,7 @@ export default function AddTransactionModal(props: {
                                 side,
                                 qty: amount,
                                 priceUsd: priceUsd,
-                                feeUsd: 0,
+                                feeUsd: fee,
                                 executedAt: props.initialTx?.executedAt,
                               }
                             : payload,
@@ -448,6 +457,7 @@ export default function AddTransactionModal(props: {
                         setPriceRaw("");
                         setAmountRaw("");
                         setTotalRaw("");
+                        setFeeRaw("0");
                         lastEdited.current = null;
                         await loadMarketPrice(a.id);
                       }}
@@ -488,6 +498,7 @@ export default function AddTransactionModal(props: {
                         setPriceRaw("");
                         setAmountRaw("");
                         setTotalRaw("");
+                        setFeeRaw("0");
                         lastEdited.current = null;
                         await loadMarketPrice(a.id);
                       }}
@@ -603,6 +614,24 @@ export default function AddTransactionModal(props: {
               </label>
             </div>
 
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-3 text-sm font-semibold text-gray-700">
+                Fees
+              </div>
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">
+                  Trading Fee <span className="text-red-600">*</span>
+                </span>
+                <MoneyInputStandalone
+                  valueRaw={feeRaw}
+                  onChangeRaw={setFeeRaw}
+                  maxDecimals={3}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2"
+                />
+              </label>
+            </div>
+
             <div className="text-xs text-gray-500">
               Amount and Total are calculated from each other. In Market Price,
               the price is automatically retrieved and remains read-only.
@@ -616,6 +645,7 @@ export default function AddTransactionModal(props: {
                   setSelected(null);
                   setAmountRaw("");
                   setTotalRaw("");
+                  setFeeRaw("0");
                   setPriceRaw("");
                   lastEdited.current = null;
                 }}

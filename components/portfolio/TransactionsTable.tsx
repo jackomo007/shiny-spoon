@@ -16,6 +16,7 @@ export type TxRow = {
   qty: number;
   priceUsd: number;
   totalUsd: number;
+  feeUsd?: number | null;
   gainLossUsd: number | null;
   gainLossPct: number | null;
 };

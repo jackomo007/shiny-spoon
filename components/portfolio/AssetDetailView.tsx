@@ -43,6 +43,7 @@ type AssetDetail = {
     qty: number;
     priceUsd: number;
     totalUsd: number;
+    feeUsd: number;
     gainLossUsd: number | null;
     gainLossPct: number | null;
   }>;
@@ -273,6 +274,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
       qty: tx.qty,
       priceUsd: tx.priceUsd,
       totalUsd: tx.totalUsd,
+      feeUsd: tx.feeUsd,
       gainLossUsd: tx.gainLossUsd,
       gainLossPct: tx.gainLossPct,
     };

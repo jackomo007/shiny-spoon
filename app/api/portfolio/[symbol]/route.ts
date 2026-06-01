@@ -78,6 +78,7 @@ export async function GET(
       qty: number;
       priceUsd: number;
       totalUsd: number;
+      feeUsd: number;
       gainLossUsd: number | null;
       gainLossPct: number | null;
     }> = [];
@@ -107,6 +108,7 @@ export async function GET(
           qty,
           priceUsd: price,
           totalUsd: totalUsd + fee,
+          feeUsd: fee,
           gainLossUsd: null,
           gainLossPct: null,
         });
@@ -131,6 +133,7 @@ export async function GET(
           qty,
           priceUsd: price,
           totalUsd: grossSaleValueUsd,
+          feeUsd: fee,
           gainLossUsd: Number.isFinite(grossSaleValueUsd)
             ? grossSaleValueUsd
             : null,
