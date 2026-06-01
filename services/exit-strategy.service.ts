@@ -260,6 +260,9 @@ export async function buildExitStrategyDetails(
     for (let i = 1; i <= maxSteps; i++) {
       const gain = round(gainStep * i, 2);
       const target = entryPriceUsd > 0 ? entryPriceUsd * (1 + gain / 100) : 0;
+      if (asset.currentPriceUsd > 0 && target > asset.currentPriceUsd * 6) {
+        break;
+      }
       const plannedQty = remaining > 0 ? remaining * sellPct : 0;
       const exec = execByGain.get(gain);
       const isExecuted = !!exec;

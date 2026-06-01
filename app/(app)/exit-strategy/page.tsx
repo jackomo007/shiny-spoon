@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import AssetMultiSelect, {
   type CoinSelection,
@@ -74,9 +74,25 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-function ScaleOutPlanTable({ rows }: { rows: ExitStrategyStepRow[] }) {
+function ScaleOutPlanTable({
+  rows,
+  onLoadMore,
+}: {
+  rows: ExitStrategyStepRow[];
+  onLoadMore?: () => void;
+}) {
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!onLoadMore) return;
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom <= 24) onLoadMore();
+  }
+
   return (
-    <div className="rounded-xl border bg-white overflow-x-auto overflow-y-auto max-h-[45vh]">
+    <div
+      className="rounded-xl border bg-white overflow-x-auto overflow-y-auto max-h-[45vh]"
+      onScroll={handleScroll}
+    >
       <table className="w-full text-sm">
         <thead className="border-b bg-gray-50 sticky top-0 z-10">
           <tr className="text-left text-gray-600">
@@ -379,6 +395,7 @@ export default function ExitStrategyPage() {
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
   const [simResults, setSimResults] = useState<CoinSimResult[] | null>(null);
+  const [simStepCount, setSimStepCount] = useState(6);
 
   const canSimulate = useMemo(() => {
     if (strategyType !== "percentage") return false;
@@ -436,6 +453,7 @@ export default function ExitStrategyPage() {
       setSimResults(null);
       setSimLoading(false);
       setCoinSelection([]);
+      setSimStepCount(6);
     }
   }, [addOpen]);
 
@@ -526,21 +544,20 @@ export default function ExitStrategyPage() {
     }
   };
 
-  const simulatePlan = async () => {
+  const simulatePlan = useCallback(async () => {
     setSimLoading(true);
     setSimError(null);
-    setSimResults(null);
 
     try {
       const body =
         coinSelection === "all"
-          ? { allCoins: true, sellPercent, gainPercent, maxSteps: 10 }
+          ? { allCoins: true, sellPercent, gainPercent, maxSteps: simStepCount }
           : {
               allCoins: false,
               coinSymbols: coinSelection,
               sellPercent,
               gainPercent,
-              maxSteps: 10,
+              maxSteps: simStepCount,
             };
 
       const res = await fetch("/api/exit-strategies/simulate", {
@@ -563,7 +580,12 @@ export default function ExitStrategyPage() {
     } finally {
       setSimLoading(false);
     }
-  };
+  }, [coinSelection, gainPercent, sellPercent, simStepCount]);
+
+  useEffect(() => {
+    if (!addOpen || !canSimulate) return;
+    void simulatePlan();
+  }, [addOpen, canSimulate, simulatePlan]);
 
   const requestDelete = (id: string, label: string) => {
     setError(null);
@@ -677,15 +699,6 @@ export default function ExitStrategyPage() {
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-                onClick={() => void simulatePlan()}
-                type="button"
-                disabled={simLoading || !canSimulate}
-                title="Preview the plan without saving"
-              >
-                {simLoading ? "Simulating…" : "Simulate Scale-Out Plan"}
-              </button>
-              <button
                 className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50"
                 onClick={() => setAddOpen(false)}
                 type="button"
@@ -714,7 +727,11 @@ export default function ExitStrategyPage() {
                 <div className="text-xs text-gray-500">Assets</div>
                 <AssetMultiSelect
                   value={coinSelection}
-                  onChange={setCoinSelection}
+                  onChange={(value) => {
+                    setCoinSelection(value);
+                    setSimResults(null);
+                    setSimStepCount(6);
+                  }}
                   searchEndpoint="/api/portfolio/symbol"
                   placeholder="Search assets in your portfolio…"
                 />
@@ -739,7 +756,11 @@ export default function ExitStrategyPage() {
                   type="number"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   value={sellPercent}
-                  onChange={(e) => setSellPercent(Number(e.target.value))}
+                  onChange={(e) => {
+                    setSellPercent(Number(e.target.value));
+                    setSimResults(null);
+                    setSimStepCount(6);
+                  }}
                   min={0}
                   max={100}
                   step={0.01}
@@ -752,7 +773,11 @@ export default function ExitStrategyPage() {
                   type="number"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   value={gainPercent}
-                  onChange={(e) => setGainPercent(Number(e.target.value))}
+                  onChange={(e) => {
+                    setGainPercent(Number(e.target.value));
+                    setSimResults(null);
+                    setSimStepCount(6);
+                  }}
                   min={0}
                   step={0.01}
                 />
@@ -764,6 +789,10 @@ export default function ExitStrategyPage() {
                 </div>
               )}
 
+              {simLoading && (
+                <div className="text-sm text-gray-500">Loading scale-out plan…</div>
+              )}
+
               {simResults && simResults.length > 0 && (
                 <div className="mt-2 grid gap-4">
                   {simResults.map((result) => (
@@ -773,7 +802,14 @@ export default function ExitStrategyPage() {
                           {result.coinSymbol}
                         </div>
                       )}
-                      <ScaleOutPlanTable rows={result.rows} />
+                      <ScaleOutPlanTable
+                        rows={result.rows}
+                        onLoadMore={
+                          result.rows.length === simStepCount
+                            ? () => setSimStepCount((count) => count + 6)
+                            : undefined
+                        }
+                      />
                     </div>
                   ))}
                 </div>

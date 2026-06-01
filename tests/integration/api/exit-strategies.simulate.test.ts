@@ -4,10 +4,12 @@ const {
   getServerSessionMock,
   getOpenSpotHoldingMock,
   getOpenSpotHoldingsMock,
+  resolveCurrentPriceUsdMock,
 } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   getOpenSpotHoldingMock: vi.fn(),
   getOpenSpotHoldingsMock: vi.fn(),
+  resolveCurrentPriceUsdMock: vi.fn(),
 }))
 
 vi.mock("next-auth", () => ({
@@ -23,6 +25,10 @@ vi.mock("@/services/portfolio-holdings.service", () => ({
   getOpenSpotHoldings: getOpenSpotHoldingsMock,
 }))
 
+vi.mock("@/lib/current-price", () => ({
+  resolveCurrentPriceUsd: resolveCurrentPriceUsdMock,
+}))
+
 import { POST } from "@/app/api/exit-strategies/simulate/route"
 
 describe("POST /api/exit-strategies/simulate", () => {
@@ -30,6 +36,12 @@ describe("POST /api/exit-strategies/simulate", () => {
     getServerSessionMock.mockReset()
     getOpenSpotHoldingMock.mockReset()
     getOpenSpotHoldingsMock.mockReset()
+    resolveCurrentPriceUsdMock.mockReset()
+    resolveCurrentPriceUsdMock.mockResolvedValue({
+      price: 1_000,
+      source: "avg_entry",
+      isEstimated: true,
+    })
   })
 
   it("returns 401 when there is no active account in session", async () => {

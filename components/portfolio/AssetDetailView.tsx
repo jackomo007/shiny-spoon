@@ -87,13 +87,6 @@ type ExitStrategyStepRow = {
   cumulativeRealizedProfitUsd: number;
 };
 
-type CoinSimResult = {
-  coinSymbol: string;
-  qtyOpen: number;
-  entryPriceUsd: number;
-  rows: ExitStrategyStepRow[];
-};
-
 const DEFAULT_SELL_PERCENT = 25;
 const DEFAULT_GAIN_PERCENT = 30;
 
@@ -117,17 +110,21 @@ function buildSuggestedRows(
   avgEntryPrice: number,
   sellPercent: number,
   gainPercent: number,
+  currentPriceUsd: number,
   maxSteps = 6,
 ): ExitStrategyStepRow[] {
   let remaining = qtyOpen;
   let cumulative = 0;
   const sellPct = sellPercent / 100;
+  const maxTargetPrice = currentPriceUsd > 0 ? currentPriceUsd * 6 : Infinity;
 
   return Array.from({ length: maxSteps }).flatMap((_, i) => {
     if (remaining <= 0) return [];
 
     const gain = round(gainPercent * (i + 1), 2);
     const target = avgEntryPrice > 0 ? avgEntryPrice * (1 + gain / 100) : 0;
+    if (target > maxTargetPrice) return [];
+
     const plannedQty = remaining * sellPct;
     const proceeds = plannedQty * target;
     const profit = plannedQty * (target - avgEntryPrice);
@@ -153,12 +150,21 @@ function buildSuggestedRows(
 function ScaleOutPlanList({
   rows,
   symbol,
+  onLoadMore,
 }: {
   rows: ExitStrategyStepRow[];
   symbol: string;
+  onLoadMore?: () => void;
 }) {
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!onLoadMore) return;
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom <= 24) onLoadMore();
+  }
+
   return (
-    <div className="max-h-[332px] overflow-y-auto pr-1">
+    <div className="max-h-[332px] overflow-y-auto pr-1" onScroll={handleScroll}>
       <div className="grid gap-2.5">
         {rows.map((row) => (
           <div
@@ -170,7 +176,7 @@ function ScaleOutPlanList({
             </div>
             <div>
               <div className="text-[10px] font-bold text-slate-600">
-                Next Scale Out
+                Scale Out
               </div>
               <div className="text-lg font-bold leading-tight tracking-normal text-slate-950">
                 {usd(row.targetPriceUsd)}
@@ -212,9 +218,9 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
   const [sellPercent, setSellPercent] = useState(DEFAULT_SELL_PERCENT);
   const [gainPercent, setGainPercent] = useState(DEFAULT_GAIN_PERCENT);
   const [savingStrategy, setSavingStrategy] = useState(false);
-  const [simLoading, setSimLoading] = useState(false);
-  const [simError, setSimError] = useState<string | null>(null);
-  const [simRows, setSimRows] = useState<ExitStrategyStepRow[] | null>(null);
+  const [startingQuantity, setStartingQuantity] = useState(0);
+  const [planStepCount, setPlanStepCount] = useState(6);
+  const [modalPlanStepCount, setModalPlanStepCount] = useState(6);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -308,6 +314,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
   const change24Up = (data.metrics.change24h.pct ?? 0) >= 0;
   const totalProfitUp = data.metrics.totalProfit.usd >= 0;
   const unrealizedUp = data.metrics.unrealizedProfit >= 0;
+  const realizedUp = data.metrics.realizedProfit >= 0;
 
   function badgeModeForTx(
     tx: AssetDetail["transactions"][0],
@@ -336,53 +343,29 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
     data.metrics.avgBuyPrice,
     activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT,
     activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT,
+    data.metrics.currentPrice,
+    planStepCount,
   );
+  const canLoadMorePlanRows = planRows.length === planStepCount;
+
+  const modalPlanRows = buildSuggestedRows(
+    startingQuantity,
+    data.metrics.avgBuyPrice,
+    sellPercent,
+    gainPercent,
+    data.metrics.currentPrice,
+    modalPlanStepCount,
+  );
+  const canLoadMoreModalPlanRows = modalPlanRows.length === modalPlanStepCount;
 
   function openStrategyModal() {
+    if (!data) return;
     setSellPercent(activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT);
     setGainPercent(activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT);
+    setStartingQuantity(data.balance.quantity);
+    setModalPlanStepCount(6);
     setStrategyError(null);
-    setSimError(null);
-    setSimRows(null);
     setStrategyModalOpen(true);
-  }
-
-  async function simulateStrategy() {
-    setSimLoading(true);
-    setSimError(null);
-    setSimRows(null);
-
-    try {
-      const res = await fetch("/api/exit-strategies/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          allCoins: false,
-          coinSymbols: [symbol],
-          sellPercent,
-          gainPercent,
-          maxSteps: 6,
-        }),
-      });
-
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as {
-          error?: unknown;
-        } | null;
-        throw new Error(
-          typeof j?.error === "string" ? j.error : "Failed to simulate",
-        );
-      }
-
-      const json = (await res.json()) as {
-        data: { results: CoinSimResult[] };
-      };
-      setSimRows(json.data.results[0]?.rows ?? []);
-    } catch (e) {
-      setSimError(e instanceof Error ? e.message : "Failed to simulate");
-    } finally {
-      setSimLoading(false);
-    }
   }
 
   async function saveStrategy() {
@@ -491,7 +474,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <div className="mb-1.5 text-[11px] font-bold text-slate-400">
-                  24h Change
+                  Market Price
                 </div>
                 <div
                   className={cls(
@@ -499,7 +482,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                     change24Up ? "text-emerald-600" : "text-red-600",
                   )}
                 >
-                  {usd(data.metrics.change24h.usd)}
+                  {usd(data.metrics.currentPrice)}
                 </div>
                 <div
                   className={cls(
@@ -540,7 +523,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                 <div
                   className={cls(
                     "text-[15px] font-bold",
-                    unrealizedUp ? "text-emerald-600" : "text-red-600",
+                    unrealizedUp ? "text-orange-500" : "text-red-600",
                   )}
                 >
                   {usd(data.metrics.unrealizedProfit)}
@@ -551,7 +534,12 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                 <div className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-400">
                   Realised Profit <span className="text-slate-300">ⓘ</span>
                 </div>
-                <div className="text-[15px] font-bold">
+                <div
+                  className={cls(
+                    "text-[15px] font-bold",
+                    realizedUp ? "text-emerald-600" : "text-red-600",
+                  )}
+                >
                   {usd(data.metrics.realizedProfit)}
                 </div>
               </div>
@@ -616,7 +604,15 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
               </div>
             ) : (
               <>
-                <ScaleOutPlanList rows={planRows} symbol={symbol} />
+                <ScaleOutPlanList
+                  rows={planRows}
+                  symbol={symbol}
+                  onLoadMore={
+                    canLoadMorePlanRows
+                      ? () => setPlanStepCount((count) => count + 6)
+                      : undefined
+                  }
+                />
                 <div className="mt-2.5 text-[11px] leading-relaxed text-slate-400">
                   Scale Out prices are calculated based on your average entry
                   price.
@@ -760,18 +756,11 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
       {strategyModalOpen && (
         <Modal
           open
+          widthClass="max-w-5xl"
           title="Add Exit Strategy"
           onClose={() => (savingStrategy ? null : setStrategyModalOpen(false))}
           footer={
             <div className="flex items-center justify-end gap-3">
-              <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-                onClick={() => void simulateStrategy()}
-                type="button"
-                disabled={savingStrategy || simLoading}
-              >
-                {simLoading ? "Simulating..." : "Simulate Scale-Out Plan"}
-              </button>
               <button
                 className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
                 onClick={() => setStrategyModalOpen(false)}
@@ -795,12 +784,6 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
             {strategyError && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {strategyError}
-              </div>
-            )}
-
-            {simError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {simError}
               </div>
             )}
 
@@ -833,7 +816,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   value={sellPercent}
                   onChange={(e) => {
                     setSellPercent(Number(e.target.value));
-                    setSimRows(null);
+                    setModalPlanStepCount(6);
                   }}
                   min={0}
                   max={100}
@@ -849,25 +832,39 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
                   value={gainPercent}
                   onChange={(e) => {
                     setGainPercent(Number(e.target.value));
-                    setSimRows(null);
+                    setModalPlanStepCount(6);
                   }}
                   min={0}
                   step={0.01}
                 />
               </label>
+
+              <label className="grid gap-1">
+                <span className="text-xs text-gray-500">
+                  Starting Quantity
+                </span>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={startingQuantity}
+                  onChange={(e) => {
+                    setStartingQuantity(Number(e.target.value));
+                    setModalPlanStepCount(6);
+                  }}
+                  min={0}
+                  step={0.00000001}
+                />
+              </label>
             </div>
 
             <ScaleOutPlanList
-              rows={
-                simRows ??
-                buildSuggestedRows(
-                  data.balance.quantity,
-                  data.metrics.avgBuyPrice,
-                  sellPercent,
-                  gainPercent,
-                )
-              }
+              rows={modalPlanRows}
               symbol={symbol}
+              onLoadMore={
+                canLoadMoreModalPlanRows
+                  ? () => setModalPlanStepCount((count) => count + 6)
+                  : undefined
+              }
             />
           </div>
         </Modal>

@@ -6,6 +6,7 @@ import {
   getOpenSpotHolding,
   getOpenSpotHoldings,
 } from "@/services/portfolio-holdings.service";
+import { resolveCurrentPriceUsd } from "@/lib/current-price";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ function simulateCoin(
   coin: string,
   qtyOpen: number,
   entryPriceUsd: number,
+  currentPriceUsd: number,
   sellPct: number,
   gainStep: number,
   maxSteps: number,
@@ -64,6 +66,8 @@ function simulateCoin(
   for (let i = 1; i <= maxSteps; i++) {
     const gain = round(gainStep * i, 2);
     const target = entryPriceUsd > 0 ? entryPriceUsd * (1 + gain / 100) : 0;
+    if (currentPriceUsd > 0 && target > currentPriceUsd * 6) break;
+
     const qtySoldNow = remaining > 0 ? remaining * sellPct : 0;
     const proceeds = qtySoldNow * target;
     const profit = qtySoldNow * (target - entryPriceUsd);
@@ -129,15 +133,24 @@ export async function POST(req: Request) {
             ),
           );
 
-    const results: CoinSimResult[] = holdings.map((h) =>
-      simulateCoin(
-        h.symbol,
-        h.qty,
-        h.avgEntryPriceUsd,
-        sellPct,
-        gainStep,
-        maxSteps,
-      ),
+    const results: CoinSimResult[] = await Promise.all(
+      holdings.map(async (h) => {
+        const priceRes = await resolveCurrentPriceUsd(
+          accountId,
+          h.symbol,
+          h.avgEntryPriceUsd,
+        );
+
+        return simulateCoin(
+          h.symbol,
+          h.qty,
+          h.avgEntryPriceUsd,
+          priceRes.price,
+          sellPct,
+          gainStep,
+          maxSteps,
+        );
+      }),
     );
 
     return NextResponse.json({ data: { results } });
