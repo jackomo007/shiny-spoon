@@ -136,6 +136,12 @@ function getSignalBadgeClass(signal: string) {
   return "inline-flex items-center rounded-[12px] border border-green-700/30 bg-green-700 px-3.5 py-2 text-[13px] font-extrabold text-green-50";
 }
 
+function getSignalLabel(signal: string | undefined, fallback: string) {
+  if (signal === "Accumulate") return "▲ Accumulate";
+  if (signal === "Scale-Out") return "▼ Scale-Out";
+  return fallback;
+}
+
 function getFearGreedLabel(score: number | undefined) {
   if (score === undefined) return "-";
   if (score <= 24) return "Extreme Fear";
@@ -417,8 +423,10 @@ export default function DashboardPage() {
                   <span
                     className={getSignalBadgeClass(thermometer?.signal ?? "")}
                   >
-                    {thermometer?.signal ??
-                      (analysisUnavailable ? "Unavailable" : "Loading")}
+                    {getSignalLabel(
+                      thermometer?.signal,
+                      analysisUnavailable ? "Unavailable" : "Loading",
+                    )}
                   </span>
                 </div>
               </div>
