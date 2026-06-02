@@ -92,6 +92,7 @@ export const config = {
     "/chart-tracker/:path*",
     "/profile/:path*",
     "/portfolio/:path*",
+    "/exit-strategy/:path*",
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/journal/:path*",
