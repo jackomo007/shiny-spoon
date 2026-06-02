@@ -74,6 +74,7 @@ type ExitStrategySummary = {
   strategyType: "percentage";
   sellPercent: number;
   gainPercent: number;
+  startingQuantity: number | null;
   assets: ExitStrategyAssetSummary[];
 };
 
@@ -341,7 +342,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
     null;
 
   const planRows = buildSuggestedRows(
-    data.balance.quantity,
+    activeStrategy?.startingQuantity ?? data.balance.quantity,
     data.metrics.avgBuyPrice,
     activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT,
     activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT,
@@ -364,7 +365,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
     if (!data) return;
     setSellPercent(activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT);
     setGainPercent(activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT);
-    setStartingQuantity(data.balance.quantity);
+    setStartingQuantity(activeStrategy?.startingQuantity ?? data.balance.quantity);
     setModalPlanStepCount(6);
     setStrategyError(null);
     setStrategyModalOpen(true);
@@ -379,6 +380,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
         strategyType: "percentage" as const,
         sellPercent,
         gainPercent,
+        startingQuantity,
       };
       const res = activeStrategy
         ? await fetch(`/api/exit-strategies/${activeStrategy.id}`, {

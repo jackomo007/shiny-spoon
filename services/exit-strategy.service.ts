@@ -31,6 +31,7 @@ export type ExitStrategySummary = {
   strategyType: "percentage";
   sellPercent: number;
   gainPercent: number;
+  startingQuantity: number | null;
   isActive: boolean;
 
   assets: ExitStrategyAssetSummary[];
@@ -95,9 +96,10 @@ async function buildAssetSummary(
   coin: string,
   sellPercent: number,
   gainPercent: number,
+  startingQuantity: number | null,
 ): Promise<ExitStrategyAssetSummary> {
   const holding = await getOpenSpotHolding(accountId, coin);
-  const qtyOpen = holding?.qty ?? 0;
+  const qtyOpen = startingQuantity ?? holding?.qty ?? 0;
   const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0;
 
   const execs = await prisma.exit_strategy_execution.findMany({
@@ -167,6 +169,7 @@ export async function buildExitStrategySummary(
       strategy_type: true,
       sell_percent: true,
       gain_percent: true,
+      starting_quantity: true,
       is_active: true,
     },
   });
@@ -174,6 +177,7 @@ export async function buildExitStrategySummary(
 
   const sellPercent = Number(s.sell_percent);
   const gainPercent = Number(s.gain_percent);
+  const startingQuantity = s.starting_quantity == null ? null : Number(s.starting_quantity);
 
   let coins: string[];
   if (s.is_all_coins) {
@@ -192,7 +196,14 @@ export async function buildExitStrategySummary(
 
   const assets = await Promise.all(
     coins.map((coin) =>
-      buildAssetSummary(accountId, s.id, coin, sellPercent, gainPercent),
+      buildAssetSummary(
+        accountId,
+        s.id,
+        coin,
+        sellPercent,
+        gainPercent,
+        s.is_all_coins ? null : startingQuantity,
+      ),
     ),
   );
 
@@ -207,6 +218,7 @@ export async function buildExitStrategySummary(
     strategyType: "percentage",
     sellPercent,
     gainPercent,
+    startingQuantity,
     isActive: s.is_active,
     assets,
     totalAssets: assets.length,
@@ -223,7 +235,7 @@ export async function buildExitStrategyDetails(
 
   const s = await prisma.exit_strategy.findFirst({
     where: { id: strategyId, account_id: accountId },
-    select: { sell_percent: true, gain_percent: true },
+    select: { sell_percent: true, gain_percent: true, starting_quantity: true },
   });
   if (!s) throw new Error("Exit strategy not found");
 
@@ -252,7 +264,7 @@ export async function buildExitStrategyDetails(
   for (const asset of summary.assets) {
     const holding = await getOpenSpotHolding(accountId, asset.coinSymbol);
     const entryPriceUsd = holding?.avgEntryPriceUsd ?? 0;
-    let remaining = holding?.qty ?? 0;
+    let remaining = asset.qtyOpen;
 
     const rows: ExitStrategyStepRow[] = [];
     let cumulative = 0;

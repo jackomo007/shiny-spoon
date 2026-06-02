@@ -16,6 +16,7 @@ const UpdateBody = z.object({
   strategyType: z.literal("percentage"),
   sellPercent: z.number().positive().max(100),
   gainPercent: z.number().positive().max(10_000),
+  startingQuantity: z.number().nonnegative().optional(),
 })
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -54,6 +55,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         strategy_type: body.strategyType,
         sell_percent: body.sellPercent,
         gain_percent: body.gainPercent,
+        starting_quantity: body.startingQuantity ?? null,
       },
     })
 

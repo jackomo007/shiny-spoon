@@ -20,6 +20,7 @@ const CreateBody = z.union([
     strategyType: z.literal("percentage"),
     sellPercent: z.number().positive().max(100),
     gainPercent: z.number().positive().max(10_000),
+    startingQuantity: z.number().nonnegative().optional(),
   }),
 ]);
 
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
           strategy_type: "percentage",
           sell_percent: body.sellPercent,
           gain_percent: body.gainPercent,
+          starting_quantity: null,
           is_active: true,
         },
         select: { id: true },
@@ -86,6 +88,7 @@ export async function POST(req: Request) {
             strategy_type: "percentage",
             sell_percent: body.sellPercent,
             gain_percent: body.gainPercent,
+            starting_quantity: body.startingQuantity ?? null,
             is_active: true,
           },
           select: { id: true },

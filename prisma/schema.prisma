@@ -340,6 +340,7 @@ model exit_strategy {
   strategy_type exit_strategy_type        @default(percentage)
   sell_percent  Decimal                   @db.Decimal(5, 2)
   gain_percent  Decimal                   @db.Decimal(6, 2)
+  starting_quantity Decimal?              @db.Decimal(18, 8)
   is_active     Boolean                   @default(true)
   created_at    DateTime                  @default(now()) @db.DateTime(0)
   updated_at    DateTime                  @updatedAt @db.DateTime(0)
