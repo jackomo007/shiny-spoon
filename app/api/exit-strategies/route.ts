@@ -3,7 +3,10 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildExitStrategySummary } from "@/services/exit-strategy.service";
+import {
+  buildExitStrategySummary,
+  pruneExitStrategiesWithoutHoldings,
+} from "@/services/exit-strategy.service";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const accountId = session.accountId;
+    await pruneExitStrategiesWithoutHoldings(accountId);
 
     const list = await prisma.exit_strategy.findMany({
       where: { account_id: accountId },

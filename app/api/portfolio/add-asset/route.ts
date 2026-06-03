@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
 import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2"
 import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
+import { ensureDefaultExitStrategyForAsset } from "@/services/exit-strategy.service"
 
 export const dynamic = "force-dynamic"
 
@@ -39,29 +39,7 @@ export async function POST(req: Request) {
     })
 
     if (!existingHolding) {
-      await prisma.exit_strategy
-        .create({
-          data: {
-            account_id: accountId,
-            coin_symbol: symbol,
-            is_all_coins: false,
-            strategy_type: "percentage",
-            sell_percent: 25,
-            gain_percent: 30,
-            is_active: true,
-          },
-        })
-        .catch((err: unknown) => {
-          if (
-            typeof err === "object" &&
-            err !== null &&
-            "code" in err &&
-            err.code === "P2002"
-          ) {
-            return null
-          }
-          throw err
-        })
+      await ensureDefaultExitStrategyForAsset(accountId, symbol)
     }
 
     return NextResponse.json({ ok: true })

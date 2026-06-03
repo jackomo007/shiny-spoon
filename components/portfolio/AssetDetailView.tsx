@@ -52,6 +52,7 @@ type AssetDetail = {
 type Props = {
   symbol: string;
   onBack: () => void;
+  onPortfolioChange?: () => Promise<void>;
 };
 
 type ExitStrategyAssetSummary = {
@@ -203,7 +204,11 @@ function ScaleOutPlanList({
   );
 }
 
-export default function AssetDetailView({ symbol, onBack }: Props) {
+export default function AssetDetailView({
+  symbol,
+  onBack,
+  onPortfolioChange,
+}: Props) {
   const [data, setData] = useState<AssetDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -295,6 +300,7 @@ export default function AssetDetailView({ symbol, onBack }: Props) {
   async function handleTransactionUpdated() {
     await loadData();
     await loadStrategies();
+    await onPortfolioChange?.();
     closeTransactionModal();
   }
 

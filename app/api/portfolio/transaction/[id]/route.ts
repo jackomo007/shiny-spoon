@@ -4,6 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
+import { prisma } from "@/lib/prisma";
+import {
+  deleteAssetExitStrategiesIfNoHolding,
+  ensureDefaultExitStrategyForAsset,
+} from "@/services/exit-strategy.service";
+import { getOpenSpotHolding } from "@/services/portfolio-holdings.service";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +37,15 @@ export async function PUT(req: Request, context: unknown) {
     const { params } = context as RouteContext;
     const tradeId = params.id;
     await migrateLegacyPortfolioTrades(session.accountId);
+    const existing = await prisma.portfolio_trade.findFirst({
+      where: {
+        id: tradeId,
+        account_id: session.accountId,
+        asset_name: { not: "CASH" },
+        kind: { in: ["buy", "sell", "init"] },
+      },
+      select: { asset_name: true },
+    });
 
     const input = Body.parse(await req.json());
 
@@ -49,6 +64,16 @@ export async function PUT(req: Request, context: unknown) {
         { error: "Transaction not found" },
         { status: 404 }
       );
+    }
+
+    if (existing) {
+      const symbol = String(existing.asset_name || "").trim().toUpperCase();
+      const holding = await getOpenSpotHolding(session.accountId, symbol);
+      if (holding) {
+        await ensureDefaultExitStrategyForAsset(session.accountId, symbol);
+      } else {
+        await deleteAssetExitStrategiesIfNoHolding(session.accountId, symbol);
+      }
     }
 
     return NextResponse.json({ ok: true });
@@ -71,6 +96,15 @@ export async function DELETE(_req: Request, context: unknown) {
     const { params } = context as RouteContext;
     const tradeId = params.id;
     await migrateLegacyPortfolioTrades(session.accountId);
+    const existing = await prisma.portfolio_trade.findFirst({
+      where: {
+        id: tradeId,
+        account_id: session.accountId,
+        asset_name: { not: "CASH" },
+        kind: { in: ["buy", "sell", "init"] },
+      },
+      select: { asset_name: true },
+    });
 
     const deleted = await PortfolioRepoV2.deleteSpotTransaction({
       accountId: session.accountId,
@@ -81,6 +115,13 @@ export async function DELETE(_req: Request, context: unknown) {
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }
+      );
+    }
+
+    if (existing) {
+      await deleteAssetExitStrategiesIfNoHolding(
+        session.accountId,
+        String(existing.asset_name || ""),
       );
     }
 

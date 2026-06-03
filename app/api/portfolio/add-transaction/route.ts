@@ -9,6 +9,11 @@ import {
   cgPriceUsdById,
   cgCoinMetaByIdSafe,
 } from "@/lib/markets/coingecko"
+import {
+  deleteAssetExitStrategiesIfNoHolding,
+  ensureDefaultExitStrategyForAsset,
+} from "@/services/exit-strategy.service"
+import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
 
 export const dynamic = "force-dynamic"
 
@@ -36,6 +41,7 @@ export async function POST(req: Request) {
 
     const symbol = input.asset.symbol.trim().toUpperCase()
     const executedAt = input.executedAt ? new Date(input.executedAt) : new Date()
+    const existingHolding = await getOpenSpotHolding(session.accountId, symbol)
 
     const coingeckoId = await cgNormalizeOrResolveCoinId({
       assetId: input.asset.id,
@@ -116,6 +122,15 @@ export async function POST(req: Request) {
       executedAt,
       notes: `[PORTFOLIO_SPOT_TX] cg:${coingeckoId ?? "unresolved"} chg24h:${change24hPct ?? "n/a"}`,
     })
+
+    if (!existingHolding) {
+      const holding = await getOpenSpotHolding(session.accountId, symbol)
+      if (holding) {
+        await ensureDefaultExitStrategyForAsset(session.accountId, symbol)
+      }
+    }
+
+    await deleteAssetExitStrategiesIfNoHolding(session.accountId, symbol)
 
     return NextResponse.json({ ok: true })
   } catch (err) {

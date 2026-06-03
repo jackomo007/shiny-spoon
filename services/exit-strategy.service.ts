@@ -5,6 +5,9 @@ import {
   getOpenSpotHoldings,
 } from "@/services/portfolio-holdings.service";
 
+const DEFAULT_EXIT_SELL_PERCENT = 25;
+const DEFAULT_EXIT_GAIN_PERCENT = 30;
+
 export type ExitStrategyAssetSummary = {
   coinSymbol: string;
 
@@ -83,6 +86,75 @@ export function parseExcludedCoinSymbols(raw: string | null | undefined) {
 export function serializeExcludedCoinSymbols(coins: string[]) {
   const normalized = normalizeCoinSymbols(coins);
   return normalized.length > 0 ? JSON.stringify(normalized) : null;
+}
+
+function isUniqueConstraintError(err: unknown) {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === "P2002"
+  );
+}
+
+export async function ensureDefaultExitStrategyForAsset(
+  accountId: string,
+  symbol: string,
+) {
+  const coinSymbol = symbol.trim().toUpperCase();
+  if (!coinSymbol || coinSymbol === "CASH") return;
+
+  await prisma.exit_strategy
+    .create({
+      data: {
+        account_id: accountId,
+        coin_symbol: coinSymbol,
+        is_all_coins: false,
+        strategy_type: "percentage",
+        sell_percent: DEFAULT_EXIT_SELL_PERCENT,
+        gain_percent: DEFAULT_EXIT_GAIN_PERCENT,
+        starting_quantity: null,
+        is_active: true,
+      },
+    })
+    .catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) return null;
+      throw err;
+    });
+}
+
+export async function deleteAssetExitStrategiesIfNoHolding(
+  accountId: string,
+  symbol: string,
+) {
+  const coinSymbol = symbol.trim().toUpperCase();
+  if (!coinSymbol || coinSymbol === "CASH") return;
+
+  const holding = await getOpenSpotHolding(accountId, coinSymbol);
+  if (holding) return;
+
+  await prisma.exit_strategy.deleteMany({
+    where: {
+      account_id: accountId,
+      coin_symbol: coinSymbol,
+      is_all_coins: false,
+    },
+  });
+}
+
+export async function pruneExitStrategiesWithoutHoldings(accountId: string) {
+  const holdings = await getOpenSpotHoldings(accountId);
+  const openSymbols = holdings.map((holding) => holding.symbol);
+
+  await prisma.exit_strategy.deleteMany({
+    where: {
+      account_id: accountId,
+      is_all_coins: false,
+      ...(openSymbols.length > 0
+        ? { coin_symbol: { notIn: openSymbols } }
+        : {}),
+    },
+  });
 }
 
 function round(n: number, digits: number): number {

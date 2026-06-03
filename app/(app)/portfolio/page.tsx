@@ -248,7 +248,11 @@ export default function PortfolioPage() {
           </div>
 
           <div>
-            <AssetDetailView symbol={selectedAsset} onBack={() => setSelectedAsset(null)} />
+            <AssetDetailView
+              symbol={selectedAsset}
+              onBack={() => setSelectedAsset(null)}
+              onPortfolioChange={load}
+            />
           </div>
         </div>
       </div>
@@ -439,7 +443,7 @@ function ExitStrategiesList({
             <th className="px-3 py-3 font-semibold">Plan</th>
             <th className="px-3 py-3 font-semibold">Status</th>
             <th className="px-3 py-3 text-right font-semibold">
-              Ready Value
+              Ready Sell Value
             </th>
           </tr>
         </thead>
