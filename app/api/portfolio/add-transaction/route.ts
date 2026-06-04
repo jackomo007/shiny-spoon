@@ -43,10 +43,17 @@ export async function POST(req: Request) {
     const executedAt = input.executedAt ? new Date(input.executedAt) : new Date()
     const existingHolding = await getOpenSpotHolding(session.accountId, symbol)
 
-    const coingeckoId = await cgNormalizeOrResolveCoinId({
-      assetId: input.asset.id,
-      assetSymbol: symbol,
+    const existingAsset = await prisma.verified_asset.findUnique({
+      where: { symbol },
+      select: { coingecko_id: true, name: true, image_url: true },
     })
+
+    const coingeckoId =
+      existingAsset?.coingecko_id ??
+      (await cgNormalizeOrResolveCoinId({
+        assetId: input.asset.id,
+        assetSymbol: symbol,
+      }))
 
     let priceUsd: number
     let change24hPct: number | null = null
@@ -81,16 +88,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid qty" }, { status: 400 })
     }
 
-    let imageUrl: string | null = null
+    let imageUrl: string | null = existingAsset?.image_url ?? null
     let name: string | null =
       (input.asset.name ?? null) && String(input.asset.name).trim()
         ? String(input.asset.name).trim()
-        : null
+        : existingAsset?.name ?? null
 
-    if (coingeckoId) {
+    if (coingeckoId && (!imageUrl || !name)) {
       const meta = await cgCoinMetaByIdSafe(coingeckoId)
       if (meta.ok) {
-        imageUrl = meta.imageUrl
+        imageUrl = imageUrl ?? meta.imageUrl
         if (!name) name = meta.name || null
       }
     }
@@ -98,9 +105,9 @@ export async function POST(req: Request) {
     await prisma.verified_asset.upsert({
       where: { symbol },
       update: {
-        name,
-        coingecko_id: coingeckoId,
-        image_url: imageUrl,
+        name: name ?? undefined,
+        coingecko_id: coingeckoId ?? undefined,
+        image_url: imageUrl ?? undefined,
       },
       create: {
         symbol,

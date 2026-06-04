@@ -5,6 +5,11 @@ import { authOptions } from "@/lib/auth"
 import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2"
 import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
 import { ensureDefaultExitStrategyForAsset } from "@/services/exit-strategy.service"
+import { prisma } from "@/lib/prisma"
+import {
+  cgCoinMetaByIdSafe,
+  cgNormalizeOrResolveCoinId,
+} from "@/lib/markets/coingecko"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +32,44 @@ export async function POST(req: Request) {
     const data = Body.parse(await req.json())
     const symbol = data.symbol.toUpperCase()
     const existingHolding = await getOpenSpotHolding(accountId, symbol)
+
+    let coingeckoId: string | null = null
+    let name: string | null = null
+    let imageUrl: string | null = null
+
+    try {
+      coingeckoId = await cgNormalizeOrResolveCoinId({
+        assetId: symbol,
+        assetSymbol: symbol,
+      })
+
+      if (coingeckoId) {
+        const meta = await cgCoinMetaByIdSafe(coingeckoId)
+        if (meta.ok) {
+          name = meta.name || null
+          imageUrl = meta.imageUrl
+        }
+      }
+    } catch (error) {
+      console.warn("[POST /api/portfolio/add-asset] metadata lookup failed:", error)
+    }
+
+    await prisma.verified_asset.upsert({
+      where: { symbol },
+      update: {
+        name: name ?? undefined,
+        coingecko_id: coingeckoId ?? undefined,
+        image_url: imageUrl ?? undefined,
+      },
+      create: {
+        symbol,
+        name,
+        exchange: "Binance",
+        coingecko_id: coingeckoId,
+        image_url: imageUrl,
+      },
+      select: { id: true },
+    })
 
     await PortfolioRepoV2.createInitTransaction({
       accountId,
