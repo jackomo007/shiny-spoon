@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { cgPriceUsdByIdSafe } from "@/lib/markets/coingecko"
 
 export type PriceSource = "binance" | "coingecko" | "db_cache" | "avg_entry"
 export type PriceResult = { price: number; source: PriceSource; isEstimated: boolean }
@@ -99,6 +100,16 @@ async function getDbCachedPriceUsd(accountId: string, symbol: string): Promise<n
   return Number.isFinite(p) && p > 0 ? p : null
 }
 
+async function getVerifiedAssetCoinGeckoId(symbol: string): Promise<string | null> {
+  const row = await prisma.verified_asset.findUnique({
+    where: { symbol },
+    select: { coingecko_id: true },
+  })
+
+  const id = row?.coingecko_id?.trim()
+  return id ? id : null
+}
+
 export async function resolveCurrentPriceUsd(
   accountId: string,
   symbol: string,
@@ -124,6 +135,23 @@ export async function resolveCurrentPriceUsd(
     const p = await getBinancePriceUsdt(pair)
     PRICE_CACHE.set(symbol, { price: p, source: "binance", ts: Date.now() })
     return { price: p, source: "binance", isEstimated: false }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const coingeckoId = await getVerifiedAssetCoinGeckoId(symbol)
+    if (coingeckoId) {
+      const cg = await cgPriceUsdByIdSafe(coingeckoId)
+      if (cg.ok) {
+        PRICE_CACHE.set(symbol, {
+          price: cg.priceUsd,
+          source: "coingecko",
+          ts: Date.now(),
+        })
+        return { price: cg.priceUsd, source: "coingecko", isEstimated: false }
+      }
+    }
   } catch {
     // ignore
   }
