@@ -46,6 +46,7 @@ type ExitStrategySummary = {
   isActive: boolean;
   totalAssets: number;
   totalProfitUsd: number;
+  readySellValueUsd?: number;
 };
 
 type ExitStrategiesApiRes = {
@@ -81,7 +82,6 @@ function BalanceCardEmpty({ summary: s }: { summary: Summary }) {
 }
 
 function BalanceCardFilled({ summary: s }: { summary: Summary }) {
-  const profitUp = s.profit.total.usd >= 0;
   const unrealizedUp = s.profit.unrealized.usd >= 0;
 
   return (
@@ -121,35 +121,16 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
 
         <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400 flex items-center gap-2">
-            Total Profit <span className="text-slate-300">ⓘ</span>
+            Realized Gain <span className="text-slate-300">ⓘ</span>
           </div>
-          <div className="font-semibold flex items-center gap-2">
-            <span
-              className={cls(
-                "inline-flex items-center gap-1 px-[10px] py-[6px] rounded-full text-[13px] font-semibold",
-                profitUp
-                  ? "bg-emerald-50 text-emerald-600"
-                  : "bg-red-50 text-red-600",
-              )}
-            >
-              {pct(s.profit.total.pct)}
-            </span>
-            <span className={profitUp ? "text-emerald-600" : "text-red-600"}>
-              {usd(s.profit.total.usd)}
-            </span>
+          <div className="font-semibold text-emerald-600">
+            {usd(s.profit.realized.usd)}
           </div>
         </div>
 
         <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400 flex items-center gap-2">
-            Realised Profit <span className="text-slate-300">ⓘ</span>
-          </div>
-          <div className="font-semibold">{usd(s.profit.realized.usd)}</div>
-        </div>
-
-        <div className="flex items-center justify-between py-3 border-t border-slate-200">
-          <div className="text-slate-400 flex items-center gap-2">
-            Unrealised Profit <span className="text-slate-300">ⓘ</span>
+            Unrealized Gain <span className="text-slate-300">ⓘ</span>
           </div>
 
           <div
@@ -478,7 +459,7 @@ function ExitStrategiesList({
                   </span>
                 </td>
                 <td className="px-3 py-4 text-right font-semibold text-slate-900">
-                  {usd(strategy.totalProfitUsd)}
+                  {usd(strategy.readySellValueUsd ?? strategy.totalProfitUsd)}
                 </td>
               </tr>
             );

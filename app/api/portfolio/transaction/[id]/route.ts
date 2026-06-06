@@ -22,20 +22,23 @@ const Body = z.object({
 });
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export async function PUT(req: Request, context: unknown) {
+export async function PUT(req: Request, { params }: RouteContext) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { params } = context as RouteContext;
-    const tradeId = params.id;
+    const { id: tradeId } = await params;
+    if (!tradeId) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
     await migrateLegacyPortfolioTrades(session.accountId);
     const existing = await prisma.portfolio_trade.findFirst({
       where: {
@@ -86,15 +89,18 @@ export async function PUT(req: Request, context: unknown) {
   }
 }
 
-export async function DELETE(_req: Request, context: unknown) {
+export async function DELETE(_req: Request, { params }: RouteContext) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accountId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { params } = context as RouteContext;
-    const tradeId = params.id;
+    const { id: tradeId } = await params;
+    if (!tradeId) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
     await migrateLegacyPortfolioTrades(session.accountId);
     const existing = await prisma.portfolio_trade.findFirst({
       where: {

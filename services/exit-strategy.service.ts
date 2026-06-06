@@ -40,6 +40,7 @@ export type ExitStrategySummary = {
   assets: ExitStrategyAssetSummary[];
   totalAssets: number;
   totalProfitUsd: number;
+  readySellValueUsd: number;
 };
 
 export type ExitStrategyStepRow = {
@@ -282,6 +283,10 @@ export async function buildExitStrategySummary(
   const totalProfitUsd = assets
     .filter((a) => a.status === "ready")
     .reduce((sum, a) => sum + a.usdValueToSell, 0);
+  const readySellValueUsd = assets.reduce(
+    (sum, a) => sum + a.usdValueToSell,
+    0,
+  );
 
   return {
     id: s.id,
@@ -295,6 +300,7 @@ export async function buildExitStrategySummary(
     assets,
     totalAssets: assets.length,
     totalProfitUsd: round(totalProfitUsd, 2),
+    readySellValueUsd: round(readySellValueUsd, 2),
   };
 }
 

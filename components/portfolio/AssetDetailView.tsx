@@ -298,10 +298,10 @@ export default function AssetDetailView({
   }
 
   async function handleTransactionUpdated() {
+    closeTransactionModal();
     await loadData();
     await loadStrategies();
     await onPortfolioChange?.();
-    closeTransactionModal();
   }
 
   if (loading) {
@@ -506,29 +506,7 @@ export default function AssetDetailView({
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <div className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                  Total Profit <span className="text-slate-300">ⓘ</span>
-                </div>
-                <div
-                  className={cls(
-                    "text-[15px] font-bold",
-                    totalProfitUp ? "text-emerald-600" : "text-red-600",
-                  )}
-                >
-                  {usd(data.metrics.totalProfit.usd)}
-                </div>
-                <div
-                  className={cls(
-                    "text-[11px] font-bold",
-                    totalProfitUp ? "text-emerald-600" : "text-red-600",
-                  )}
-                >
-                  {signedPct(data.metrics.totalProfit.pct)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                <div className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                  Unrealised Profit <span className="text-slate-300">ⓘ</span>
+                  Unrealized Gain <span className="text-slate-300">ⓘ</span>
                 </div>
                 <div
                   className={cls(
@@ -542,7 +520,7 @@ export default function AssetDetailView({
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <div className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                  Realised Profit <span className="text-slate-300">ⓘ</span>
+                  Realized Gain <span className="text-slate-300">ⓘ</span>
                 </div>
                 <div
                   className={cls(

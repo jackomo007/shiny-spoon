@@ -283,7 +283,6 @@ export default function AddTransactionModal(props: {
       setConfirmDeleteOpen(false);
 
       await props.onDone();
-      props.onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed";
       alert(msg);

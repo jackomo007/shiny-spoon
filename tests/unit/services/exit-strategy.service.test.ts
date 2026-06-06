@@ -1,19 +1,41 @@
 import { describe, expect, it, vi } from "vitest"
 
+const {
+  findFirstMock,
+  findManyExecutionMock,
+  getOpenSpotHoldingMock,
+  getOpenSpotHoldingsMock,
+  resolveCurrentPriceUsdMock,
+} = vi.hoisted(() => ({
+  findFirstMock: vi.fn(),
+  findManyExecutionMock: vi.fn(),
+  getOpenSpotHoldingMock: vi.fn(),
+  getOpenSpotHoldingsMock: vi.fn(),
+  resolveCurrentPriceUsdMock: vi.fn(),
+}))
+
 vi.mock("@/lib/prisma", () => ({
-  prisma: {},
+  prisma: {
+    exit_strategy: {
+      findFirst: findFirstMock,
+    },
+    exit_strategy_execution: {
+      findMany: findManyExecutionMock,
+    },
+  },
 }))
 
 vi.mock("@/lib/current-price", () => ({
-  resolveCurrentPriceUsd: vi.fn(),
+  resolveCurrentPriceUsd: resolveCurrentPriceUsdMock,
 }))
 
 vi.mock("@/services/portfolio-holdings.service", () => ({
-  getOpenSpotHolding: vi.fn(),
-  getOpenSpotHoldings: vi.fn(),
+  getOpenSpotHolding: getOpenSpotHoldingMock,
+  getOpenSpotHoldings: getOpenSpotHoldingsMock,
 }))
 
 import {
+  buildExitStrategySummary,
   parseExcludedCoinSymbols,
   serializeExcludedCoinSymbols,
 } from "@/services/exit-strategy.service"
@@ -34,5 +56,47 @@ describe("exit strategy symbol helpers", () => {
       '["BTC","ETH"]',
     )
     expect(serializeExcludedCoinSymbols([])).toBeNull()
+  })
+})
+
+describe("buildExitStrategySummary", () => {
+  it("returns the planned ready sell value even when the next sell is not ready yet", async () => {
+    findFirstMock.mockResolvedValue({
+      id: "strategy-1",
+      coin_symbol: "HYPE",
+      is_all_coins: false,
+      excluded_coin_symbols_json: null,
+      strategy_type: "percentage",
+      sell_percent: 25,
+      gain_percent: 30,
+      starting_quantity: null,
+      is_active: true,
+    })
+    findManyExecutionMock.mockResolvedValue([])
+    getOpenSpotHoldingMock.mockResolvedValue({
+      symbol: "HYPE",
+      qty: 10,
+      investedUsd: 200,
+      avgEntryPriceUsd: 20,
+    })
+    resolveCurrentPriceUsdMock.mockResolvedValue({
+      price: 22,
+      source: "coingecko",
+      isEstimated: false,
+    })
+
+    const summary = await buildExitStrategySummary("account-1", "strategy-1")
+
+    expect(summary.assets[0]).toEqual(
+      expect.objectContaining({
+        coinSymbol: "HYPE",
+        status: "pending",
+        qtyToSell: 2.5,
+        targetPriceUsd: 26,
+        usdValueToSell: 65,
+      }),
+    )
+    expect(summary.totalProfitUsd).toBe(0)
+    expect(summary.readySellValueUsd).toBe(65)
   })
 })
