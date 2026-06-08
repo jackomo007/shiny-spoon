@@ -127,6 +127,8 @@ model tag {
   id         String              @id @default(uuid()) @db.Char(36)
   account_id String              @db.Char(36)
   name       String              @db.VarChar(100)
+  description String?            @db.Text
+  color      String              @default("#6B7280") @db.VarChar(20)
   created_at DateTime            @default(now()) @db.DateTime(0)
   entries    journal_entry_tag[]
   account    account             @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_tag_account")

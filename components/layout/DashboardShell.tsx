@@ -65,7 +65,9 @@ export default function DashboardShell({ children }: Props) {
   }, []);
 
   const tradingGroupActive =
-    pathname === "/journal" || pathname === "/strategies";
+    pathname === "/journal" ||
+    pathname === "/strategies" ||
+    pathname === "/manage-tags";
 
   const portfolioGroupActive =
     pathname === "/portfolio" || pathname === "/exit-strategy";
@@ -124,6 +126,14 @@ export default function DashboardShell({ children }: Props) {
                   }`}
                 >
                   Strategy Creator
+                </Link>
+                <Link
+                  href="/manage-tags"
+                  className={`${topNavLinkBase} ${
+                    isTopActive("/manage-tags") ? topNavActive : topNavInactive
+                  }`}
+                >
+                  Manage Tags
                 </Link>
                 {isAdmin && (
                   <Link
@@ -286,6 +296,28 @@ export default function DashboardShell({ children }: Props) {
 
                       <li>
                         <Link
+                          href="/manage-tags"
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
+                            isTopActive("/manage-tags")
+                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
+                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
+                              #
+                            </span>
+                            <span className="font-medium">Manage Tags</span>
+                          </div>
+                          <span className="text-xs text-[#9C92D4]">
+                            {isTopActive("/manage-tags") ? "Current" : ""}
+                          </span>
+                        </Link>
+                      </li>
+
+                      <li>
+                        <Link
                           href="/exit-strategy"
                           onClick={() => setMobileOpen(false)}
                           className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
@@ -430,6 +462,13 @@ export default function DashboardShell({ children }: Props) {
                   <NavChildItem
                     href="/strategies"
                     label="Strategy Creator"
+                    icon="-"
+                    showText={sidebarExpanded}
+                    pathname={pathname}
+                  />
+                  <NavChildItem
+                    href="/manage-tags"
+                    label="Manage Tags"
                     icon="-"
                     showText={sidebarExpanded}
                     pathname={pathname}

@@ -79,6 +79,8 @@ type JournalSummary = { id: string; name: string; created_at: string };
 type Tag = {
   id: string;
   name: string;
+  description?: string | null;
+  color?: string;
 };
 type JournalsPayload = {
   items?: JournalSummary[];
@@ -219,7 +221,7 @@ export default function JournalPage() {
 
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"new" | "az" | "za">("new");
+  const [sort, setSort] = useState<"new" | "az" | "za" | "tag_az" | "tag_za">("new");
   const [showFilter, setShowFilter] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -243,6 +245,8 @@ export default function JournalPage() {
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#7C3AED");
+  const [selectedTagName, setSelectedTagName] = useState("");
 
   const {
     register,
@@ -276,7 +280,7 @@ export default function JournalPage() {
   const wAmount = watch("amount");
   const wEntryPrice = watch("entry_price");
   const amountSyncRef = useRef<"amount_spent" | "amount" | null>(null);
-  const showTagsSection = false;
+  const showTagsSection = true;
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
@@ -340,15 +344,57 @@ export default function JournalPage() {
     }
   }
 
+  async function createPendingTag() {
+    const name = newTagName.trim();
+    if (!name) return null;
+
+    if (wTags.includes(name)) {
+      setNewTagName("");
+      return name;
+    }
+
+    try {
+      setTagsError(null);
+      const r = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, color: newTagColor }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const created = (await r.json()) as Tag;
+
+      setAvailableTags((prev) => {
+        if (prev.some((t) => t.id === created.id)) return prev;
+        return [...prev, created];
+      });
+
+      const updated = Array.from(new Set([...wTags, created.name]));
+      setValue("tags", updated, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+      setNewTagName("");
+      setNewTagColor("#7C3AED");
+      return created.name;
+    } catch {
+      setTagsError("Could not create tag");
+      return null;
+    }
+  }
+
   useEffect(() => {
     register("tags");
     register("matched_rule_ids");
   }, [register]);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!open) return;
     void loadTagsList();
   }, [open]);
+
+  useEffect(() => {
+    void loadTagsList();
+  }, []);
 
 useEffect(() => {
   if (typeof window === "undefined") return;
@@ -605,8 +651,13 @@ useEffect(() => {
     const q = query.trim().toLowerCase();
     if (q)
       arr = arr.filter((i) =>
-        `${i.asset_name} ${i.status} ${i.side}`.toLowerCase().includes(q)
+        `${i.asset_name} ${i.status} ${i.side} ${(i.tags ?? []).join(" ")}`
+          .toLowerCase()
+          .includes(q)
       );
+    if (selectedTagName) {
+      arr = arr.filter((i) => (i.tags ?? []).includes(selectedTagName));
+    }
     switch (sort) {
       case "az":
         return [...arr].sort((a, b) =>
@@ -616,10 +667,18 @@ useEffect(() => {
         return [...arr].sort((a, b) =>
           b.asset_name.localeCompare(a.asset_name)
         );
+      case "tag_az":
+        return [...arr].sort((a, b) =>
+          ((a.tags ?? [])[0] ?? "").localeCompare((b.tags ?? [])[0] ?? "")
+        );
+      case "tag_za":
+        return [...arr].sort((a, b) =>
+          ((b.tags ?? [])[0] ?? "").localeCompare((a.tags ?? [])[0] ?? "")
+        );
       default:
         return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date));
     }
-  }, [items, query, sort]);
+  }, [items, query, sort, selectedTagName]);
 
   function openCreate() {
     setMode("create");
@@ -829,6 +888,27 @@ useEffect(() => {
       return;
     }
 
+    const pendingTagName = newTagName.trim();
+    const pendingTagToInclude =
+      pendingTagName && !(form.tags ?? []).includes(pendingTagName)
+        ? await createPendingTag()
+        : pendingTagName;
+
+    if (pendingTagName && !pendingTagToInclude) {
+      return;
+    }
+
+    const tagNames = Array.from(
+      new Set(
+        [
+          ...(form.tags ?? []),
+          ...(pendingTagToInclude ? [pendingTagToInclude] : []),
+        ]
+          .map((t) => t.trim())
+          .filter(Boolean),
+      ),
+    );
+
     const base: BasePayload = {
       strategy_id: form.strategy_id,
       asset_name: form.asset_name,
@@ -843,7 +923,7 @@ useEffect(() => {
       notes_entry: form.notes_entry?.trim() || null,
       notes_review: form.notes_review?.trim() || null,
       trading_fee: fee,
-      tags: (form.tags ?? []).map((t) => t.trim()).filter(Boolean),
+      tags: tagNames,
     };
 
     let payload: CreatePayload;
@@ -1275,6 +1355,8 @@ async function fetchAssets(q: string) {
         query={query}
         showFilter={showFilter}
         showMenu={showMenu}
+        availableTags={availableTags}
+        selectedTagName={selectedTagName}
         expandedRowId={expandedRowId}
         onToggleSearch={() => setShowSearch((s) => !s)}
         onCloseSearch={() => setShowSearch(false)}
@@ -1290,6 +1372,7 @@ async function fetchAssets(q: string) {
         }}
         onCloseMenu={() => setShowMenu(false)}
         onSortChange={setSort}
+        onSelectedTagChange={setSelectedTagName}
         onRefresh={() => {
           void load();
         }}
@@ -1844,7 +1927,7 @@ async function fetchAssets(q: string) {
                   <div>
                   <div className="text-sm mb-1">Tags (Optional)</div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       type="text"
                       value={newTagName}
@@ -1864,7 +1947,7 @@ async function fetchAssets(q: string) {
                             const r = await fetch("/api/tags", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ name }),
+                              body: JSON.stringify({ name, color: newTagColor }),
                             });
                             if (!r.ok) throw new Error(await r.text());
                             const created = (await r.json()) as Tag;
@@ -1880,14 +1963,31 @@ async function fetchAssets(q: string) {
                               shouldValidate: false,
                             });
                             setNewTagName("");
+                            setNewTagColor("#7C3AED");
                           } catch {
                             setTagsError("Could not create tag");
                           }
                         }
                       }}
-                      placeholder="Type a tag and press Enter…"
+                      placeholder="Tag name"
                       className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
                     />
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={newTagColor}
+                        onChange={(e) => setNewTagColor(e.target.value)}
+                        className="h-10 w-12 rounded-xl border border-gray-200 bg-white p-1"
+                        title="Tag color"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void createPendingTag()}
+                        className="rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
+                      >
+                        Add Tag
+                      </button>
+                    </div>
                   </div>
 
                   {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
@@ -1905,8 +2005,16 @@ async function fetchAssets(q: string) {
                               shouldValidate: false,
                             });
                           }}
-                          className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
                         >
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              backgroundColor:
+                                availableTags.find((tag) => tag.name === t)?.color ??
+                                "#9CA3AF",
+                            }}
+                          />
                           <span>{t}</span>
                           <span className="text-gray-500">✕</span>
                         </button>
@@ -1936,8 +2044,12 @@ async function fetchAssets(q: string) {
                                 shouldValidate: false,
                               });
                             }}
-                            className="inline-flex items-center rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
                           >
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
+                            />
                             {tag.name}
                           </button>
                         ))}
