@@ -46,7 +46,7 @@ type ExitStrategySummary = {
   isActive: boolean;
   totalAssets: number;
   totalProfitUsd: number;
-  readySellValueUsd?: number;
+  realizedGainUsd?: number;
 };
 
 type ExitStrategiesApiRes = {
@@ -424,7 +424,7 @@ function ExitStrategiesList({
             <th className="px-3 py-3 font-semibold">Plan</th>
             <th className="px-3 py-3 font-semibold">Status</th>
             <th className="px-3 py-3 text-right font-semibold">
-              Ready Sell Value
+              Realized Gain
             </th>
           </tr>
         </thead>
@@ -459,7 +459,7 @@ function ExitStrategiesList({
                   </span>
                 </td>
                 <td className="px-3 py-4 text-right font-semibold text-slate-900">
-                  {usd(strategy.readySellValueUsd ?? strategy.totalProfitUsd)}
+                  {usd(strategy.realizedGainUsd ?? 0)}
                 </td>
               </tr>
             );

@@ -60,7 +60,7 @@ describe("exit strategy symbol helpers", () => {
 })
 
 describe("buildExitStrategySummary", () => {
-  it("returns the planned ready sell value even when the next sell is not ready yet", async () => {
+  it("returns realized gain from executed strategy steps", async () => {
     findFirstMock.mockResolvedValue({
       id: "strategy-1",
       coin_symbol: "HYPE",
@@ -72,7 +72,9 @@ describe("buildExitStrategySummary", () => {
       starting_quantity: null,
       is_active: true,
     })
-    findManyExecutionMock.mockResolvedValue([])
+    findManyExecutionMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ realized_profit: 12.5 }])
     getOpenSpotHoldingMock.mockResolvedValue({
       symbol: "HYPE",
       qty: 10,
@@ -97,6 +99,6 @@ describe("buildExitStrategySummary", () => {
       }),
     )
     expect(summary.totalProfitUsd).toBe(0)
-    expect(summary.readySellValueUsd).toBe(65)
+    expect(summary.realizedGainUsd).toBe(12.5)
   })
 })
