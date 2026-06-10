@@ -29,12 +29,6 @@ type FormValues = {
   color: string
 }
 
-type Rgb = {
-  r: number
-  g: number
-  b: number
-}
-
 function buildRangeQS(start: string, end: string) {
   const startDate = new Date(`${start}T00:00:00`)
   const endDate = new Date(`${end}T23:59:59.999`)
@@ -44,24 +38,10 @@ function buildRangeQS(start: string, end: string) {
   }).toString()
 }
 
-function clampColorChannel(value: number) {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(255, Math.max(0, Math.round(value)))
-}
-
-function rgbToHex({ r, g, b }: Rgb) {
-  return `#${[r, g, b]
-    .map((channel) => clampColorChannel(channel).toString(16).padStart(2, "0"))
-    .join("")}`.toUpperCase()
-}
-
-function hexToRgb(hex: string): Rgb {
-  const normalized = /^#[0-9A-Fa-f]{6}$/.test(hex) ? hex.slice(1) : "7C3AED"
-  return {
-    r: Number.parseInt(normalized.slice(0, 2), 16),
-    g: Number.parseInt(normalized.slice(2, 4), 16),
-    b: Number.parseInt(normalized.slice(4, 6), 16),
-  }
+function randomTagColor() {
+  return `#${Math.floor(Math.random() * 0xffffff)
+    .toString(16)
+    .padStart(6, "0")}`.toUpperCase()
 }
 
 export default function ManageTagsClient() {
@@ -102,21 +82,6 @@ export default function ManageTagsClient() {
   })
 
   const color = watch("color")
-  const rgb = hexToRgb(color)
-
-  function setRgbChannel(channel: keyof Rgb, value: number) {
-    setValue(
-      "color",
-      rgbToHex({
-        ...rgb,
-        [channel]: clampColorChannel(value),
-      }),
-      {
-        shouldDirty: true,
-        shouldValidate: true,
-      },
-    )
-  }
 
   const load = useCallback(async () => {
     try {
@@ -173,7 +138,7 @@ export default function ManageTagsClient() {
   function openCreate() {
     setMode("create")
     setEditingId(null)
-    reset({ name: "", description: "", color: "#7C3AED" })
+    reset({ name: "", description: "", color: randomTagColor() })
     setOpen(true)
   }
 
@@ -500,11 +465,6 @@ export default function ManageTagsClient() {
                   },
                 })}
               />
-              <div className="grid gap-2 sm:grid-cols-3">
-                <RgbInput label="R" value={rgb.r} onChange={(value) => setRgbChannel("r", value)} />
-                <RgbInput label="G" value={rgb.g} onChange={(value) => setRgbChannel("g", value)} />
-                <RgbInput label="B" value={rgb.b} onChange={(value) => setRgbChannel("b", value)} />
-              </div>
               <div className="flex items-center gap-3">
                 <span
                   className="h-8 w-8 rounded-full border border-gray-200"
@@ -550,30 +510,6 @@ export default function ManageTagsClient() {
         </p>
       </Modal>
     </div>
-  )
-}
-
-function RgbInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-xs font-medium text-gray-500">{label}</span>
-      <input
-        type="number"
-        min={0}
-        max={255}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-      />
-    </label>
   )
 }
 
