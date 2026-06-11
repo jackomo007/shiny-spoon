@@ -26,6 +26,10 @@ type StrategyDetail = {
   rules: { id: string; title: string; description: string | null }[]
 }
 
+function isInternalDefaultStrategy(row: { name: string | null }) {
+  return (row.name ?? "").trim().toLowerCase() === "none"
+}
+
 export default function StrategiesClient() {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,8 +89,22 @@ export default function StrategiesClient() {
       const r = await fetch(`/api/strategies?${qs}`, { cache: "no-store" });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json() as { items: Row[]; summary: { topPerformingId: string|null; mostUsedId: string|null } };
-      setItems(data.items);
-      setSummary(data.summary);
+      const visibleItems = data.items.filter((item) => !isInternalDefaultStrategy(item));
+      const mostUsed = visibleItems.reduce<{ id: string | null; count: number }>(
+        (acc, item) =>
+          item.tradesUsed > acc.count ? { id: item.id, count: item.tradesUsed } : acc,
+        { id: null, count: -1 },
+      );
+      const topPerforming = visibleItems.reduce<{ id: string | null; value: number }>(
+        (acc, item) => (item.pnl > acc.value ? { id: item.id, value: item.pnl } : acc),
+        { id: null, value: -Infinity },
+      );
+
+      setItems(visibleItems);
+      setSummary({
+        topPerformingId: topPerforming.id,
+        mostUsedId: mostUsed.id,
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load strategies");
     } finally {

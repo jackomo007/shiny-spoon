@@ -5,8 +5,18 @@ export async function getDefaultStrategyId(accountId: string): Promise<string> {
     where: { account_id: accountId, name: { in: ["None", "none", "NONE"] } },
     select: { id: true },
   })
-  if (!s) throw new Error('Default strategy "None" not found for account')
-  return s.id
+  if (s) return s.id
+
+  const created = await prisma.strategy.create({
+    data: {
+      account_id: accountId,
+      name: "None",
+      description: "Default internal strategy for trades without a selected strategy.",
+    },
+    select: { id: true },
+  })
+
+  return created.id
 }
 
 export function qtyFrom(params: { amountSpent: number; entryPrice: number; tradeType: number; leverage?: number }): number {

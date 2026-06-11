@@ -46,13 +46,7 @@ export type JournalRow = {
   tags?: string[];
 };
 
-type StrategyOption = { id: string; name: string | null };
-type StrategyWithRules = StrategyOption & {
-  rules: { id: string; title: string }[];
-};
-
 type JournalForm = {
-  strategy_id: string;
   asset_name: string;
   trade_type: TradeType | string;
   trade_datetime: string;
@@ -67,7 +61,6 @@ type JournalForm = {
   side?: Side;
   status?: Status;
 
-  matched_rule_ids?: string[];
   notes_entry?: string;
   notes_review?: string;
 
@@ -86,17 +79,6 @@ type JournalsPayload = {
   items?: JournalSummary[];
   activeJournalId?: string | null;
 };
-type Rule = { id: string; title: string };
-type HasRules = { rules?: Rule[] | undefined };
-type HasStrategyRules = {
-  strategy_rules?: Array<{ rule?: Rule | null | undefined }> | undefined;
-};
-type MaybeWithRules =
-  | HasRules
-  | HasStrategyRules
-  | StrategyWithRules
-  | undefined;
-
 type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
   trading_fee?: number | null;
   buy_fee?: number | null;
@@ -105,19 +87,6 @@ type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
 };
 
 type JournalIndexResponse = { items: JournalApiItem[] };
-
-function hasRules(x: unknown): x is HasRules {
-  return (
-    typeof x === "object" && x !== null && Array.isArray((x as HasRules).rules)
-  );
-}
-function hasStrategyRules(x: unknown): x is HasStrategyRules {
-  return (
-    typeof x === "object" &&
-    x !== null &&
-    Array.isArray((x as HasStrategyRules).strategy_rules)
-  );
-}
 
 function toLocalInputValue(dt: string | Date) {
   const d = new Date(dt);
@@ -178,7 +147,6 @@ function toNum(input: string | number | null | undefined): number {
 const money2 = (n: number) => `$${n.toFixed(3)}`;
 
 type BasePayload = {
-  strategy_id: string;
   asset_name: string;
   trade_datetime: string;
   side: Side;
@@ -198,135 +166,10 @@ type CreateSpotPayload = BasePayload & { trade_type: 1 };
 type CreateFuturesPayload = BasePayload & { trade_type: 2 };
 type CreatePayload = CreateSpotPayload | CreateFuturesPayload;
 
-// Multi-Select Dropdown Component
-function MultiSelectDropdown({
-  options,
-  selectedIds,
-  onSelectionChange,
-  placeholder = "Select options...",
-}: {
-  options: Rule[];
-  selectedIds: string[];
-  onSelectionChange: (ids: string[]) => void;
-  placeholder?: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const toggleOption = (optionId: string) => {
-    const newSelection = selectedIds.includes(optionId)
-      ? selectedIds.filter((id) => id !== optionId)
-      : [...selectedIds, optionId];
-    onSelectionChange(newSelection);
-  };
-
-  const removeSelected = (optionId: string) => {
-    onSelectionChange(selectedIds.filter((id) => id !== optionId));
-  };
-
-  const selectedOptions = options.filter((opt) => selectedIds.includes(opt.id));
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      {/* Selected Items Display */}
-      {selectedOptions.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {selectedOptions.map((option) => (
-            <span
-              key={option.id}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800"
-            >
-              {option.title}
-              <button
-                type="button"
-                onClick={() => removeSelected(option.id)}
-                className="text-blue-600 hover:text-blue-800"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Dropdown Trigger */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 text-left text-sm bg-white hover:bg-gray-50"
-      >
-        <span
-          className={selectedIds.length ? "text-gray-900" : "text-gray-500"}
-        >
-          {selectedIds.length ? `${selectedIds.length} selected` : placeholder}
-        </span>
-        <svg
-          className={`w-4 h-4 transform transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
-
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-          {options.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-gray-500">
-              No confluences available for selected strategy.
-            </div>
-          ) : (
-            options.map((option) => (
-              <label
-                key={option.id}
-                className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(option.id)}
-                  onChange={() => toggleOption(option.id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-900">
-                  {option.title}
-                </span>
-              </label>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function JournalsPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<JournalRow[]>([]);
-  const [strategies, setStrategies] = useState<StrategyWithRules[]>([]);
 
   const [start, setStart] = useState<string>(() => {
     const end = new Date();
@@ -356,6 +199,7 @@ function JournalsPageContent() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [addNotes, setAddNotes] = useState(false);
 
   const [assetQuery, setAssetQuery] = useState<string>("");
   const [assetOptions, setAssetOptions] = useState<AssetOption[]>([]);
@@ -382,12 +226,10 @@ function JournalsPageContent() {
     formState: { isSubmitting, errors },
   } = useForm<JournalForm>({
     defaultValues: {
-      strategy_id: "",
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
       trading_fee: "0",
-      matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
       tags: [],
@@ -397,14 +239,11 @@ function JournalsPageContent() {
 
   const wTradeType = Number(watch("trade_type") ?? 1) as TradeType;
   const wStatus = watch("status") as Status | undefined;
-  const wStrategyId = watch("strategy_id");
   const wTags = watch("tags") ?? [];
   const wAmountSpent = watch("amount_spent");
   const wAmount = watch("amount");
   const wEntryPrice = watch("entry_price");
-  const wMatchedRuleIds = watch("matched_rule_ids") ?? [];
   const amountSyncRef = useRef<"amount_spent" | "amount" | null>(null);
-  const showTagsSection = true;
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
@@ -427,24 +266,9 @@ function JournalsPageContent() {
   const [closeFeeError, setCloseFeeError] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
-  const RULE_CACHE_PREFIX = "jrnl.ruleIds.";
-  const makeRuleKey = (entryId: string) => `${RULE_CACHE_PREFIX}${entryId}`;
-  function saveRuleIds(entryId: string, ids: string[]) {
-    try {
-      localStorage.setItem(makeRuleKey(entryId), JSON.stringify(ids));
-    } catch {}
-  }
-  function loadRuleIds(entryId: string): string[] | null {
-    try {
-      const raw = localStorage.getItem(makeRuleKey(entryId));
-      return raw ? (JSON.parse(raw) as string[]) : null;
-    } catch {
-      return null;
-    }
-  }
   function clearRuleIds(entryId: string) {
     try {
-      localStorage.removeItem(makeRuleKey(entryId));
+      localStorage.removeItem(`jrnl.ruleIds.${entryId}`);
     } catch {}
   }
 
@@ -508,8 +332,6 @@ function JournalsPageContent() {
 
   useEffect(() => {
     register("tags");
-    // Register matched_rule_ids as a controlled field
-    register("matched_rule_ids");
   }, [register]);
 
   useEffect(() => {
@@ -665,42 +487,15 @@ function JournalsPageContent() {
       setMovedOutBanner(null);
 
       const qs = buildRangeQS(start, end);
-      const [jr, st, jn] = await Promise.all([
+      const [jr, jn] = await Promise.all([
         fetch(`/api/journal?${qs}`, { cache: "no-store" }),
-        fetch(`/api/strategies`, { cache: "no-store" }),
         fetch(`/api/journals`, { cache: "no-store" }),
       ]);
 
       if (!jr.ok) throw new Error(await jr.text());
-      if (!st.ok) throw new Error(await st.text());
 
       const j: JournalIndexResponse = await jr.json();
       setItems((j.items ?? []).map(normalizeJournal));
-
-      const sPayload:
-        | {
-            items?: Array<{
-              id: string;
-              name: string | null;
-              strategy_rules?: Array<{ rule: { id: string; title: string } }>;
-            }>;
-          }
-        | Array<{ id: string; name: string | null }> = await st.json();
-
-      const arr: StrategyWithRules[] = Array.isArray(sPayload)
-        ? sPayload.map((x) => {
-            const prev = strategiesRef.current.find((s) => s.id === x.id);
-            return { id: x.id, name: x.name, rules: prev?.rules ?? [] };
-          })
-        : (sPayload.items ?? []).map((x) => ({
-            id: x.id,
-            name: x.name,
-            rules: (x.strategy_rules ?? []).map((sr) => ({
-              id: sr.rule.id,
-              title: sr.rule.title,
-            })),
-          }));
-      setStrategies(arr);
 
       if (!jn.ok) throw new Error(await jn.text());
       const jnPayload = (await jn.json()) as JournalsPayload;
@@ -808,6 +603,7 @@ function JournalsPageContent() {
     setMode("create");
     setEditingId(null);
     setWizardStep(1);
+    setAddNotes(false);
 
     validSymbolsRef.current = new Set();
     setAssetQuery("");
@@ -815,12 +611,10 @@ function JournalsPageContent() {
     setShowAssetMenu(false);
 
     reset({
-      strategy_id: "",
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
       amount: "",
-      matched_rule_ids: [],
       notes_entry: "",
       notes_review: "",
       tags: [],
@@ -837,6 +631,7 @@ function JournalsPageContent() {
     setMode("edit");
     setEditingId(row.id);
     setWizardStep(1);
+    setAddNotes(Boolean(row.notes_entry || row.notes_review));
 
     validSymbolsRef.current = new Set([row.asset_name.toUpperCase()]);
     setAssetQuery(row.asset_name);
@@ -844,7 +639,6 @@ function JournalsPageContent() {
     setShowAssetMenu(false);
 
     reset({
-      strategy_id: row.strategy_id,
       asset_name: row.asset_name,
       trade_type: row.trade_type,
       trade_datetime: toLocalInputValue(row.date),
@@ -857,7 +651,6 @@ function JournalsPageContent() {
       exit_price: row.exit_price != null ? String(row.exit_price) : "",
       stop_loss_price:
         row.stop_loss_price != null ? String(row.stop_loss_price) : "",
-      matched_rule_ids: [],
       notes_entry: row.notes_entry ?? "",
       notes_review: row.notes_review ?? "",
       tags: row.tags ?? [],
@@ -866,61 +659,7 @@ function JournalsPageContent() {
       shouldValidate: false,
       shouldDirty: false,
     });
-    setValue("strategy_id", row.strategy_id, {
-      shouldValidate: false,
-      shouldDirty: false,
-    });
     amountSyncRef.current = "amount_spent";
-
-    const rulesForStrategy = normalizeRules(
-      strategiesRef.current.find((s) => s.id === row.strategy_id),
-    );
-    setStrategyRules(rulesForStrategy);
-
-    const cached = loadRuleIds(row.id);
-    const validIds = new Set(rulesForStrategy.map((r) => r.id));
-    const cachedFiltered = Array.isArray(cached)
-      ? cached.filter((id) => validIds.has(id))
-      : [];
-
-    if (cachedFiltered.length) {
-      setValue("matched_rule_ids", cachedFiltered, { shouldDirty: false });
-    } else {
-      const prechecked = rulesForStrategy
-        .slice(0, row.strategy_rule_match || 0)
-        .map((r) => r.id);
-      setValue("matched_rule_ids", prechecked, { shouldDirty: false });
-    }
-
-    if (!rulesForStrategy.length) {
-      (async () => {
-        try {
-          const r = await fetch(`/api/strategies/${row.strategy_id}`, {
-            cache: "no-store",
-          });
-          if (!r.ok) return;
-          const data: unknown = await r.json();
-          const normalized = normalizeRules(data as MaybeWithRules);
-          setStrategyRules(normalized);
-
-          const valid2 = new Set(normalized.map((rr) => rr.id));
-          const cached2 = loadRuleIds(row.id);
-          const cached2Filtered = Array.isArray(cached2)
-            ? cached2.filter((id) => valid2.has(id))
-            : [];
-          if (cached2Filtered.length) {
-            setValue("matched_rule_ids", cached2Filtered, {
-              shouldDirty: false,
-            });
-          } else {
-            const pre = normalized
-              .slice(0, row.strategy_rule_match || 0)
-              .map((rr) => rr.id);
-            setValue("matched_rule_ids", pre, { shouldDirty: false });
-          }
-        } catch {}
-      })();
-    }
 
     setOpen(true);
   }
@@ -950,7 +689,6 @@ function JournalsPageContent() {
   async function validateAndNext() {
     if (wizardStep === 1) {
       const ok = await trigger([
-        "strategy_id",
         "asset_name",
         "trade_type",
         "trade_datetime",
@@ -966,7 +704,7 @@ function JournalsPageContent() {
           "entry_price",
           "trading_fee",
         ]);
-        if (ok) setWizardStep(3);
+        if (ok) await handleSubmit(onSubmit)();
       } else {
         const ok = await trigger([
           "amount_spent",
@@ -975,7 +713,7 @@ function JournalsPageContent() {
           "status",
           "side",
         ]);
-        if (ok) setWizardStep(3);
+        if (ok) await handleSubmit(onSubmit)();
       }
       return;
     }
@@ -983,7 +721,7 @@ function JournalsPageContent() {
 
   async function submitFinal(form: JournalForm) {
     const tradeType = Number(form.trade_type) as TradeType;
-    const ruleCount = (form.matched_rule_ids ?? []).length;
+    const ruleCount = 0;
 
     let coercedSide: Side = (form.side ?? "buy") as Side;
     coercedSide =
@@ -1034,7 +772,6 @@ function JournalsPageContent() {
     );
 
     const base: BasePayload = {
-      strategy_id: form.strategy_id,
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
       side: coercedSide,
@@ -1044,8 +781,8 @@ function JournalsPageContent() {
       exit_price: exit,
       stop_loss_price: sl,
       strategy_rule_match: ruleCount,
-      notes_entry: form.notes_entry?.trim() || null,
-      notes_review: form.notes_review?.trim() || null,
+      notes_entry: addNotes ? form.notes_entry?.trim() || null : null,
+      notes_review: addNotes ? form.notes_review?.trim() || null : null,
       trading_fee: fee,
       tags: tagNames,
     };
@@ -1123,9 +860,6 @@ function JournalsPageContent() {
   const onSubmit = async (form: JournalForm) => {
     try {
       await submitFinal(form);
-      if (mode === "edit" && editingId) {
-        saveRuleIds(editingId, form.matched_rule_ids ?? []);
-      }
       setOpen(false);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save");
@@ -1201,60 +935,6 @@ function JournalsPageContent() {
     : 0;
 
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0);
-
-  const [strategyRules, setStrategyRules] = useState<Rule[]>([]);
-
-  const strategiesRef = useRef<StrategyWithRules[]>([]);
-  useEffect(() => {
-    strategiesRef.current = strategies;
-  }, [strategies]);
-
-  function normalizeRules(payload: MaybeWithRules): Rule[] {
-    if (!payload) return [];
-
-    if (hasRules(payload) && payload.rules) {
-      return payload.rules.map((r) => ({ id: r.id, title: r.title }));
-    }
-
-    if (hasStrategyRules(payload) && payload.strategy_rules) {
-      return payload.strategy_rules
-        .map((sr) => sr.rule)
-        .filter((r): r is Rule => !!r)
-        .map((r) => ({ id: r.id, title: r.title }));
-    }
-
-    return [];
-  }
-
-  useEffect(() => {
-    let abort = false;
-    async function loadRules() {
-      if (!wStrategyId) return;
-
-      const fromList = normalizeRules(
-        strategiesRef.current.find((s) => s.id === wStrategyId),
-      );
-      if (fromList.length) {
-        if (!abort) setStrategyRules(fromList);
-      }
-
-      try {
-        const r = await fetch(`/api/strategies/${wStrategyId}`, {
-          cache: "no-store",
-        });
-        if (!r.ok) throw new Error(await r.text());
-        const data: unknown = await r.json();
-        const normalized = normalizeRules(data as MaybeWithRules);
-        if (!abort) setStrategyRules(normalized);
-      } catch {
-        if (!abort) setStrategyRules(fromList ?? []);
-      }
-    }
-    void loadRules();
-    return () => {
-      abort = true;
-    };
-  }, [wStrategyId, open]);
 
   function renderStatusButton(r: JournalRow) {
     if (r.status === "in_progress") {
@@ -1337,7 +1017,6 @@ function JournalsPageContent() {
             : "loss";
 
       const baseClose: BasePayload = {
-        strategy_id: rowToClose.strategy_id,
         asset_name: rowToClose.asset_name,
         trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
         side: rowToClose.side,
@@ -1432,6 +1111,104 @@ function JournalsPageContent() {
     }
   }
 
+  function renderTagsSection() {
+    return (
+      <div>
+        <div className="text-sm mb-1">Tags (Optional)</div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void createPendingTag();
+              }
+            }}
+            placeholder="Tag name"
+            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(e) => setNewTagColor(e.target.value)}
+              className="h-10 w-12 rounded-xl border border-gray-200 bg-white p-1"
+              title="Tag color"
+            />
+            <button
+              type="button"
+              onClick={() => void createPendingTag()}
+              className="rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
+            >
+              Add Tag
+            </button>
+          </div>
+        </div>
+        {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
+        {wTags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {wTags.map((t: string) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  const updated = wTags.filter((x: string) => x !== t);
+                  setValue("tags", updated, { shouldDirty: true });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor:
+                      availableTags.find((tag) => tag.name === t)?.color ??
+                      "#9CA3AF",
+                  }}
+                />
+                <span>{t}</span>
+                <span className="text-gray-500">x</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="mt-3">
+          <div className="text-xs text-gray-500 mb-1">
+            Existing tags
+            {tagsLoading && " (loading...)"}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableTags.length === 0 && !tagsLoading && (
+              <span className="text-xs text-gray-400">
+                No tags yet. Create one above.
+              </span>
+            )}
+            {availableTags
+              .filter((t) => !wTags.includes(t.name))
+              .map((tag) => (
+                <button
+                  type="button"
+                  key={tag.id}
+                  onClick={() => {
+                    const updated = [...wTags, tag.name];
+                    setValue("tags", updated, { shouldDirty: true });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
+                  />
+                  {tag.name}
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6">
       <JournalToolbar
@@ -1509,7 +1286,7 @@ function JournalsPageContent() {
               {wizardStep > 1 && (
                 <button
                   className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200"
-                  onClick={() => setWizardStep((s) => (s === 2 ? 1 : 2))}
+                  onClick={() => setWizardStep(1)}
                 >
                   Back
                 </button>
@@ -1522,7 +1299,7 @@ function JournalsPageContent() {
               >
                 Cancel
               </button>
-              {wizardStep < 3 ? (
+              {wizardStep < 2 ? (
                 <button
                   className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90"
                   onClick={() => void validateAndNext()}
@@ -1531,7 +1308,7 @@ function JournalsPageContent() {
                 </button>
               ) : (
                 <button
-                  onClick={handleSubmit(onSubmit)}
+                  onClick={() => void validateAndNext()}
                   disabled={isSubmitting}
                   className="rounded-xl bg-green-600 text-white px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
                 >
@@ -1546,30 +1323,6 @@ function JournalsPageContent() {
           <form className="grid gap-4" onSubmit={() => {}}>
             {wizardStep === 1 && (
               <>
-                <div>
-                  <div className="text-sm mb-1">
-                    Strategy Used <span className="text-red-600">*</span>
-                  </div>
-                  <select
-                    {...register("strategy_id", {
-                      required: "Strategy is required",
-                    })}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                  >
-                    <option value="">Select a strategy…</option>
-                    {strategies.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name || "Untitled"}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.strategy_id && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {String(errors.strategy_id.message)}
-                    </p>
-                  )}
-                </div>
-
                 <div>
                   <div className="text-sm mb-1">
                     Asset <span className="text-red-600">*</span>
@@ -1680,6 +1433,8 @@ function JournalsPageContent() {
                     </p>
                   )}
                 </div>
+                <hr className="my-2 border-gray-200" />
+                {renderTagsSection()}
               </>
             )}
 
@@ -1984,189 +1739,42 @@ function JournalsPageContent() {
                     </div>
                   </>
                 )}
-              </>
-            )}
-            {wizardStep === 3 && (
-              <>
-                <div>
-                  <div className="text-sm mb-2">
-                    Select all confluences that supported this trade.
-                  </div>
-                  <MultiSelectDropdown
-                    options={strategyRules}
-                    selectedIds={wMatchedRuleIds}
-                    onSelectionChange={(ids) => {
-                      setValue("matched_rule_ids", ids, { shouldDirty: true });
-                    }}
-                    placeholder="Select confluences..."
+
+                <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={addNotes}
+                    onChange={(e) => setAddNotes(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
                   />
-                </div>
+                  Add Notes
+                </label>
 
-                <div>
-                  <div className="text-sm mb-1">Notes (Optional)</div>
-                  <textarea
-                    {...register("notes_entry")}
-                    rows={3}
-                    placeholder="Write any notes…"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                  />
-                </div>
-
-                {(wStatus === "loss" || wStatus === "break_even") && (
-                  <div>
-                    <div className="text-sm mb-1">
-                      Post Loss Review (Optional)
-                    </div>
-                    <textarea
-                      {...register("notes_review")}
-                      rows={3}
-                      placeholder="Reflect on what went wrong…"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                    />
-                  </div>
-                )}
-
-                <hr className="my-2 border-gray-200" />
-
-                {showTagsSection && (
-                  <div>
-                    <div className="text-sm mb-1">Tags (Optional)</div>
-
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <input
-                        type="text"
-                        value={newTagName}
-                        onChange={(e) => setNewTagName(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const name = newTagName.trim();
-                            if (!name) return;
-                            if (wTags.includes(name)) {
-                              setNewTagName("");
-                              return;
-                            }
-
-                            try {
-                              setTagsError(null);
-                              const r = await fetch("/api/tags", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ name, color: newTagColor }),
-                              });
-                              if (!r.ok) throw new Error(await r.text());
-                              const created = (await r.json()) as Tag;
-
-                              setAvailableTags((prev) => {
-                                if (prev.some((t) => t.id === created.id))
-                                  return prev;
-                                return [...prev, created];
-                              });
-
-                              const updated = [...wTags, created.name];
-                              setValue("tags", updated, {
-                                shouldDirty: true,
-                                shouldValidate: false,
-                              });
-                              setNewTagName("");
-                              setNewTagColor("#7C3AED");
-                            } catch {
-                              setTagsError("Could not create tag");
-                            }
-                          }
-                        }}
-                        placeholder="Tag name"
-                        className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                {addNotes && (
+                  <div className="grid gap-4">
+                    <div>
+                      <div className="text-sm mb-1">Notes (Optional)</div>
+                      <textarea
+                        {...register("notes_entry")}
+                        rows={3}
+                        placeholder="Write any notes..."
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
                       />
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={newTagColor}
-                          onChange={(e) => setNewTagColor(e.target.value)}
-                          className="h-10 w-12 rounded-xl border border-gray-200 bg-white p-1"
-                          title="Tag color"
+                    </div>
+
+                    {(wStatus === "loss" || wStatus === "break_even") && (
+                      <div>
+                        <div className="text-sm mb-1">
+                          Post Loss Review (Optional)
+                        </div>
+                        <textarea
+                          {...register("notes_review")}
+                          rows={3}
+                          placeholder="Reflect on what went wrong..."
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
                         />
-                        <button
-                          type="button"
-                          onClick={() => void createPendingTag()}
-                          className="rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
-                        >
-                          Add Tag
-                        </button>
-                      </div>
-                    </div>
-
-                    {tagsError && (
-                      <p className="mt-1 text-xs text-red-600">{tagsError}</p>
-                    )}
-
-                    {wTags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {wTags.map((t: string) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => {
-                              const updated = wTags.filter(
-                                (x: string) => x !== t,
-                              );
-                              setValue("tags", updated, {
-                                shouldDirty: true,
-                                shouldValidate: false,
-                              });
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-                          >
-                            <span
-                              className="h-2 w-2 rounded-full"
-                              style={{
-                                backgroundColor:
-                                  availableTags.find((tag) => tag.name === t)
-                                    ?.color ?? "#9CA3AF",
-                              }}
-                            />
-                            <span>{t}</span>
-                            <span className="text-gray-500">✕</span>
-                          </button>
-                        ))}
                       </div>
                     )}
-
-                    <div className="mt-3">
-                      <div className="text-xs text-gray-500 mb-1">
-                        Existing tags
-                        {tagsLoading && " (loading…)"}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableTags.length === 0 && !tagsLoading && (
-                          <span className="text-xs text-gray-400">
-                            No tags yet. Create one above.
-                          </span>
-                        )}
-                        {availableTags
-                          .filter((t) => !wTags.includes(t.name))
-                          .map((tag) => (
-                            <button
-                              type="button"
-                              key={tag.id}
-                              onClick={() => {
-                                const updated = [...wTags, tag.name];
-                                setValue("tags", updated, {
-                                  shouldDirty: true,
-                                  shouldValidate: false,
-                                });
-                              }}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
-                            >
-                              <span
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
-                              />
-                              {tag.name}
-                            </button>
-                          ))}
-                      </div>
-                    </div>
                   </div>
                 )}
               </>

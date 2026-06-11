@@ -5,12 +5,13 @@ import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { getActiveAccountId } from "@/lib/account"
 import { Prisma } from "@prisma/client"
+import { getDefaultStrategyId } from "@/lib/trade-helpers"
 
 type Status = "in_progress" | "win" | "loss" | "break_even"
 
 const BaseSchema = z
   .object({
-    strategy_id: z.string().min(1),
+    strategy_id: z.string().min(1).optional(),
     asset_name: z.string().min(1),
     trade_type: z.union([z.number(), z.string()]),
     trade_datetime: z.string().min(1),
@@ -118,8 +119,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
+  const strategyId = data.strategy_id ?? (await getDefaultStrategyId(accountId))
   const okStrategy = await prisma.strategy.findFirst({
-    where: { id: data.strategy_id, account_id: accountId },
+    where: { id: strategyId, account_id: accountId },
     select: { id: true },
   })
   if (!okStrategy)
@@ -160,7 +162,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         amount_spent: data.amount_spent,
         amount: amountQty,
         status: statusToPersist,
-        strategy_id: data.strategy_id,
+        strategy_id: strategyId,
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
