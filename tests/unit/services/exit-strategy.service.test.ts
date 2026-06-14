@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from "vitest"
 const {
   findFirstMock,
   findManyExecutionMock,
+  findManyPortfolioTradeMock,
   getOpenSpotHoldingMock,
   getOpenSpotHoldingsMock,
   resolveCurrentPriceUsdMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyExecutionMock: vi.fn(),
+  findManyPortfolioTradeMock: vi.fn(),
   getOpenSpotHoldingMock: vi.fn(),
   getOpenSpotHoldingsMock: vi.fn(),
   resolveCurrentPriceUsdMock: vi.fn(),
@@ -21,6 +23,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     exit_strategy_execution: {
       findMany: findManyExecutionMock,
+    },
+    portfolio_trade: {
+      findMany: findManyPortfolioTradeMock,
     },
   },
 }))
@@ -60,7 +65,7 @@ describe("exit strategy symbol helpers", () => {
 })
 
 describe("buildExitStrategySummary", () => {
-  it("returns realized gain from executed strategy steps", async () => {
+  it("returns realized gain from portfolio sell transactions", async () => {
     findFirstMock.mockResolvedValue({
       id: "strategy-1",
       coin_symbol: "HYPE",
@@ -72,9 +77,11 @@ describe("buildExitStrategySummary", () => {
       starting_quantity: null,
       is_active: true,
     })
-    findManyExecutionMock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ realized_profit: 12.5 }])
+    findManyExecutionMock.mockResolvedValueOnce([])
+    findManyPortfolioTradeMock.mockResolvedValueOnce([
+      { qty: 10, price_usd: 800, fee_usd: 5 },
+      { qty: 0.5, price_usd: 660, fee_usd: 0.73 },
+    ])
     getOpenSpotHoldingMock.mockResolvedValue({
       symbol: "HYPE",
       qty: 10,
@@ -99,6 +106,6 @@ describe("buildExitStrategySummary", () => {
       }),
     )
     expect(summary.totalProfitUsd).toBe(0)
-    expect(summary.realizedGainUsd).toBe(12.5)
+    expect(summary.realizedGainUsd).toBe(8324.27)
   })
 })

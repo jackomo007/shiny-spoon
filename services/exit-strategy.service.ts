@@ -163,6 +163,38 @@ function round(n: number, digits: number): number {
   return Math.round(n * p) / p;
 }
 
+async function getPortfolioRealizedGainUsd(
+  accountId: string,
+  coins: string[],
+): Promise<number> {
+  const symbols = normalizeCoinSymbols(coins);
+  if (!symbols.length) return 0;
+
+  const rows = await prisma.portfolio_trade.findMany({
+    where: {
+      account_id: accountId,
+      asset_name: { in: symbols },
+      kind: "sell",
+    },
+    select: {
+      qty: true,
+      price_usd: true,
+      fee_usd: true,
+    },
+  });
+
+  return rows.reduce((sum, row) => {
+    const qty = Number(row.qty ?? 0);
+    const priceUsd = Number(row.price_usd ?? 0);
+    const feeUsd = Number(row.fee_usd ?? 0) || 0;
+
+    if (!Number.isFinite(qty) || qty <= 0) return sum;
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return sum;
+
+    return sum + qty * priceUsd - feeUsd;
+  }, 0);
+}
+
 async function buildAssetSummary(
   accountId: string,
   strategyId: string,
@@ -284,14 +316,7 @@ export async function buildExitStrategySummary(
     .filter((a) => a.status === "ready")
     .reduce((sum, a) => sum + a.usdValueToSell, 0);
 
-  const realizedGainRows = await prisma.exit_strategy_execution.findMany({
-    where: { exit_strategy_id: s.id },
-    select: { realized_profit: true },
-  });
-  const realizedGainUsd = realizedGainRows.reduce(
-    (sum, row) => sum + Number(row.realized_profit ?? 0),
-    0,
-  );
+  const realizedGainUsd = await getPortfolioRealizedGainUsd(accountId, coins);
 
   return {
     id: s.id,
