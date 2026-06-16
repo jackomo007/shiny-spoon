@@ -3,6 +3,7 @@ import React from "react";
 type JournalToolbarProps = {
   activeJournalName: string;
   movedOutBanner: string | null;
+  onOpenManageJournals: () => void;
   onOpenExport: () => void;
   onOpenCreate: () => void;
 };
@@ -10,6 +11,7 @@ type JournalToolbarProps = {
 export default function JournalToolbar({
   activeJournalName,
   movedOutBanner,
+  onOpenManageJournals,
   onOpenExport,
   onOpenCreate,
 }: JournalToolbarProps) {
@@ -24,13 +26,14 @@ export default function JournalToolbar({
         </div>
 
         <div className="flex items-center gap-3">
-          <a
-            href="/journals"
+          <button
+            type="button"
+            onClick={onOpenManageJournals}
             className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"
             title="Manage journals"
           >
             📒 Manage Journals
-          </a>
+          </button>
           <button
             onClick={onOpenExport}
             className="flex items-center gap-2 rounded-xl bg-white text-gray-700 px-3 py-2 shadow-sm hover:bg-gray-50"

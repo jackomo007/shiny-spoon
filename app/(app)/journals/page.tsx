@@ -21,6 +21,7 @@ import DeleteEntryModal from "@/components/journal/DeleteEntryModal";
 import QuickCloseModal from "@/components/journal/QuickCloseModal";
 import FirstRunJournalModal from "@/components/journal/FirstRunJournalModal";
 import JournalFooter from "@/components/journal/JournalFooter";
+import ManageJournalsModal from "@/components/journal/ManageJournalsModal";
 
 type TradeType = 1 | 2;
 type Status = "in_progress" | "win" | "loss" | "break_even";
@@ -246,7 +247,15 @@ function JournalsPageContent() {
   const amountSyncRef = useRef<"amount_spent" | "amount" | null>(null);
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
+  const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
+  const [manageJournalsOpen, setManageJournalsOpen] = useState(false);
+  const [pendingJournalAction, setPendingJournalAction] = useState<string | null>(
+    null,
+  );
+  const [manageJournalsError, setManageJournalsError] = useState<string | null>(
+    null,
+  );
 
   const searchParams = useSearchParams();
   const [handledFromPortfolio, setHandledFromPortfolio] = useState(false);
@@ -501,6 +510,7 @@ function JournalsPageContent() {
       const jnPayload = (await jn.json()) as JournalsPayload;
       const list = jnPayload.items ?? [];
       setJournals(list);
+      setActiveJournalId(jnPayload.activeJournalId ?? null);
 
       const name =
         list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ??
@@ -1111,6 +1121,88 @@ function JournalsPageContent() {
     }
   }
 
+  async function switchActiveJournal(id: string) {
+    setPendingJournalAction(`select:${id}`);
+    setManageJournalsError(null);
+    try {
+      const r = await fetch("/api/journal/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+
+      await load();
+      setManageJournalsOpen(false);
+    } catch (e) {
+      setManageJournalsError(
+        e instanceof Error ? e.message : "Failed to switch journal",
+      );
+    } finally {
+      setPendingJournalAction(null);
+    }
+  }
+
+  async function createJournal(name: string) {
+    setPendingJournalAction("create");
+    setManageJournalsError(null);
+    try {
+      const r = await fetch("/api/journals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const created = (await r.json()) as { id: string };
+
+      await switchActiveJournal(created.id);
+    } catch (e) {
+      setManageJournalsError(
+        e instanceof Error ? e.message : "Failed to create journal",
+      );
+    } finally {
+      setPendingJournalAction(null);
+    }
+  }
+
+  async function renameJournal(id: string, name: string) {
+    setPendingJournalAction(`rename:${id}`);
+    setManageJournalsError(null);
+    try {
+      const r = await fetch(`/api/journals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+
+      await load();
+    } catch (e) {
+      setManageJournalsError(
+        e instanceof Error ? e.message : "Failed to rename journal",
+      );
+    } finally {
+      setPendingJournalAction(null);
+    }
+  }
+
+  async function deleteJournal(id: string) {
+    setPendingJournalAction(`delete:${id}`);
+    setManageJournalsError(null);
+    try {
+      const r = await fetch(`/api/journals/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(await r.text());
+
+      await load();
+    } catch (e) {
+      setManageJournalsError(
+        e instanceof Error ? e.message : "Failed to delete journal",
+      );
+    } finally {
+      setPendingJournalAction(null);
+    }
+  }
+
   function renderTagsSection() {
     return (
       <div>
@@ -1214,6 +1306,7 @@ function JournalsPageContent() {
       <JournalToolbar
         activeJournalName={activeJournalName}
         movedOutBanner={movedOutBanner}
+        onOpenManageJournals={() => setManageJournalsOpen(true)}
         onOpenExport={() => setExportOpen(true)}
         onOpenCreate={openCreate}
       />
@@ -1784,6 +1877,27 @@ function JournalsPageContent() {
       </Modal>
 
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
+
+      <ManageJournalsModal
+        open={manageJournalsOpen}
+        journals={journals}
+        activeJournalId={activeJournalId}
+        pendingAction={pendingJournalAction}
+        error={manageJournalsError}
+        onClose={() => setManageJournalsOpen(false)}
+        onSelect={(id) => {
+          void switchActiveJournal(id);
+        }}
+        onCreate={(name) => {
+          void createJournal(name);
+        }}
+        onRename={(id, name) => {
+          void renameJournal(id, name);
+        }}
+        onDelete={(id) => {
+          void deleteJournal(id);
+        }}
+      />
 
       <DeleteEntryModal
         open={confirmOpen}

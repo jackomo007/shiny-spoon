@@ -6,8 +6,11 @@ import { getActiveAccountId } from "@/lib/account"
 import { getActiveJournalId, setActiveJournalId } from "@/lib/journal"
 import { revalidatePath } from "next/cache"
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library"
+import { z } from "zod"
 
-function getJournalId(context: unknown): string {
+const BodySchema = z.object({ name: z.string().min(1) })
+
+async function getJournalId(context: unknown): Promise<string> {
   if (typeof context !== "object" || context === null) {
     throw new Error("Invalid route context")
   }
@@ -15,10 +18,59 @@ function getJournalId(context: unknown): string {
   if (typeof paramsUnknown !== "object" || paramsUnknown === null) {
     throw new Error("Route params missing")
   }
-  const idVal = (paramsUnknown as Record<string, unknown>)["id"]
+  const params =
+    typeof (paramsUnknown as Promise<unknown>).then === "function"
+      ? await (paramsUnknown as Promise<unknown>)
+      : paramsUnknown
+  if (typeof params !== "object" || params === null) {
+    throw new Error("Route params missing")
+  }
+  const idVal = (params as Record<string, unknown>)["id"]
   if (typeof idVal === "string") return idVal
   if (Array.isArray(idVal) && typeof idVal[0] === "string") return idVal[0]
   throw new Error("Invalid route param id")
+}
+
+export async function PATCH(req: Request, context: unknown) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = Number(session.user.id)
+    const accountId = await getActiveAccountId(userId)
+    if (!accountId) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
+    }
+
+    const journalId = await getJournalId(context)
+    const parsed = BodySchema.safeParse(await req.json())
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    }
+
+    const updated = await prisma.journal.updateMany({
+      where: { id: journalId, account_id: accountId },
+      data: { name: parsed.data.name.trim() },
+    })
+
+    if (updated.count === 0) {
+      return NextResponse.json({ error: "Journal not found" }, { status: 404 })
+    }
+
+    revalidatePath("/journals")
+    return NextResponse.json({ id: journalId, name: parsed.data.name.trim() })
+  } catch (e: unknown) {
+    if (e instanceof PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json(
+        { error: "A journal with this name already exists." },
+        { status: 409 },
+      )
+    }
+    console.error("[PATCH /api/journals/[id]]", e)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
 }
 
 export async function DELETE(_req: Request, context: unknown) {
@@ -34,7 +86,7 @@ export async function DELETE(_req: Request, context: unknown) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    const journalId = getJournalId(context)
+    const journalId = await getJournalId(context)
 
     const journal = await prisma.journal.findFirst({
       where: { id: journalId, account_id: accountId },
