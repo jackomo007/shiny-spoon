@@ -201,6 +201,7 @@ export default function JournalPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [addNotes, setAddNotes] = useState(false);
+  const [setTargets, setSetTargets] = useState(false);
 
   const [assetQuery, setAssetQuery] = useState<string>("");
   const [assetOptions, setAssetOptions] = useState<AssetOption[]>([]);
@@ -214,6 +215,7 @@ export default function JournalPage() {
   const [tagsError, setTagsError] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#7C3AED");
+  const [showNewTagForm, setShowNewTagForm] = useState(false);
   const [selectedTagName, setSelectedTagName] = useState("");
 
   const {
@@ -305,6 +307,11 @@ export default function JournalPage() {
     const name = newTagName.trim();
     if (!name) return null;
 
+    if (!wTags.includes(name) && wTags.length >= 10) {
+      setTagsError("You can select up to 10 tags");
+      return null;
+    }
+
     if (wTags.includes(name)) {
       setNewTagName("");
       return name;
@@ -332,6 +339,7 @@ export default function JournalPage() {
       });
       setNewTagName("");
       setNewTagColor("#7C3AED");
+      setShowNewTagForm(false);
       return created.name;
     } catch {
       setTagsError("Could not create tag");
@@ -615,6 +623,8 @@ useEffect(() => {
     setEditingId(null);
     setWizardStep(1);
     setAddNotes(false);
+    setSetTargets(false);
+    setShowNewTagForm(false);
 
     validSymbolsRef.current = new Set();
     setAssetQuery("");
@@ -643,6 +653,8 @@ useEffect(() => {
     setEditingId(row.id);
     setWizardStep(1);
     setAddNotes(Boolean(row.notes_entry || row.notes_review));
+    setSetTargets(Boolean(row.exit_price || row.stop_loss_price));
+    setShowNewTagForm(false);
 
     validSymbolsRef.current = new Set([row.asset_name.toUpperCase()]);
     setAssetQuery(row.asset_name);
@@ -750,9 +762,11 @@ useEffect(() => {
     const amt = amtRaw > 0 ? amtRaw : entry > 0 && qty > 0 ? qty * entry : NaN;
     const fee = toNum(form.trading_fee ?? "0");
     const exit =
-      form.exit_price && form.exit_price.trim() ? toNum(form.exit_price) : null;
+      setTargets && form.exit_price && form.exit_price.trim()
+        ? toNum(form.exit_price)
+        : null;
     const sl =
-      form.stop_loss_price && form.stop_loss_price.trim()
+      setTargets && form.stop_loss_price && form.stop_loss_price.trim()
         ? toNum(form.stop_loss_price)
         : null;
 
@@ -1196,21 +1210,82 @@ async function fetchAssets(q: string) {
     return (
       <div>
         <div className="text-sm mb-1">Tags (Optional)</div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            type="text"
-            value={newTagName}
-            onChange={(e) => setNewTagName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void createPendingTag();
-              }
-            }}
-            placeholder="Tag name"
-            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
-          />
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-2 lg:flex-row">
+          <div className="max-h-44 min-h-24 flex-1 overflow-y-auto rounded-xl border border-gray-200 p-2">
+            {availableTags.map((tag) => {
+              const checked = wTags.includes(tag.name);
+              const disabled = !checked && wTags.length >= 10;
+
+              return (
+                <label
+                  key={tag.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-gray-50 ${
+                    disabled ? "opacity-50" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        if (wTags.length >= 10) {
+                          setTagsError("You can select up to 10 tags");
+                          return;
+                        }
+                        setTagsError(null);
+                        setValue("tags", [...wTags, tag.name], {
+                          shouldDirty: true,
+                        });
+                      } else {
+                        setTagsError(null);
+                        setValue(
+                          "tags",
+                          wTags.filter((name: string) => name !== tag.name),
+                          { shouldDirty: true },
+                        );
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
+                  />
+                  <span>{tag.name}</span>
+                </label>
+              );
+            })}
+            {availableTags.length === 0 && !tagsLoading && (
+              <p className="px-2 py-1 text-xs text-gray-400">
+                No tags yet. Add a new tag.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowNewTagForm((open) => !open)}
+            className="h-10 rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
+          >
+            Add New Tag
+          </button>
+        </div>
+
+        {showNewTagForm && (
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-gray-200 p-3 sm:flex-row">
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void createPendingTag();
+                }
+              }}
+              placeholder="New tag name"
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            />
             <input
               type="color"
               value={newTagColor}
@@ -1221,13 +1296,15 @@ async function fetchAssets(q: string) {
             <button
               type="button"
               onClick={() => void createPendingTag()}
-              className="rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
+              className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
             >
-              Add Tag
+              Save Tag
             </button>
           </div>
-        </div>
+        )}
+
         {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
+        <p className="mt-1 text-xs text-gray-500">{wTags.length}/10 selected</p>
         {wTags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {wTags.map((t: string) => (
@@ -1254,38 +1331,6 @@ async function fetchAssets(q: string) {
             ))}
           </div>
         )}
-        <div className="mt-3">
-          <div className="text-xs text-gray-500 mb-1">
-            Existing tags
-            {tagsLoading && " (loading...)"}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availableTags.length === 0 && !tagsLoading && (
-              <span className="text-xs text-gray-400">
-                No tags yet. Create one above.
-              </span>
-            )}
-            {availableTags
-              .filter((t) => !wTags.includes(t.name))
-              .map((tag) => (
-                <button
-                  type="button"
-                  key={tag.id}
-                  onClick={() => {
-                    const updated = [...wTags, tag.name];
-                    setValue("tags", updated, { shouldDirty: true });
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50"
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
-                  />
-                  {tag.name}
-                </button>
-              ))}
-          </div>
-        </div>
       </div>
     );
   }
@@ -1643,27 +1688,41 @@ async function fetchAssets(q: string) {
                       </div>
                     </div>
 
-                    <div>
-                      <div className="text-sm mb-1">Take Profit Price</div>
-                      <MoneyField<JournalForm>
-                        name="exit_price"
-                        control={control}
-                        decimalPlaces={8}
-                        placeholder="e.g. 28000.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={setTargets}
+                        onChange={(e) => setSetTargets(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300"
                       />
-                    </div>
+                      Set Profit & Loss Targets
+                    </label>
 
-                    <div>
-                      <div className="text-sm mb-1">Stop Loss Price</div>
-                      <MoneyField<JournalForm>
-                        name="stop_loss_price"
-                        control={control}
-                        decimalPlaces={8}
-                        placeholder="e.g. 25000.00"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                      />
-                    </div>
+                    {setTargets && (
+                      <>
+                        <div>
+                          <div className="text-sm mb-1">Take Profit Price</div>
+                          <MoneyField<JournalForm>
+                            name="exit_price"
+                            control={control}
+                            decimalPlaces={8}
+                            placeholder="e.g. 28000.00"
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-sm mb-1">Stop Loss Price</div>
+                          <MoneyField<JournalForm>
+                            name="stop_loss_price"
+                            control={control}
+                            decimalPlaces={8}
+                            placeholder="e.g. 25000.00"
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1691,27 +1750,42 @@ async function fetchAssets(q: string) {
                           </p>
                         )}
                       </div>
-                      <div>
-                        <div className="text-sm mb-1">Take Profit Price</div>
-                        <MoneyField<JournalForm>
-                          name="exit_price"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 28000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
-                      <div className="md:col-span-full">
-                        <div className="text-sm mb-1">Stop Loss Price</div>
-                        <MoneyField<JournalForm>
-                          name="stop_loss_price"
-                          control={control}
-                          decimalPlaces={8}
-                          placeholder="e.g. 25000.00"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                        />
-                      </div>
                     </div>
+
+                    <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={setTargets}
+                        onChange={(e) => setSetTargets(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      Set Profit & Loss Targets
+                    </label>
+
+                    {setTargets && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm mb-1">Take Profit Price</div>
+                          <MoneyField<JournalForm>
+                            name="exit_price"
+                            control={control}
+                            decimalPlaces={8}
+                            placeholder="e.g. 28000.00"
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <div className="text-sm mb-1">Stop Loss Price</div>
+                          <MoneyField<JournalForm>
+                            name="stop_loss_price"
+                            control={control}
+                            decimalPlaces={8}
+                            placeholder="e.g. 25000.00"
+                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
