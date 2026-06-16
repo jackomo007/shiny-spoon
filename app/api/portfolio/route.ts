@@ -7,6 +7,7 @@ import {
   cgPriceUsdByIdSafe,
 } from "@/lib/markets/coingecko";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
+import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
 
 export const dynamic = "force-dynamic";
 
@@ -254,16 +255,22 @@ export async function GET() {
           gainLossPct: null,
         });
       } else {
-        const avg = s.qtyHeld > 0 ? s.costBasisUsd / s.qtyHeld : 0;
-        const grossSaleValueUsd = totalUsd - fee;
+        const result = calculatePortfolioPnl([
+          {
+            kind: "init",
+            qty: s.qtyHeld,
+            priceUsd: s.qtyHeld > 0 ? s.costBasisUsd / s.qtyHeld : 0,
+            feeUsd: 0,
+          },
+          { kind, qty, priceUsd: price, feeUsd: fee },
+        ]);
+        const sellTx = result.transactions.at(-1);
+        const saleProceedsUsd = totalUsd - fee;
+        s.qtyHeld = result.qtyHeld;
+        s.costBasisUsd = result.costBasisUsd;
 
-        const reduceQty = Math.min(qty, s.qtyHeld);
-
-        s.qtyHeld -= reduceQty;
-        s.costBasisUsd -= reduceQty * avg;
-
-        if (Number.isFinite(grossSaleValueUsd)) {
-          s.realizedProfitUsd += grossSaleValueUsd;
+        if (Number.isFinite(result.realizedPnlUsd)) {
+          s.realizedProfitUsd += result.realizedPnlUsd;
         }
 
         if (s.qtyHeld < 1e-10) {
@@ -281,12 +288,10 @@ export async function GET() {
           executedAt: r.trade_datetime.toISOString(),
           qty,
           priceUsd: price,
-          totalUsd: grossSaleValueUsd,
+          totalUsd: saleProceedsUsd,
           feeUsd: fee,
-          gainLossUsd: Number.isFinite(grossSaleValueUsd)
-            ? grossSaleValueUsd
-            : null,
-          gainLossPct: null,
+          gainLossUsd: sellTx?.realizedPnlUsd ?? null,
+          gainLossPct: sellTx?.realizedPnlPct ?? null,
         });
       }
     }

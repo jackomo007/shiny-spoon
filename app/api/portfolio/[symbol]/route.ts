@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { cgPriceUsdByIdSafe } from "@/lib/markets/coingecko";
 import { calculateKeyLevels } from "@/lib/markets/pivotPoints";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
+import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
 
 export const dynamic = "force-dynamic";
 
@@ -66,11 +67,6 @@ export async function GET(
       },
     })) as DbRow[];
 
-    let qtyHeld = 0;
-    let costBasisUsd = 0;
-    let totalInvestedUsd = 0;
-    let realizedProfitUsd = 0;
-
     const transactions: Array<{
       id: string;
       side: "buy" | "sell";
@@ -83,64 +79,35 @@ export async function GET(
       gainLossPct: number | null;
     }> = [];
 
-    for (const r of rows) {
-      const kind = String(r.kind || "").toLowerCase();
-      const side: "buy" | "sell" = kind === "sell" ? "sell" : "buy";
+    const pnl = calculatePortfolioPnl(
+      rows.map((r) => ({
+        id: r.id,
+        executedAt: r.trade_datetime,
+        kind: r.kind,
+        qty: r.qty,
+        priceUsd: r.price_usd,
+        feeUsd: r.fee_usd,
+      })),
+    );
 
-      const qty = Number(r.qty ?? 0);
-      const price = Number(r.price_usd ?? 0);
-      const fee = Number(r.fee_usd ?? 0) || 0;
-
-      if (!Number.isFinite(qty) || qty <= 0) continue;
-      if (!Number.isFinite(price) || price <= 0) continue;
-
-      const totalUsd = qty * price;
-
-      if (side === "buy") {
-        qtyHeld += qty;
-        costBasisUsd += totalUsd + fee;
-        totalInvestedUsd += totalUsd + fee;
-
-        transactions.push({
-          id: r.id,
-          side: "buy",
-          executedAt: r.trade_datetime.toISOString(),
-          qty,
-          priceUsd: price,
-          totalUsd: totalUsd + fee,
-          feeUsd: fee,
-          gainLossUsd: null,
-          gainLossPct: null,
-        });
-      } else {
-        const avg = qtyHeld > 0 ? costBasisUsd / qtyHeld : 0;
-        const grossSaleValueUsd = totalUsd - fee;
-
-        realizedProfitUsd += grossSaleValueUsd;
-
-        const reduceQty = Math.min(qty, qtyHeld);
-        qtyHeld -= reduceQty;
-        costBasisUsd -= reduceQty * avg;
-        if (qtyHeld < 1e-10) {
-          qtyHeld = 0;
-          costBasisUsd = 0;
-        }
-
-        transactions.push({
-          id: r.id,
-          side: "sell",
-          executedAt: r.trade_datetime.toISOString(),
-          qty,
-          priceUsd: price,
-          totalUsd: grossSaleValueUsd,
-          feeUsd: fee,
-          gainLossUsd: Number.isFinite(grossSaleValueUsd)
-            ? grossSaleValueUsd
-            : null,
-          gainLossPct: null,
-        });
-      }
+    for (const tx of pnl.transactions) {
+      transactions.push({
+        id: tx.id ?? "",
+        side: tx.side,
+        executedAt: tx.executedAt?.toISOString() ?? new Date(0).toISOString(),
+        qty: tx.qty,
+        priceUsd: tx.priceUsd,
+        totalUsd: tx.totalUsd,
+        feeUsd: tx.feeUsd,
+        gainLossUsd: tx.realizedPnlUsd,
+        gainLossPct: tx.realizedPnlPct,
+      });
     }
+
+    const qtyHeld = pnl.qtyHeld;
+    const costBasisUsd = pnl.costBasisUsd;
+    const totalInvestedUsd = pnl.totalInvestedUsd;
+    const realizedProfitUsd = pnl.realizedPnlUsd;
 
     let currentPrice = 0;
     let change24hPct: number | null = null;

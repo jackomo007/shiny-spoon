@@ -65,7 +65,7 @@ describe("exit strategy symbol helpers", () => {
 })
 
 describe("buildExitStrategySummary", () => {
-  it("returns realized gain from portfolio sell transactions", async () => {
+  it("returns realized gain from portfolio sell transaction PnL", async () => {
     findFirstMock.mockResolvedValue({
       id: "strategy-1",
       coin_symbol: "HYPE",
@@ -79,8 +79,10 @@ describe("buildExitStrategySummary", () => {
     })
     findManyExecutionMock.mockResolvedValueOnce([])
     findManyPortfolioTradeMock.mockResolvedValueOnce([
-      { qty: 10, price_usd: 800, fee_usd: 5 },
-      { qty: 0.5, price_usd: 660, fee_usd: 0.73 },
+      { asset_name: "HYPE", kind: "buy", qty: 10, price_usd: 500, fee_usd: 0 },
+      { asset_name: "HYPE", kind: "sell", qty: 10, price_usd: 800, fee_usd: 5 },
+      { asset_name: "HYPE", kind: "buy", qty: 0.5, price_usd: 500, fee_usd: 0 },
+      { asset_name: "HYPE", kind: "sell", qty: 0.5, price_usd: 660, fee_usd: 0.73 },
     ])
     getOpenSpotHoldingMock.mockResolvedValue({
       symbol: "HYPE",
@@ -106,6 +108,6 @@ describe("buildExitStrategySummary", () => {
       }),
     )
     expect(summary.totalProfitUsd).toBe(0)
-    expect(summary.realizedGainUsd).toBe(8324.27)
+    expect(summary.realizedGainUsd).toBe(3074.27)
   })
 })

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveCurrentPriceUsd } from "@/lib/current-price";
+import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
 import {
   getOpenSpotHolding,
   getOpenSpotHoldings,
@@ -174,24 +175,35 @@ async function getPortfolioRealizedGainUsd(
     where: {
       account_id: accountId,
       asset_name: { in: symbols },
-      kind: "sell",
+      kind: { in: ["buy", "sell", "init"] },
     },
+    orderBy: { trade_datetime: "asc" },
     select: {
+      asset_name: true,
+      kind: true,
       qty: true,
       price_usd: true,
       fee_usd: true,
     },
   });
 
-  return rows.reduce((sum, row) => {
-    const qty = Number(row.qty ?? 0);
-    const priceUsd = Number(row.price_usd ?? 0);
-    const feeUsd = Number(row.fee_usd ?? 0) || 0;
+  const bySymbol = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const symbol = String(row.asset_name || "").trim().toUpperCase();
+    if (!symbol) continue;
+    bySymbol.set(symbol, [...(bySymbol.get(symbol) ?? []), row]);
+  }
 
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return sum;
-
-    return sum + qty * priceUsd - feeUsd;
+  return Array.from(bySymbol.values()).reduce((sum, symbolRows) => {
+    const pnl = calculatePortfolioPnl(
+      symbolRows.map((row) => ({
+        kind: row.kind,
+        qty: row.qty,
+        priceUsd: row.price_usd,
+        feeUsd: row.fee_usd,
+      })),
+    );
+    return sum + pnl.realizedPnlUsd;
   }, 0);
 }
 
