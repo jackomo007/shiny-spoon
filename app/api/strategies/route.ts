@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getActiveAccountId } from "@/lib/account"
 import { StrategyUpsert } from "@/lib/validators"
+import { calcJournalPnl } from "@/lib/trade-helpers"
 
 function parseRange(searchParams: URLSearchParams) {
   const end = searchParams.get("end") ? new Date(searchParams.get("end")!) : new Date()
@@ -17,19 +18,22 @@ function parseRange(searchParams: URLSearchParams) {
 
 function calcPnL(row: {
   side: "buy" | "sell" | "long" | "short"
+  status: "in_progress" | "win" | "loss" | "break_even"
   trade_type: 1 | 2
   entry_price: number
   exit_price: number | null
+  stop_loss_price: number | null
   amount_spent: number
 }) {
-  if (row.exit_price == null) return 0
-  const qtyBase = row.amount_spent / row.entry_price
-  const qty = qtyBase
-  const diff =
-    row.side === "buy" || row.side === "long"
-      ? row.exit_price - row.entry_price
-      : row.entry_price - row.exit_price
-  return diff * qty
+  return calcJournalPnl({
+    side: row.side,
+    status: row.status,
+    entry: row.entry_price,
+    exit: row.exit_price,
+    stopLoss: row.stop_loss_price,
+    amountSpent: row.amount_spent,
+    tradeType: row.trade_type,
+  }) ?? 0
 }
 
 function calcRR(row: {
@@ -109,9 +113,11 @@ export async function GET(req: Request) {
     const pnls = ts.map(t =>
       calcPnL({
         side: t.side as "buy" | "sell" | "long" | "short",
+        status: t.status as "in_progress" | "win" | "loss" | "break_even",
         trade_type: t.trade_type as 1 | 2,
         entry_price: Number(t.entry_price),
         exit_price: t.exit_price != null ? Number(t.exit_price) : null,
+        stop_loss_price: t.stop_loss_price != null ? Number(t.stop_loss_price) : null,
         amount_spent: Number(t.amount_spent),
       })
     )

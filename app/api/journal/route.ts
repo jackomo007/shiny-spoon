@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getActiveAccountId } from "@/lib/account";
 import { getActiveJournalId } from "@/lib/journal";
-import { getDefaultStrategyId, qtyFrom, calcPnl } from "@/lib/trade-helpers";
+import { getDefaultStrategyId, qtyFrom, calcJournalPnl } from "@/lib/trade-helpers";
 
 type Status = "in_progress" | "win" | "loss" | "break_even";
 
@@ -103,10 +103,12 @@ export async function GET(req: Request) {
   });
 
   const items = rows.map((r) => {
-    const pnl = calcPnl({
+    const pnl = calcJournalPnl({
       side: r.side,
+      status: r.status,
       entry: Number(r.entry_price),
       exit: r.exit_price != null ? Number(r.exit_price) : null,
+      stopLoss: r.stop_loss_price != null ? Number(r.stop_loss_price) : null,
       amountSpent: Number(r.amount_spent),
       leverage: null,
       tradeType: r.trade_type as 1 | 2,

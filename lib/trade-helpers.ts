@@ -50,3 +50,37 @@ export function calcPnl(input: {
   const net = gross - fees
   return Number(net.toFixed(2))
 }
+
+export function calcJournalPnl(input: {
+  side: "buy" | "sell" | "long" | "short"
+  status: "in_progress" | "win" | "loss" | "break_even"
+  entry: number
+  exit: number | null
+  stopLoss: number | null
+  amountSpent: number
+  leverage?: number | null
+  tradeType: 1 | 2
+  buyFee?: number
+  sellFee?: number
+  tradingFee?: number | null
+}): number | null {
+  if (input.status === "in_progress") return null
+  if (input.status === "break_even") return 0
+
+  const realizedExit =
+    input.status === "loss"
+      ? input.stopLoss ?? input.exit
+      : input.exit
+
+  return calcPnl({
+    side: input.side,
+    entry: input.entry,
+    exit: realizedExit,
+    amountSpent: input.amountSpent,
+    leverage: input.leverage,
+    tradeType: input.tradeType,
+    buyFee: input.buyFee,
+    sellFee: input.sellFee,
+    tradingFee: input.tradingFee,
+  })
+}

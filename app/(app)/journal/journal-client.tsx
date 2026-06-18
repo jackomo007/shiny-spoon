@@ -1206,12 +1206,74 @@ async function fetchAssets(q: string) {
     }
   }
 
+  function renderTargetsSection() {
+    return (
+      <>
+        <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            checked={setTargets}
+            onChange={(e) => setSetTargets(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+          Set Profit & Loss Targets
+        </label>
+
+        {setTargets && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm mb-1">Take Profit Price</div>
+              <MoneyField<JournalForm>
+                name="exit_price"
+                control={control}
+                decimalPlaces={8}
+                placeholder="e.g. 28000.00"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
+              />
+            </div>
+            <div>
+              <div className="text-sm mb-1">Stop Loss Price</div>
+              <MoneyField<JournalForm>
+                name="stop_loss_price"
+                control={control}
+                decimalPlaces={8}
+                placeholder="e.g. 25000.00"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
+              />
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   function renderTagsSection() {
     return (
       <div>
         <div className="text-sm mb-1">Tags (Optional)</div>
-        <div className="flex flex-col gap-2 lg:flex-row">
-          <div className="max-h-44 min-h-24 flex-1 overflow-y-auto rounded-xl border border-gray-200 p-2">
+        <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="flex min-h-11 flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2">
+            {wTags.length > 0 ? (
+              wTags.map((t: string) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    const updated = wTags.filter((x: string) => x !== t);
+                    setValue("tags", updated, { shouldDirty: true });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200"
+                >
+                  <span>{t}</span>
+                  <span aria-hidden="true">x</span>
+                </button>
+              ))
+            ) : (
+              <span className="text-sm text-gray-400">Select tags</span>
+            )}
+          </div>
+
+          <div className="max-h-44 overflow-y-auto p-2">
             {availableTags.map((tag) => {
               const checked = wTags.includes(tag.name);
               const disabled = !checked && wTags.length >= 10;
@@ -1262,6 +1324,9 @@ async function fetchAssets(q: string) {
               </p>
             )}
           </div>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setShowNewTagForm((open) => !open)}
@@ -1269,6 +1334,7 @@ async function fetchAssets(q: string) {
           >
             Add New Tag
           </button>
+          <p className="text-xs text-gray-500">{wTags.length}/10 selected</p>
         </div>
 
         {showNewTagForm && (
@@ -1304,33 +1370,6 @@ async function fetchAssets(q: string) {
         )}
 
         {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
-        <p className="mt-1 text-xs text-gray-500">{wTags.length}/10 selected</p>
-        {wTags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {wTags.map((t: string) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  const updated = wTags.filter((x: string) => x !== t);
-                  setValue("tags", updated, { shouldDirty: true });
-                }}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{
-                    backgroundColor:
-                      availableTags.find((tag) => tag.name === t)?.color ??
-                      "#9CA3AF",
-                  }}
-                />
-                <span>{t}</span>
-                <span className="text-gray-500">x</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     );
   }
@@ -1688,41 +1727,7 @@ async function fetchAssets(q: string) {
                       </div>
                     </div>
 
-                    <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={setTargets}
-                        onChange={(e) => setSetTargets(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                      Set Profit & Loss Targets
-                    </label>
-
-                    {setTargets && (
-                      <>
-                        <div>
-                          <div className="text-sm mb-1">Take Profit Price</div>
-                          <MoneyField<JournalForm>
-                            name="exit_price"
-                            control={control}
-                            decimalPlaces={8}
-                            placeholder="e.g. 28000.00"
-                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="text-sm mb-1">Stop Loss Price</div>
-                          <MoneyField<JournalForm>
-                            name="stop_loss_price"
-                            control={control}
-                            decimalPlaces={8}
-                            placeholder="e.g. 25000.00"
-                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          />
-                        </div>
-                      </>
-                    )}
+                    {renderTargetsSection()}
                   </>
                 ) : (
                   <>
@@ -1751,41 +1756,6 @@ async function fetchAssets(q: string) {
                         )}
                       </div>
                     </div>
-
-                    <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={setTargets}
-                        onChange={(e) => setSetTargets(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                      Set Profit & Loss Targets
-                    </label>
-
-                    {setTargets && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-sm mb-1">Take Profit Price</div>
-                          <MoneyField<JournalForm>
-                            name="exit_price"
-                            control={control}
-                            decimalPlaces={8}
-                            placeholder="e.g. 28000.00"
-                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm mb-1">Stop Loss Price</div>
-                          <MoneyField<JournalForm>
-                            name="stop_loss_price"
-                            control={control}
-                            decimalPlaces={8}
-                            placeholder="e.g. 25000.00"
-                            className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          />
-                        </div>
-                      </div>
-                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -1898,6 +1868,8 @@ async function fetchAssets(q: string) {
                     </div>
                   </>
                 )}
+
+                {wTradeType === 2 && renderTargetsSection()}
 
                 <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">
                   <input

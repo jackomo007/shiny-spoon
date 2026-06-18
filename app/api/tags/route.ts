@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { getActiveAccountId } from "@/lib/account"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+import { calcJournalPnl } from "@/lib/trade-helpers"
 
 const BodySchema = z.object({
   name: z.string().min(1),
@@ -24,18 +25,22 @@ function parseRange(searchParams: URLSearchParams) {
 
 function calcPnL(row: {
   side: "buy" | "sell" | "long" | "short"
+  status: "in_progress" | "win" | "loss" | "break_even"
   trade_type: 1 | 2
   entry_price: number
   exit_price: number | null
+  stop_loss_price: number | null
   amount_spent: number
 }) {
-  if (row.exit_price == null) return 0
-  const qty = row.amount_spent / row.entry_price
-  const diff =
-    row.side === "buy" || row.side === "long"
-      ? row.exit_price - row.entry_price
-      : row.entry_price - row.exit_price
-  return diff * qty
+  return calcJournalPnl({
+    side: row.side,
+    status: row.status,
+    entry: row.entry_price,
+    exit: row.exit_price,
+    stopLoss: row.stop_loss_price,
+    amountSpent: row.amount_spent,
+    tradeType: row.trade_type,
+  }) ?? 0
 }
 
 function calcRR(row: {
@@ -105,9 +110,12 @@ export async function GET(req: Request) {
         acc +
         calcPnL({
           side: trade.side as "buy" | "sell" | "long" | "short",
+          status: trade.status as "in_progress" | "win" | "loss" | "break_even",
           trade_type: trade.trade_type as 1 | 2,
           entry_price: Number(trade.entry_price),
           exit_price: trade.exit_price != null ? Number(trade.exit_price) : null,
+          stop_loss_price:
+            trade.stop_loss_price != null ? Number(trade.stop_loss_price) : null,
           amount_spent: Number(trade.amount_spent),
         }),
       0,

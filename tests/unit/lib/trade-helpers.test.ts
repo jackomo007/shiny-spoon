@@ -1,4 +1,4 @@
-import { calcPnl, qtyFrom } from "@/lib/trade-helpers"
+import { calcJournalPnl, calcPnl, qtyFrom } from "@/lib/trade-helpers"
 import { describe, expect, it } from "vitest"
 
 describe("trade helpers", () => {
@@ -53,5 +53,50 @@ describe("trade helpers", () => {
         tradingFee: 4.25,
       }),
     ).toBe(95.75)
+  })
+
+  it("does not count target pnl for an in-progress trade", () => {
+    expect(
+      calcJournalPnl({
+        side: "long",
+        status: "in_progress",
+        entry: 76_000,
+        exit: 80_000,
+        stopLoss: 70_208,
+        amountSpent: 1853.4912,
+        tradeType: 2,
+        tradingFee: 0,
+      }),
+    ).toBeNull()
+  })
+
+  it("uses stop loss for a losing long trade even when take profit is set", () => {
+    expect(
+      calcJournalPnl({
+        side: "long",
+        status: "loss",
+        entry: 76_000,
+        exit: 80_000,
+        stopLoss: 70_208,
+        amountSpent: 1853.4912,
+        tradeType: 2,
+        tradingFee: 0,
+      }),
+    ).toBe(-141.26)
+  })
+
+  it("uses exit price for a winning long trade", () => {
+    expect(
+      calcJournalPnl({
+        side: "long",
+        status: "win",
+        entry: 76_000,
+        exit: 80_000,
+        stopLoss: 70_208,
+        amountSpent: 1853.4912,
+        tradeType: 2,
+        tradingFee: 0,
+      }),
+    ).toBe(97.55)
   })
 })
