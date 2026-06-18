@@ -98,7 +98,7 @@ export default function QuickCloseModal({
                 className={`w-full rounded-xl border px-3 py-2 ${
                   closeFeeError ? "border-red-500" : "border-gray-200"
                 }`}
-                maxDecimals={2}
+                maxDecimals={8}
               />
 
               {closeFeeError && <div className="mt-1 text-xs text-red-600">{closeFeeError}</div>}

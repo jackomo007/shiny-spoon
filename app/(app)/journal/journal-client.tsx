@@ -74,6 +74,7 @@ type Tag = {
   name: string;
   description?: string | null;
   color?: string;
+  date_created?: string;
 };
 type JournalsPayload = {
   items?: JournalSummary[];
@@ -1255,14 +1256,19 @@ async function fetchAssets(q: string) {
   function renderTagsSection() {
     const normalizedQuery = tagQuery.trim().toLowerCase();
     const selectedTags = new Set(wTags.map((tag: string) => tag.toLowerCase()));
-    const filteredTags = availableTags
+    const unselectedTags = availableTags
       .filter((tag) => !selectedTags.has(tag.name.toLowerCase()))
-      .filter((tag) =>
-        normalizedQuery
-          ? tag.name.toLowerCase().includes(normalizedQuery)
-          : true,
-      )
-      .slice(0, 20);
+    const filteredTags = normalizedQuery
+      ? unselectedTags
+          .filter((tag) => tag.name.toLowerCase().includes(normalizedQuery))
+          .slice(0, 20)
+      : [...unselectedTags]
+          .sort(
+            (a, b) =>
+              new Date(b.date_created ?? 0).getTime() -
+              new Date(a.date_created ?? 0).getTime(),
+          )
+          .slice(0, 3);
     const exactTagExists = availableTags.some(
       (tag) => tag.name.toLowerCase() === normalizedQuery,
     );
@@ -1690,7 +1696,7 @@ async function fetchAssets(q: string) {
                           name="trading_fee"
                           control={control}
                           placeholder="0"
-                          decimalPlaces={3}
+                          decimalPlaces={8}
                           className="w-full rounded-xl border border-gray-200 px-3 py-2"
                           rules={{
                             required: "Trading fee is required",
@@ -1803,6 +1809,29 @@ async function fetchAssets(q: string) {
                           </p>
                         )}
                       </div>
+                      <div>
+                        <div className="text-sm mb-1">
+                          Trading Fee <span className="text-red-600">*</span>
+                        </div>
+                        <MoneyField<JournalForm>
+                          name="trading_fee"
+                          control={control}
+                          decimalPlaces={8}
+                          placeholder="0"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                          rules={{
+                            required: "Trading fee is required",
+                            validate: (v) =>
+                              parseDecimal((v ?? "").toString() || "0") >= 0 ||
+                              "Must be ≥ 0",
+                          }}
+                        />
+                        {errors.trading_fee && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {String(errors.trading_fee.message)}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1842,32 +1871,6 @@ async function fetchAssets(q: string) {
                         {errors.amount_spent && (
                           <p className="mt-1 text-xs text-red-600">
                             {String(errors.amount_spent.message)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-full">
-                        <div className="text-sm mb-1">
-                          Trading Fee <span className="text-red-600">*</span>
-                        </div>
-                        <MoneyField<JournalForm>
-                          name="trading_fee"
-                          control={control}
-                          decimalPlaces={3}
-                          placeholder="0"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                          rules={{
-                            required: "Trading fee is required",
-                            validate: (v) =>
-                              parseDecimal((v ?? "").toString() || "0") >= 0 ||
-                              "Must be ≥ 0",
-                          }}
-                        />
-                        {errors.trading_fee && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {String(errors.trading_fee.message)}
                           </p>
                         )}
                       </div>
