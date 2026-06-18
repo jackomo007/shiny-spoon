@@ -146,6 +146,7 @@ function toNum(input: string | number | null | undefined): number {
 }
 
 const money2 = (n: number) => `$${n.toFixed(3)}`;
+const DEFAULT_NEW_TAG_COLOR = "#7C3AED";
 
 type BasePayload = {
   asset_name: string;
@@ -213,9 +214,8 @@ export default function JournalPage() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
-  const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState("#7C3AED");
-  const [showNewTagForm, setShowNewTagForm] = useState(false);
+  const [tagQuery, setTagQuery] = useState("");
+  const [showTagMenu, setShowTagMenu] = useState(false);
   const [selectedTagName, setSelectedTagName] = useState("");
 
   const {
@@ -303,17 +303,21 @@ export default function JournalPage() {
     }
   }
 
-  async function createPendingTag() {
-    const name = newTagName.trim();
+  async function createPendingTag(name: string) {
+    name = name.trim();
     if (!name) return null;
 
-    if (!wTags.includes(name) && wTags.length >= 10) {
+    const alreadySelected = wTags.some(
+      (tag) => tag.toLowerCase() === name.toLowerCase(),
+    );
+
+    if (!alreadySelected && wTags.length >= 10) {
       setTagsError("You can select up to 10 tags");
       return null;
     }
 
-    if (wTags.includes(name)) {
-      setNewTagName("");
+    if (alreadySelected) {
+      setTagQuery("");
       return name;
     }
 
@@ -322,7 +326,7 @@ export default function JournalPage() {
       const r = await fetch("/api/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, color: newTagColor }),
+        body: JSON.stringify({ name, color: DEFAULT_NEW_TAG_COLOR }),
       });
       if (!r.ok) throw new Error(await r.text());
       const created = (await r.json()) as Tag;
@@ -337,9 +341,8 @@ export default function JournalPage() {
         shouldDirty: true,
         shouldValidate: false,
       });
-      setNewTagName("");
-      setNewTagColor("#7C3AED");
-      setShowNewTagForm(false);
+      setTagQuery("");
+      setShowTagMenu(false);
       return created.name;
     } catch {
       setTagsError("Could not create tag");
@@ -624,7 +627,8 @@ useEffect(() => {
     setWizardStep(1);
     setAddNotes(false);
     setSetTargets(false);
-    setShowNewTagForm(false);
+    setTagQuery("");
+    setShowTagMenu(false);
 
     validSymbolsRef.current = new Set();
     setAssetQuery("");
@@ -654,7 +658,8 @@ useEffect(() => {
     setWizardStep(1);
     setAddNotes(Boolean(row.notes_entry || row.notes_review));
     setSetTargets(Boolean(row.exit_price || row.stop_loss_price));
-    setShowNewTagForm(false);
+    setTagQuery("");
+    setShowTagMenu(false);
 
     validSymbolsRef.current = new Set([row.asset_name.toUpperCase()]);
     setAssetQuery(row.asset_name);
@@ -775,10 +780,10 @@ useEffect(() => {
       return;
     }
 
-    const pendingTagName = newTagName.trim();
+    const pendingTagName = tagQuery.trim();
     const pendingTagToInclude =
       pendingTagName && !(form.tags ?? []).includes(pendingTagName)
-        ? await createPendingTag()
+        ? await createPendingTag(pendingTagName)
         : pendingTagName;
 
     if (pendingTagName && !pendingTagToInclude) {
@@ -1248,12 +1253,53 @@ async function fetchAssets(q: string) {
   }
 
   function renderTagsSection() {
+    const normalizedQuery = tagQuery.trim().toLowerCase();
+    const selectedTags = new Set(wTags.map((tag: string) => tag.toLowerCase()));
+    const filteredTags = availableTags
+      .filter((tag) => !selectedTags.has(tag.name.toLowerCase()))
+      .filter((tag) =>
+        normalizedQuery
+          ? tag.name.toLowerCase().includes(normalizedQuery)
+          : true,
+      )
+      .slice(0, 20);
+    const exactTagExists = availableTags.some(
+      (tag) => tag.name.toLowerCase() === normalizedQuery,
+    );
+    const canCreateTag = Boolean(normalizedQuery) && !exactTagExists;
+    const selectionFull = wTags.length >= 10;
+
+    function addTag(name: string) {
+      if (wTags.some((tag: string) => tag.toLowerCase() === name.toLowerCase())) {
+        setTagQuery("");
+        return;
+      }
+
+      if (selectionFull) {
+        setTagsError("You can select up to 10 tags");
+        return;
+      }
+
+      setTagsError(null);
+      setValue("tags", [...wTags, name], {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+      setTagQuery("");
+      setShowTagMenu(false);
+    }
+
     return (
       <div>
         <div className="text-sm mb-1">Tags (Optional)</div>
-        <div className="rounded-xl border border-gray-200 bg-white">
-          <div className="flex min-h-11 flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2">
-            {wTags.length > 0 ? (
+        <div
+          className="relative rounded-xl border border-gray-200 bg-white"
+          onBlur={() => {
+            window.setTimeout(() => setShowTagMenu(false), 120);
+          }}
+        >
+          <div className="flex min-h-11 flex-wrap items-center gap-2 px-3 py-2">
+            {wTags.length > 0 &&
               wTags.map((t: string) => (
                 <button
                   key={t}
@@ -1267,107 +1313,109 @@ async function fetchAssets(q: string) {
                   <span>{t}</span>
                   <span aria-hidden="true">x</span>
                 </button>
-              ))
-            ) : (
-              <span className="text-sm text-gray-400">Select tags</span>
-            )}
-          </div>
-
-          <div className="max-h-44 overflow-y-auto p-2">
-            {availableTags.map((tag) => {
-              const checked = wTags.includes(tag.name);
-              const disabled = !checked && wTags.length >= 10;
-
-              return (
-                <label
-                  key={tag.id}
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-gray-50 ${
-                    disabled ? "opacity-50" : ""
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        if (wTags.length >= 10) {
-                          setTagsError("You can select up to 10 tags");
-                          return;
-                        }
-                        setTagsError(null);
-                        setValue("tags", [...wTags, tag.name], {
-                          shouldDirty: true,
-                        });
-                      } else {
-                        setTagsError(null);
-                        setValue(
-                          "tags",
-                          wTags.filter((name: string) => name !== tag.name),
-                          { shouldDirty: true },
-                        );
-                      }
-                    }}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
-                  />
-                  <span>{tag.name}</span>
-                </label>
-              );
-            })}
-            {availableTags.length === 0 && !tagsLoading && (
-              <p className="px-2 py-1 text-xs text-gray-400">
-                No tags yet. Add a new tag.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setShowNewTagForm((open) => !open)}
-            className="h-10 rounded-xl bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1D4ED8]"
-          >
-            Add New Tag
-          </button>
-          <p className="text-xs text-gray-500">{wTags.length}/10 selected</p>
-        </div>
-
-        {showNewTagForm && (
-          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-gray-200 p-3 sm:flex-row">
+              ))}
             <input
               type="text"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
+              value={tagQuery}
+              disabled={selectionFull}
+              onChange={(e) => {
+                setTagQuery(e.target.value);
+                setTagsError(null);
+                setShowTagMenu(true);
+              }}
+              onFocus={() => setShowTagMenu(true)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  void createPendingTag();
+                  const firstTag = filteredTags[0];
+                  if (firstTag) {
+                    addTag(firstTag.name);
+                    return;
+                  }
+                  if (canCreateTag) {
+                    void createPendingTag(tagQuery);
+                  }
+                }
+
+                if (e.key === "Backspace" && !tagQuery && wTags.length > 0) {
+                  setValue("tags", wTags.slice(0, -1), {
+                    shouldDirty: true,
+                    shouldValidate: false,
+                  });
+                }
+
+                if (e.key === "Escape") {
+                  setShowTagMenu(false);
                 }
               }}
-              placeholder="New tag name"
-              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              placeholder={
+                selectionFull
+                  ? "Maximum tags selected"
+                  : wTags.length > 0
+                    ? "Add another tag"
+                    : "Type to search tags"
+              }
+              className="min-w-36 flex-1 border-0 bg-transparent py-1 text-sm outline-none disabled:cursor-not-allowed disabled:text-gray-400"
             />
-            <input
-              type="color"
-              value={newTagColor}
-              onChange={(e) => setNewTagColor(e.target.value)}
-              className="h-10 w-12 rounded-xl border border-gray-200 bg-white p-1"
-              title="Tag color"
-            />
-            <button
-              type="button"
-              onClick={() => void createPendingTag()}
-              className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
-            >
-              Save Tag
-            </button>
           </div>
-        )}
+
+          {showTagMenu && !selectionFull && (
+            <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+              {tagsLoading && (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  Loading tags...
+                </div>
+              )}
+
+              {!tagsLoading &&
+                filteredTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => addTag(tag.name)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-50"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
+                    />
+                    <span>{tag.name}</span>
+                  </button>
+                ))}
+
+              {!tagsLoading && canCreateTag && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void createPendingTag(tagQuery)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
+                  <span>Create &quot;{tagQuery.trim()}&quot;</span>
+                </button>
+              )}
+
+              {!tagsLoading && filteredTags.length === 0 && !canCreateTag && (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  {availableTags.length === 0
+                    ? "No tags yet"
+                    : "No matching tags"}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-1 flex items-center justify-end">
+          <p
+            className={`text-xs ${
+              selectionFull ? "text-amber-700" : "text-gray-500"
+            }`}
+          >
+            {wTags.length}/10 selected
+          </p>
+        </div>
 
         {tagsError && <p className="mt-1 text-xs text-red-600">{tagsError}</p>}
       </div>
