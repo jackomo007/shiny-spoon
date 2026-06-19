@@ -8,6 +8,7 @@ describe("calculatePortfolioPnl", () => {
       { kind: "sell", qty: 4, priceUsd: 150, feeUsd: 5 },
     ]);
 
+    expect(result.totalInvestedUsd).toBe(1000);
     expect(result.realizedPnlUsd).toBe(195);
     expect(result.qtyHeld).toBe(6);
     expect(result.costBasisUsd).toBe(600);

@@ -18,6 +18,7 @@ export type AssetRow = {
   holdingsValueUsd: number;
   currentProfitUsd: number;
   currentProfitPct: number | null;
+  isStablecoin?: boolean;
 };
 
 function usd4(n: number) {

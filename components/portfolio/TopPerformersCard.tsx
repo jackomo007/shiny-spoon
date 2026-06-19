@@ -11,9 +11,11 @@ export default function TopPerformersCard(props: {
     iconUrl: string | null
     currentProfitUsd: number
     currentProfitPct: number | null
+    isStablecoin?: boolean
   }>
 }) {
   const top5 = (props.assets ?? [])
+    .filter((asset) => !asset.isStablecoin)
     .slice()
     .sort((a, b) => {
       const ap = a.currentProfitPct

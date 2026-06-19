@@ -10,6 +10,7 @@ import {
   cgCoinMetaByIdSafe,
   cgNormalizeOrResolveCoinId,
 } from "@/lib/markets/coingecko"
+import { setPortfolioAssetStablecoin } from "@/services/portfolio-asset-settings.service"
 
 export const dynamic = "force-dynamic"
 
@@ -18,6 +19,7 @@ const Body = z.object({
   amount: z.number().positive(),
   priceUsd: z.number().positive(),
   feeUsd: z.number().min(0).optional(),
+  isStablecoin: z.boolean().optional(),
   strategyId: z.string().min(1).optional(),
   executedAt: z.string().datetime(), 
 })
@@ -70,6 +72,14 @@ export async function POST(req: Request) {
       },
       select: { id: true },
     })
+
+    if (data.isStablecoin != null) {
+      await setPortfolioAssetStablecoin({
+        accountId,
+        symbol,
+        isStablecoin: data.isStablecoin,
+      })
+    }
 
     await PortfolioRepoV2.createInitTransaction({
       accountId,

@@ -63,6 +63,7 @@ export default function AddTransactionModal(props: {
   const [amountRaw, setAmountRaw] = useState<string>("");
   const [totalRaw, setTotalRaw] = useState<string>("");
   const [feeRaw, setFeeRaw] = useState<string>("0");
+  const [isStablecoin, setIsStablecoin] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -92,6 +93,7 @@ export default function AddTransactionModal(props: {
     setAmountRaw("");
     setTotalRaw("");
     setFeeRaw("0");
+    setIsStablecoin(false);
     setBusy(false);
 
     setConfirmDeleteOpen(false);
@@ -117,6 +119,7 @@ export default function AddTransactionModal(props: {
     setAmountRaw(String(Math.abs(t.qty ?? 0)));
     setTotalRaw(String(Math.abs(t.totalUsd ?? 0)));
     setFeeRaw(String(t.feeUsd ?? 0));
+    setIsStablecoin(false);
     lastEdited.current = "amount";
 
     setSelected({
@@ -158,6 +161,7 @@ export default function AddTransactionModal(props: {
     setAmountRaw("");
     setTotalRaw("");
     setFeeRaw("0");
+    setIsStablecoin(false);
     lastEdited.current = null;
 
     if (asset.priceUsd == null || asset.priceUsd <= 0) {
@@ -353,6 +357,7 @@ export default function AddTransactionModal(props: {
                         qty?: number;
                         totalUsd?: number;
                         feeUsd: number;
+                        isStablecoin?: boolean;
                         executedAt: string;
                       } = {
                         asset: {
@@ -372,6 +377,10 @@ export default function AddTransactionModal(props: {
                             ? undefined
                             : total || undefined,
                         feeUsd: fee,
+                        isStablecoin:
+                          mode === "add" && side === "buy"
+                            ? isStablecoin
+                            : undefined,
                         executedAt: new Date().toISOString(),
                       };
 
@@ -457,6 +466,7 @@ export default function AddTransactionModal(props: {
                         setAmountRaw("");
                         setTotalRaw("");
                         setFeeRaw("0");
+                        setIsStablecoin(false);
                         lastEdited.current = null;
                         await loadMarketPrice(a.id);
                       }}
@@ -498,6 +508,7 @@ export default function AddTransactionModal(props: {
                         setAmountRaw("");
                         setTotalRaw("");
                         setFeeRaw("0");
+                        setIsStablecoin(false);
                         lastEdited.current = null;
                         await loadMarketPrice(a.id);
                       }}
@@ -624,12 +635,32 @@ export default function AddTransactionModal(props: {
                 <MoneyInputStandalone
                   valueRaw={feeRaw}
                   onChangeRaw={setFeeRaw}
-                  maxDecimals={3}
+                  maxDecimals={8}
                   placeholder="0"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2"
                 />
               </label>
             </div>
+
+            {mode === "add" && side === "buy" ? (
+              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  checked={isStablecoin}
+                  onChange={(e) => setIsStablecoin(e.target.checked)}
+                />
+                <span className="grid gap-0.5">
+                  <span className="font-semibold text-slate-800">
+                    Is Stablecoin
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    Exclude this asset from Top Performers and portfolio Total
+                    Invested.
+                  </span>
+                </span>
+              </label>
+            ) : null}
 
             <div className="text-xs text-gray-500">
               Amount and Total are calculated from each other. In Market Price,
@@ -645,6 +676,7 @@ export default function AddTransactionModal(props: {
                   setAmountRaw("");
                   setTotalRaw("");
                   setFeeRaw("0");
+                  setIsStablecoin(false);
                   setPriceRaw("");
                   lastEdited.current = null;
                 }}

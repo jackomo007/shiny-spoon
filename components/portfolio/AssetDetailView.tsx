@@ -154,10 +154,14 @@ function ScaleOutPlanList({
   rows,
   symbol,
   onLoadMore,
+  completedLevels,
+  onToggleLevel,
 }: {
   rows: ExitStrategyStepRow[];
   symbol: string;
   onLoadMore?: () => void;
+  completedLevels?: Record<string, boolean>;
+  onToggleLevel?: (levelKey: string) => void;
 }) {
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!onLoadMore) return;
@@ -169,36 +173,65 @@ function ScaleOutPlanList({
   return (
     <div className="max-h-[332px] overflow-y-auto pr-1" onScroll={handleScroll}>
       <div className="grid gap-2.5">
-        {rows.map((row) => (
-          <div
-            key={row.gainPercent}
-            className="grid grid-cols-[78px_1fr_auto] items-center gap-3 rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3"
-          >
-            <div className="inline-flex h-7 items-center justify-center rounded-full bg-[#eef3fb] px-2.5 text-[11px] font-bold text-[#4f7bb8]">
-              {signedPct(row.gainPercent, 0)}
+        {rows.map((row) => {
+          const levelKey = row.gainPercent.toFixed(2);
+          const isCompleted = !!completedLevels?.[levelKey];
+          const canToggle = !!onToggleLevel;
+
+          return (
+            <div
+              key={row.gainPercent}
+              className={cls(
+                "grid items-center gap-3 rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3",
+                canToggle
+                  ? "grid-cols-[auto_78px_1fr_auto]"
+                  : "grid-cols-[78px_1fr_auto]",
+                isCompleted && "bg-slate-100 text-slate-400",
+              )}
+            >
+              {canToggle ? (
+                <input
+                  type="checkbox"
+                  aria-label={`Mark ${signedPct(row.gainPercent, 0)} scale out as complete`}
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={isCompleted}
+                  onChange={() => onToggleLevel?.(levelKey)}
+                />
+              ) : null}
+
+              <div
+                className={cls(
+                  "inline-flex h-7 items-center justify-center rounded-full bg-[#eef3fb] px-2.5 text-[11px] font-bold text-[#4f7bb8]",
+                  isCompleted && "text-slate-400 line-through",
+                )}
+              >
+                {signedPct(row.gainPercent, 0)}
+              </div>
+
+              <div className={cls(isCompleted && "line-through")}>
+                <div className="text-[10px] font-bold text-slate-600">
+                  Scale Out
+                </div>
+                <div className="text-lg font-bold leading-tight tracking-normal text-slate-950">
+                  {usd(row.targetPriceUsd)}
+                </div>
+                <div className="mt-0.5 text-[10px] text-slate-600">
+                  Estimated sell:{" "}
+                  {qty(row.executedQtyToSell ?? row.plannedQtyToSell)} {symbol}
+                </div>
+              </div>
+
+              <div className={cls("text-right", isCompleted && "line-through")}>
+                <div className="mb-0.5 text-[10px] text-slate-600">
+                  Estimated Cumulative Profit
+                </div>
+                <div className="text-[13px] font-bold">
+                  {usd(row.cumulativeRealizedProfitUsd)}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-slate-600">
-                Scale Out
-              </div>
-              <div className="text-lg font-bold leading-tight tracking-normal text-slate-950">
-                {usd(row.targetPriceUsd)}
-              </div>
-              <div className="mt-0.5 text-[10px] text-slate-600">
-                Estimated sell:{" "}
-                {qty(row.executedQtyToSell ?? row.plannedQtyToSell)} {symbol}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="mb-0.5 text-[10px] text-slate-600">
-                Estimated Cumulative Profit
-              </div>
-              <div className="text-[13px] font-bold">
-                {usd(row.cumulativeRealizedProfitUsd)}
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -228,6 +261,9 @@ export default function AssetDetailView({
   const [startingQuantity, setStartingQuantity] = useState(0);
   const [planStepCount, setPlanStepCount] = useState(6);
   const [modalPlanStepCount, setModalPlanStepCount] = useState(6);
+  const [completedScaleOutLevels, setCompletedScaleOutLevels] = useState<
+    Record<string, boolean>
+  >({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -268,6 +304,58 @@ export default function AssetDetailView({
   useEffect(() => {
     void loadStrategies();
   }, [loadStrategies]);
+
+  const activeStrategy =
+    strategies.find(
+      (s) =>
+        !s.isAllCoins &&
+        s.coinSymbols.some(
+          (coin) => coin.toUpperCase() === symbol.toUpperCase(),
+        ),
+    ) ??
+    strategies.find((s) =>
+      s.assets.some(
+        (asset) => asset.coinSymbol.toUpperCase() === symbol.toUpperCase(),
+      ),
+    ) ??
+    null;
+
+  const scaleOutStorageKey = [
+    "portfolio-scale-out",
+    symbol.toUpperCase(),
+    activeStrategy?.id ?? "default",
+    activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT,
+    activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT,
+  ].join(":");
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(scaleOutStorageKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+      setCompletedScaleOutLevels(
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, boolean>)
+          : {},
+      );
+    } catch {
+      setCompletedScaleOutLevels({});
+    }
+  }, [scaleOutStorageKey]);
+
+  function toggleScaleOutLevel(levelKey: string) {
+    setCompletedScaleOutLevels((current) => {
+      const next = { ...current, [levelKey]: !current[levelKey] };
+      if (!next[levelKey]) delete next[levelKey];
+
+      try {
+        window.localStorage.setItem(scaleOutStorageKey, JSON.stringify(next));
+      } catch {
+        // Visual reminder only; ignore storage failures.
+      }
+
+      return next;
+    });
+  }
 
   function convertToTxRow(tx: AssetDetail["transactions"][0]): TxRow {
     return {
@@ -331,21 +419,6 @@ export default function AssetDetailView({
     if (tx.gainLossUsd == null) return "coin";
     return tx.gainLossUsd >= 0 ? "win" : "loss";
   }
-
-  const activeStrategy =
-    strategies.find(
-      (s) =>
-        !s.isAllCoins &&
-        s.coinSymbols.some(
-          (coin) => coin.toUpperCase() === symbol.toUpperCase(),
-        ),
-    ) ??
-    strategies.find((s) =>
-      s.assets.some(
-        (asset) => asset.coinSymbol.toUpperCase() === symbol.toUpperCase(),
-      ),
-    ) ??
-    null;
 
   const planRows = buildSuggestedRows(
     activeStrategy?.startingQuantity ?? data.balance.quantity,
@@ -415,6 +488,7 @@ export default function AssetDetailView({
 
       setStrategyModalOpen(false);
       await loadStrategies();
+      await onPortfolioChange?.();
     } catch (e) {
       setStrategyError(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -595,6 +669,8 @@ export default function AssetDetailView({
                 <ScaleOutPlanList
                   rows={planRows}
                   symbol={symbol}
+                  completedLevels={completedScaleOutLevels}
+                  onToggleLevel={toggleScaleOutLevel}
                   onLoadMore={
                     canLoadMorePlanRows
                       ? () => setPlanStepCount((count) => count + 6)

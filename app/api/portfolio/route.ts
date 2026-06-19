@@ -8,6 +8,7 @@ import {
 } from "@/lib/markets/coingecko";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
+import { getStablecoinSymbols } from "@/services/portfolio-asset-settings.service";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,7 @@ export async function GET() {
 
     const accountId = session.accountId;
     await migrateLegacyPortfolioTrades(accountId);
+    const stablecoinSymbols = await getStablecoinSymbols(accountId);
 
     const rows = (await prisma.portfolio_trade.findMany({
       where: {
@@ -169,6 +171,7 @@ export async function GET() {
         name: string | null;
         coingeckoId: string | null;
         iconUrl: string | null;
+        isStablecoin: boolean;
         qtyHeld: number;
         costBasisUsd: number;
         totalInvestedUsd: number;
@@ -205,6 +208,7 @@ export async function GET() {
         name: meta.name,
         coingeckoId: meta.coingeckoId,
         iconUrl: meta.iconUrl,
+        isStablecoin: stablecoinSymbols.has(s),
         qtyHeld: 0,
         costBasisUsd: 0,
         totalInvestedUsd: 0,
@@ -318,6 +322,7 @@ export async function GET() {
           name: g.name,
           coingeckoId: g.coingeckoId,
           iconUrl: g.iconUrl,
+          isStablecoin: g.isStablecoin,
           priceUsd: pr.priceUsd,
           change24hPct: pr.change24hPct,
           totalInvestedUsd: g.totalInvestedUsd,
@@ -357,7 +362,7 @@ export async function GET() {
     const portfolio24hPct =
       previousBalanceUsd > 0 ? (portfolio24hUsd / previousBalanceUsd) * 100 : 0;
     const totalInvestedUsd = assetsSorted.reduce(
-      (s, a) => s + (a.totalInvestedUsd ?? 0),
+      (s, a) => s + (a.isStablecoin ? 0 : (a.totalInvestedUsd ?? 0)),
       0,
     );
 
@@ -376,7 +381,7 @@ export async function GET() {
       totalInvestedUsd > 0 ? (totalProfitUsd / totalInvestedUsd) * 100 : 0;
 
     const top =
-      assetsSorted.slice().sort((a, b) => {
+      assetsSorted.filter((asset) => !asset.isStablecoin).sort((a, b) => {
         const ap = a.currentProfitPct;
         const bp = b.currentProfitPct;
         if (ap != null && bp != null) return bp - ap;

@@ -14,6 +14,7 @@ import {
   ensureDefaultExitStrategyForAsset,
 } from "@/services/exit-strategy.service"
 import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
+import { setPortfolioAssetStablecoin } from "@/services/portfolio-asset-settings.service"
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +30,7 @@ const Body = z.object({
   qty: z.number().positive().optional(),
   totalUsd: z.number().positive().optional(),
   feeUsd: z.number().min(0).optional(),
+  isStablecoin: z.boolean().optional(),
   executedAt: z.string().datetime().optional(),
 })
 
@@ -118,6 +120,14 @@ export async function POST(req: Request) {
       },
       select: { id: true },
     })
+
+    if (input.isStablecoin != null && !existingHolding) {
+      await setPortfolioAssetStablecoin({
+        accountId: session.accountId,
+        symbol,
+        isStablecoin: input.isStablecoin,
+      })
+    }
 
     await PortfolioRepoV2.createSpotTransaction({
       accountId: session.accountId,
