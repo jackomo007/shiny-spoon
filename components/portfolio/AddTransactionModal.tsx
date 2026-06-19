@@ -655,8 +655,8 @@ export default function AddTransactionModal(props: {
                     Is Stablecoin
                   </span>
                   <span className="text-xs text-slate-500">
-                    Exclude this asset from Top Performers and portfolio Total
-                    Invested.
+                    This asset is considered a cash-like holding and won&apos;t
+                    appear in investment performance metrics.
                   </span>
                 </span>
               </label>

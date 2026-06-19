@@ -186,14 +186,15 @@ function ScaleOutPlanList({
                 canToggle
                   ? "grid-cols-[auto_78px_1fr_auto]"
                   : "grid-cols-[78px_1fr_auto]",
-                isCompleted && "bg-slate-100 text-slate-400",
+                isCompleted &&
+                  "border-slate-200 border-l-4 border-l-emerald-500 bg-white",
               )}
             >
               {canToggle ? (
                 <input
                   type="checkbox"
                   aria-label={`Mark ${signedPct(row.gainPercent, 0)} scale out as complete`}
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
                   checked={isCompleted}
                   onChange={() => onToggleLevel?.(levelKey)}
                 />
@@ -202,17 +203,24 @@ function ScaleOutPlanList({
               <div
                 className={cls(
                   "inline-flex h-7 items-center justify-center rounded-full bg-[#eef3fb] px-2.5 text-[11px] font-bold text-[#4f7bb8]",
-                  isCompleted && "text-slate-400 line-through",
+                  isCompleted && "bg-emerald-50 text-emerald-700",
                 )}
               >
                 {signedPct(row.gainPercent, 0)}
               </div>
 
-              <div className={cls(isCompleted && "line-through")}>
+              <div
+                className={cls(isCompleted && "text-slate-500")}
+              >
                 <div className="text-[10px] font-bold text-slate-600">
                   Scale Out
                 </div>
-                <div className="text-lg font-bold leading-tight tracking-normal text-slate-950">
+                <div
+                  className={cls(
+                    "text-lg font-bold leading-tight tracking-normal text-slate-950",
+                    isCompleted && "text-slate-600",
+                  )}
+                >
                   {usd(row.targetPriceUsd)}
                 </div>
                 <div className="mt-0.5 text-[10px] text-slate-600">
@@ -221,12 +229,24 @@ function ScaleOutPlanList({
                 </div>
               </div>
 
-              <div className={cls("text-right", isCompleted && "line-through")}>
-                <div className="mb-0.5 text-[10px] text-slate-600">
-                  Estimated Cumulative Profit
-                </div>
-                <div className="text-[13px] font-bold">
-                  {usd(row.cumulativeRealizedProfitUsd)}
+              <div
+                className={cls(
+                  "text-right",
+                  isCompleted && "text-slate-500",
+                )}
+              >
+                {isCompleted ? (
+                  <div className="mb-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                    Completed
+                  </div>
+                ) : null}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-slate-600">
+                    Estimated Cumulative Profit
+                  </div>
+                  <div className="text-[13px] font-bold">
+                    {usd(row.cumulativeRealizedProfitUsd)}
+                  </div>
                 </div>
               </div>
             </div>
