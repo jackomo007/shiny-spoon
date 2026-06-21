@@ -8,7 +8,7 @@ describe("calculatePortfolioPnl", () => {
       { kind: "sell", qty: 4, priceUsd: 150, feeUsd: 5 },
     ]);
 
-    expect(result.totalInvestedUsd).toBe(1000);
+    expect(result.totalInvestedUsd).toBe(405);
     expect(result.realizedPnlUsd).toBe(195);
     expect(result.qtyHeld).toBe(6);
     expect(result.costBasisUsd).toBe(600);
@@ -35,5 +35,14 @@ describe("calculatePortfolioPnl", () => {
         realizedPnlPct: -20,
       }),
     );
+  });
+
+  it("calculates total invested as buys minus net sell proceeds", () => {
+    const result = calculatePortfolioPnl([
+      { kind: "buy", qty: 1, priceUsd: 21_841.28, feeUsd: 0 },
+      { kind: "sell", qty: 0.1, priceUsd: 60_714, feeUsd: 0 },
+    ]);
+
+    expect(result.totalInvestedUsd).toBeCloseTo(15_769.88, 2);
   });
 });

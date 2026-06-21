@@ -272,6 +272,7 @@ export async function GET() {
         const saleProceedsUsd = totalUsd - fee;
         s.qtyHeld = result.qtyHeld;
         s.costBasisUsd = result.costBasisUsd;
+        s.totalInvestedUsd -= saleProceedsUsd;
 
         if (Number.isFinite(result.realizedPnlUsd)) {
           s.realizedProfitUsd += result.realizedPnlUsd;
