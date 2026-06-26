@@ -174,6 +174,28 @@ function clampAllocation(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
+function DashboardLoadingOverlay() {
+  return (
+    <div className="absolute inset-0 z-20 grid min-h-[420px] place-items-center rounded-[20px] bg-gray-50/70 px-4 backdrop-blur-[2px]">
+      <div className="flex min-w-[240px] flex-col items-center gap-4 rounded-[18px] border border-[#E9E6F2] bg-white/95 px-6 py-5 text-center shadow-[0_18px_48px_rgba(20,18,26,0.10)]">
+        <div className="relative h-12 w-12">
+          <div className="absolute inset-0 rounded-full border-4 border-[#F1EAFE]" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#7C3AED]" />
+          <div className="absolute inset-[14px] rounded-full bg-[radial-gradient(circle_at_30%_30%,#B49BFF,#7C3AED)]" />
+        </div>
+        <div className="grid gap-1">
+          <div className="text-sm font-extrabold text-[#14121A]">
+            Loading home dashboard
+          </div>
+          <div className="text-xs font-semibold text-[#6B6777]">
+            Syncing portfolio and market data...
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const {
     portfolio,
@@ -267,7 +289,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="flex flex-col gap-[14px] text-[#14121A]">
+    <main
+      className="relative flex flex-col gap-[14px] text-[#14121A]"
+      aria-busy={loading}
+    >
+      {loading ? <DashboardLoadingOverlay /> : null}
+
       <section className="rounded-[16px] border border-[#E9E6F2] bg-white px-[18px] py-[14px]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1">

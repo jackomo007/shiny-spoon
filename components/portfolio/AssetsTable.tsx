@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState, type ReactNode } from "react";
 import Card from "@/components/ui/Card";
 import { Table, Th, Tr, Td } from "@/components/ui/Table";
 import { usd, pct, qty, cls } from "@/components/portfolio/format";
@@ -19,6 +20,23 @@ export type AssetRow = {
   currentProfitUsd: number;
   currentProfitPct: number | null;
   isStablecoin?: boolean;
+  marketCapUsd?: number | null;
+};
+
+type SortKey =
+  | "asset"
+  | "price"
+  | "totalInvested"
+  | "avgPrice"
+  | "currentProfit"
+  | "roi"
+  | "holdings";
+
+type SortDirection = "asc" | "desc";
+
+type SortConfig = {
+  key: SortKey;
+  direction: SortDirection;
 };
 
 function usd4(n: number) {
@@ -37,12 +55,79 @@ function pct2Always(v: number | null, fallback = 0) {
   return `${sign}${safe.toFixed(2)}%`;
 }
 
+function sortValue(asset: AssetRow, key: SortKey) {
+  switch (key) {
+    case "asset":
+      return asset.symbol;
+    case "price":
+      return asset.priceUsd;
+    case "totalInvested":
+      return asset.totalInvestedUsd;
+    case "avgPrice":
+      return asset.avgPriceUsd;
+    case "currentProfit":
+      return asset.currentProfitUsd;
+    case "roi":
+      return asset.currentProfitPct ?? Number.NEGATIVE_INFINITY;
+    case "holdings":
+      return asset.holdingsValueUsd;
+  }
+}
+
 export default function AssetsTable(props: {
   assets: AssetRow[];
   title?: string;
   onAssetClick?: (symbol: string) => void;
 }) {
-  const rows = props.assets;
+  const [sort, setSort] = useState<SortConfig>({
+    key: "currentProfit",
+    direction: "desc",
+  });
+
+  const rows = useMemo(() => {
+    return props.assets.slice().sort((a, b) => {
+      const av = sortValue(a, sort.key);
+      const bv = sortValue(b, sort.key);
+
+      let result: number;
+      if (typeof av === "string" || typeof bv === "string") {
+        result = String(av).localeCompare(String(bv));
+      } else {
+        result = av - bv;
+      }
+
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [props.assets, sort]);
+
+  function setSortKey(key: SortKey) {
+    setSort((current) => ({
+      key,
+      direction:
+        current.key === key && current.direction === "desc" ? "asc" : "desc",
+    }));
+  }
+
+  function SortTh({ sortKey, children }: { sortKey: SortKey; children: ReactNode }) {
+    const active = sort.key === sortKey;
+    const arrow = active ? (sort.direction === "asc" ? "↑" : "↓") : "↕";
+
+    return (
+      <Th className="pr-4">
+        <button
+          type="button"
+          className={cls(
+            "inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-extrabold",
+            active ? "text-[#5801cc]" : "text-[#69758a] hover:text-slate-700",
+          )}
+          onClick={() => setSortKey(sortKey)}
+        >
+          <span className="text-xs">{arrow}</span>
+          <span>{children}</span>
+        </button>
+      </Th>
+    );
+  }
 
   return (
     <Card className="p-0 rounded-2xl overflow-hidden">
@@ -55,12 +140,13 @@ export default function AssetsTable(props: {
       <Table>
         <thead className="border-b border-[#eef2f7]">
           <tr>
-            <Th>Asset</Th>
-            <Th>Price / 24h</Th>
-            <Th>Total Invested</Th>
-            <Th>Avg. Price</Th>
-            <Th>Current Profit</Th>
-            <Th>Holdings</Th>
+            <SortTh sortKey="asset">Asset</SortTh>
+            <SortTh sortKey="price">Price / 24h</SortTh>
+            <SortTh sortKey="totalInvested">Total Invested</SortTh>
+            <SortTh sortKey="avgPrice">Avg. Price</SortTh>
+            <SortTh sortKey="currentProfit">Current Profit</SortTh>
+            <SortTh sortKey="roi">ROI</SortTh>
+            <SortTh sortKey="holdings">Holdings</SortTh>
           </tr>
         </thead>
 
@@ -125,16 +211,18 @@ export default function AssetsTable(props: {
                     >
                       {usd(a.currentProfitUsd)}
                     </span>
-
-                    <span
-                      className={cls(
-                        "text-xs",
-                        upPnl ? "text-emerald-600" : "text-red-600",
-                      )}
-                    >
-                      {pct(a.currentProfitPct)}
-                    </span>
                   </div>
+                </Td>
+
+                <Td>
+                  <span
+                    className={cls(
+                      "font-semibold",
+                      upPnl ? "text-emerald-600" : "text-red-600",
+                    )}
+                  >
+                    {pct(a.currentProfitPct)}
+                  </span>
                 </Td>
 
                 <Td>

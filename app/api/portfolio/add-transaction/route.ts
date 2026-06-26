@@ -77,14 +77,27 @@ export async function POST(req: Request) {
       priceUsd = input.priceUsd
     }
 
+    const feeUsd = input.feeUsd ?? 0
     let qty = input.qty ?? null
     let totalUsd = input.totalUsd ?? null
 
     if (qty == null && totalUsd == null) {
       return NextResponse.json({ error: "Provide qty or totalUsd" }, { status: 400 })
     }
-    if (qty == null && totalUsd != null) qty = totalUsd / priceUsd
-    if (totalUsd == null && qty != null) totalUsd = qty * priceUsd
+    if (qty == null && totalUsd != null) {
+      const grossUsd = input.side === "sell" ? totalUsd + feeUsd : totalUsd - feeUsd
+      if (!Number.isFinite(grossUsd) || grossUsd <= 0) {
+        return NextResponse.json(
+          { error: "Total must be greater than the trading fee" },
+          { status: 400 },
+        )
+      }
+      qty = grossUsd / priceUsd
+    }
+    if (totalUsd == null && qty != null) {
+      const grossUsd = qty * priceUsd
+      totalUsd = input.side === "sell" ? grossUsd - feeUsd : grossUsd + feeUsd
+    }
 
     if (!qty || !Number.isFinite(qty) || qty <= 0) {
       return NextResponse.json({ error: "Invalid qty" }, { status: 400 })
@@ -135,7 +148,7 @@ export async function POST(req: Request) {
       side: input.side,
       qty,
       priceUsd,
-      feeUsd: input.feeUsd ?? 0,
+      feeUsd,
       executedAt,
       notes: `[PORTFOLIO_SPOT_TX] cg:${coingeckoId ?? "unresolved"} chg24h:${change24hPct ?? "n/a"}`,
     })

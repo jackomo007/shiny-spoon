@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   cgCoinMetaByIdSafe,
+  cgMarketsByIds,
   cgPriceUsdByIdSafe,
 } from "@/lib/markets/coingecko";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
@@ -163,6 +164,17 @@ export async function GET() {
         { name: m.name, coingeckoId: m.coingeckoId, iconUrl: m.iconUrl },
       ]),
     );
+    const marketRows = await cgMarketsByIds(
+      enriched
+        .map((m) => m.coingeckoId)
+        .filter((id): id is string => !!id),
+    ).catch((error: unknown) => {
+      console.warn("[GET /api/portfolio] market cap lookup failed:", error);
+      return [];
+    });
+    const marketById = new Map(
+      marketRows.map((market) => [market.id, market.market_cap ?? null]),
+    );
 
     const st = new Map<
       string,
@@ -171,6 +183,7 @@ export async function GET() {
         name: string | null;
         coingeckoId: string | null;
         iconUrl: string | null;
+        marketCapUsd: number | null;
         isStablecoin: boolean;
         qtyHeld: number;
         costBasisUsd: number;
@@ -208,6 +221,9 @@ export async function GET() {
         name: meta.name,
         coingeckoId: meta.coingeckoId,
         iconUrl: meta.iconUrl,
+        marketCapUsd: meta.coingeckoId
+          ? (marketById.get(meta.coingeckoId) ?? null)
+          : null,
         isStablecoin: stablecoinSymbols.has(s),
         qtyHeld: 0,
         costBasisUsd: 0,
@@ -323,6 +339,7 @@ export async function GET() {
           name: g.name,
           coingeckoId: g.coingeckoId,
           iconUrl: g.iconUrl,
+          marketCapUsd: g.marketCapUsd,
           isStablecoin: g.isStablecoin,
           priceUsd: pr.priceUsd,
           change24hPct: pr.change24hPct,

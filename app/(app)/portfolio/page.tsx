@@ -9,7 +9,7 @@ import TransactionsTable, {
 import HoldingsAllocationCard, {
   AllocationAssetRow,
 } from "@/components/portfolio/HoldingsAllocationCard";
-import TopPerformersCard from "@/components/portfolio/TopPerformersCard";
+import PortfolioHealthCard from "@/components/portfolio/PortfolioHealthCard";
 import AssetDetailView from "@/components/portfolio/AssetDetailView";
 import Card from "@/components/ui/Card";
 import { usd, pct, cls } from "@/components/portfolio/format";
@@ -225,7 +225,7 @@ export default function PortfolioPage() {
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
           <div className="flex flex-col gap-6">
             {data && <BalanceCardFilled summary={data.summary} />}
-            {data && <TopPerformersCard assets={data.assets} />}
+            {data && <PortfolioHealthCard assets={data.assets} />}
           </div>
 
           <div>
@@ -254,9 +254,9 @@ export default function PortfolioPage() {
             <BalanceCardEmpty summary={data.summary} />
 
             <div className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] h-[420px] border-2 border-dashed border-slate-200 bg-white/35 p-6 flex flex-col gap-3">
-              <div className="font-bold text-slate-500">Top Performers</div>
+              <div className="font-bold text-slate-500">Portfolio Health</div>
               <div className="flex-1 flex items-center justify-center text-center text-sm text-slate-500 px-6">
-                No assets yet. Top performers will appear here once you add assets.
+                No assets yet. Your risk profile will appear here once you add assets.
               </div>
             </div>
           </div>
@@ -288,7 +288,7 @@ export default function PortfolioPage() {
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <div className="flex flex-col gap-6">
             <BalanceCardFilled summary={data.summary} />
-            <TopPerformersCard assets={data.assets} />
+            <PortfolioHealthCard assets={data.assets} />
           </div>
 
           <div className="flex flex-col gap-6">

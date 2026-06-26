@@ -78,6 +78,16 @@ export default function AddTransactionModal(props: {
 
   const priceUsd = useMemo(() => numFromRaw(priceRaw), [priceRaw]);
 
+  const totalFromAmount = useCallback((amount: number, price: number, fee: number) => {
+    const gross = amount * price;
+    return side === "buy" ? gross + fee : Math.max(0, gross - fee);
+  }, [side]);
+
+  const amountFromTotal = useCallback((total: number, price: number, fee: number) => {
+    const gross = side === "buy" ? total - fee : total + fee;
+    return gross > 0 ? gross / price : 0;
+  }, [side]);
+
   const hasQuery = query.trim().length > 0;
 
   function resetAll() {
@@ -120,7 +130,7 @@ export default function AddTransactionModal(props: {
     setTotalRaw(String(Math.abs(t.totalUsd ?? 0)));
     setFeeRaw(String(t.feeUsd ?? 0));
     setIsStablecoin(false);
-    lastEdited.current = "amount";
+    lastEdited.current = "total";
 
     setSelected({
       id: t.symbol.toLowerCase(),
@@ -239,15 +249,25 @@ export default function AddTransactionModal(props: {
     const total = numFromRaw(totalRaw);
 
     if (lastEdited.current === "amount") {
-      const newTotal = amount * priceUsd;
+      const fee = numFromRaw(feeRaw);
+      const newTotal = totalFromAmount(amount, priceUsd, fee);
       const next = amount ? String(newTotal) : "";
       setTotalRaw((prev) => (prev === next ? prev : next));
     } else if (lastEdited.current === "total") {
-      const newAmount = total / priceUsd;
+      const fee = numFromRaw(feeRaw);
+      const newAmount = amountFromTotal(total, priceUsd, fee);
       const next = total ? String(newAmount) : "";
       setAmountRaw((prev) => (prev === next ? prev : next));
     }
-  }, [priceUsd, selected, amountRaw, totalRaw]);
+  }, [
+    priceUsd,
+    selected,
+    amountRaw,
+    totalRaw,
+    feeRaw,
+    amountFromTotal,
+    totalFromAmount,
+  ]);
 
   const canSave =
     !!selected &&
@@ -599,8 +619,9 @@ export default function AddTransactionModal(props: {
                     lastEdited.current = "amount";
                     setAmountRaw(v);
                     const n = numFromRaw(v);
+                    const fee = numFromRaw(feeRaw);
                     if (!n || priceUsd <= 0) setTotalRaw("");
-                    else setTotalRaw(String(n * priceUsd));
+                    else setTotalRaw(String(totalFromAmount(n, priceUsd, fee)));
                   }}
                   placeholder="0"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
@@ -615,8 +636,9 @@ export default function AddTransactionModal(props: {
                     lastEdited.current = "total";
                     setTotalRaw(v);
                     const n = numFromRaw(v);
+                    const fee = numFromRaw(feeRaw);
                     if (!n || priceUsd <= 0) setAmountRaw("");
-                    else setAmountRaw(String(n / priceUsd));
+                    else setAmountRaw(String(amountFromTotal(n, priceUsd, fee)));
                   }}
                   placeholder="0"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"

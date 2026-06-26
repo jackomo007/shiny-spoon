@@ -25,6 +25,7 @@ export type CgMarketCoin = {
   current_price: number | null
   price_change_percentage_24h: number | null
   market_cap_rank: number | null
+  market_cap?: number | null
 }
 
 export type CgSearchItem = {
@@ -353,6 +354,7 @@ export async function cgTopByMarketCap(limit = 6): Promise<CgMarketCoin[]> {
     const currentPrice = toNumberSafe(item.current_price)
     const pct24 = toNumberSafe(item.price_change_percentage_24h)
     const rank = toNumberSafe(item.market_cap_rank)
+    const marketCap = toNumberSafe(item.market_cap)
 
     if (!id || !symbol) continue
 
@@ -364,6 +366,63 @@ export async function cgTopByMarketCap(limit = 6): Promise<CgMarketCoin[]> {
       current_price: currentPrice,
       price_change_percentage_24h: pct24,
       market_cap_rank: rank,
+      market_cap: marketCap,
+    })
+  }
+
+  setCache(cacheKey, out, 60_000)
+
+  return out
+}
+
+export async function cgMarketsByIds(ids: string[]): Promise<CgMarketCoin[]> {
+  const coinIds = Array.from(
+    new Set(ids.map((id) => normalizeIdCandidate(id)).filter(Boolean)),
+  )
+  if (!coinIds.length) return []
+
+  const cacheKey = `cg:markets:${coinIds.slice().sort().join(",")}`
+  const cached = getCache<CgMarketCoin[]>(cacheKey)
+  if (cached) return cached
+
+  const url =
+    `${baseUrl()}/coins/markets` +
+    `?vs_currency=usd&ids=${encodeURIComponent(coinIds.join(","))}` +
+    `&order=market_cap_desc&per_page=${clampInt(coinIds.length, 1, 250)}&page=1&sparkline=false` +
+    `&price_change_percentage=24h`
+
+  const res = await cgFetch(url)
+  if (!res.ok) throw new Error(`CoinGecko /coins/markets HTTP ${res.status}`)
+
+  const j = (await res.json()) as CgMarketsResponse
+  if (!Array.isArray(j)) throw new Error("Invalid markets response")
+
+  const out: CgMarketCoin[] = []
+
+  for (const item of j) {
+    if (!isPlainObject(item)) continue
+
+    const id = toStringSafe(item.id) ?? ""
+    const symbol = toStringSafe(item.symbol) ?? ""
+    const name = toStringSafe(item.name) ?? ""
+    const image = toStringSafe(item.image) ?? null
+
+    const currentPrice = toNumberSafe(item.current_price)
+    const pct24 = toNumberSafe(item.price_change_percentage_24h)
+    const rank = toNumberSafe(item.market_cap_rank)
+    const marketCap = toNumberSafe(item.market_cap)
+
+    if (!id || !symbol) continue
+
+    out.push({
+      id,
+      symbol,
+      name,
+      image,
+      current_price: currentPrice,
+      price_change_percentage_24h: pct24,
+      market_cap_rank: rank,
+      market_cap: marketCap,
     })
   }
 
