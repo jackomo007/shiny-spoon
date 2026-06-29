@@ -5,6 +5,22 @@ type PortfolioKind = "buy" | "sell" | "init"
 
 const TRADE_KINDS: PortfolioKind[] = ["buy", "sell", "init"]
 
+function assertFiniteTradeNumbers(values: {
+  qty: number
+  priceUsd: number
+  feeUsd: number
+}) {
+  if (!Number.isFinite(values.qty) || values.qty <= 0) {
+    throw new Error("Invalid transaction quantity")
+  }
+  if (!Number.isFinite(values.priceUsd) || values.priceUsd <= 0) {
+    throw new Error("Invalid transaction price")
+  }
+  if (!Number.isFinite(values.feeUsd) || values.feeUsd < 0) {
+    throw new Error("Invalid transaction fee")
+  }
+}
+
 export type SpotTxRow = {
   id: string
   symbol: string
@@ -66,6 +82,7 @@ export const PortfolioRepoV2 = {
     const qty = Number(params.qty)
     const priceUsd = Number(params.priceUsd)
     const feeUsd = Number(params.feeUsd ?? 0)
+    assertFiniteTradeNumbers({ qty, priceUsd, feeUsd })
 
     const cashDeltaUsd =
       params.side === "sell"
@@ -103,6 +120,7 @@ export const PortfolioRepoV2 = {
     const qty = Number(params.qty)
     const priceUsd = Number(params.priceUsd)
     const feeUsd = Number(params.feeUsd ?? 0)
+    assertFiniteTradeNumbers({ qty, priceUsd, feeUsd })
 
     const row = await prisma.portfolio_trade.create({
       data: {
@@ -134,6 +152,7 @@ export const PortfolioRepoV2 = {
     const qty = Number(params.qty)
     const priceUsd = Number(params.priceUsd)
     const feeUsd = Number(params.feeUsd ?? 0)
+    assertFiniteTradeNumbers({ qty, priceUsd, feeUsd })
 
     const cashDeltaUsd =
       params.side === "sell"

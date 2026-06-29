@@ -39,8 +39,6 @@ export default function DashboardShell({ children }: Props) {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   const [tradingGroupOpen, setTradingGroupOpen] = useState(true);
-  const [portfolioGroupOpen, setPortfolioGroupOpen] = useState(true);
-
   const pathname = usePathname();
 
   useEffect(() => {
@@ -66,11 +64,7 @@ export default function DashboardShell({ children }: Props) {
 
   const tradingGroupActive =
     pathname === "/journal" ||
-    pathname === "/strategies" ||
     pathname === "/manage-tags";
-
-  const portfolioGroupActive =
-    pathname === "/portfolio" || pathname === "/exit-strategy";
 
   const topNavLinkBase =
     "text-sm px-3 py-2 rounded-xl transition-colors whitespace-nowrap";
@@ -118,14 +112,6 @@ export default function DashboardShell({ children }: Props) {
                   }`}
                 >
                   Trading Journal
-                </Link>
-                <Link
-                  href="/strategies"
-                  className={`${topNavLinkBase} ${
-                    isTopActive("/strategies") ? topNavActive : topNavInactive
-                  }`}
-                >
-                  Strategy Creator
                 </Link>
                 <Link
                   href="/manage-tags"
@@ -272,30 +258,6 @@ export default function DashboardShell({ children }: Props) {
 
                       <li>
                         <Link
-                          href="/strategies"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/strategies")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              🧭
-                            </span>
-                            <span className="font-medium">
-                              Strategy Creator
-                            </span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/strategies") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
-                      <li>
-                        <Link
                           href="/manage-tags"
                           onClick={() => setMobileOpen(false)}
                           className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
@@ -312,28 +274,6 @@ export default function DashboardShell({ children }: Props) {
                           </div>
                           <span className="text-xs text-[#9C92D4]">
                             {isTopActive("/manage-tags") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
-                      <li>
-                        <Link
-                          href="/exit-strategy"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/exit-strategy")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              🚪
-                            </span>
-                            <span className="font-medium">Exit Strategy</span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/exit-strategy") ? "Current" : ""}
                           </span>
                         </Link>
                       </li>
@@ -430,24 +370,13 @@ export default function DashboardShell({ children }: Props) {
                   pathname={pathname}
                 />
 
-                <NavGroup
+                <NavItem
                   href="/portfolio"
                   label="Portfolio Manager"
                   icon="💼"
                   showText={sidebarExpanded}
                   pathname={pathname}
-                  open={portfolioGroupOpen}
-                  setOpen={setPortfolioGroupOpen}
-                  isActiveGroup={portfolioGroupActive}
-                >
-                  <NavChildItem
-                    href="/exit-strategy"
-                    label="Exit Strategy"
-                    icon="-"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                </NavGroup>
+                />
 
                 <NavGroup
                   href="/journal"
@@ -459,13 +388,6 @@ export default function DashboardShell({ children }: Props) {
                   setOpen={setTradingGroupOpen}
                   isActiveGroup={tradingGroupActive}
                 >
-                  <NavChildItem
-                    href="/strategies"
-                    label="Strategy Creator"
-                    icon="-"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
                   <NavChildItem
                     href="/manage-tags"
                     label="Manage Tags"

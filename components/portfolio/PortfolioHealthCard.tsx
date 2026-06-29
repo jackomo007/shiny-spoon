@@ -2,6 +2,10 @@
 
 import Card from "@/components/ui/Card";
 import { cls } from "@/components/portfolio/format";
+import {
+  classifyPortfolioAsset,
+  type PortfolioAllocationCategory,
+} from "@/lib/portfolio-classification";
 
 type HealthAsset = {
   symbol: string;
@@ -10,7 +14,7 @@ type HealthAsset = {
   isStablecoin?: boolean;
 };
 
-type AllocationKey = "btc" | "eth" | "large" | "mid" | "small" | "stable";
+type AllocationKey = PortfolioAllocationCategory;
 
 type AllocationRow = {
   key: AllocationKey;
@@ -29,26 +33,12 @@ const RISK_POINTS: Record<AllocationKey, number> = {
   mid: 75,
   small: 100,
 };
-const STABLECOIN_SYMBOLS = new Set(["USDT", "USDC", "DAI", "TUSD", "USDP"]);
-
 function clamp(n: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, n));
 }
 
 function pct(n: number) {
   return `${Math.round(clamp(n))}%`;
-}
-
-function categoryFor(asset: HealthAsset): AllocationKey {
-  const symbol = asset.symbol.trim().toUpperCase();
-  if (asset.isStablecoin || STABLECOIN_SYMBOLS.has(symbol)) return "stable";
-  if (symbol === "BTC") return "btc";
-  if (symbol === "ETH") return "eth";
-
-  const marketCap = asset.marketCapUsd ?? 0;
-  if (marketCap > 10_000_000_000) return "large";
-  if (marketCap >= 1_000_000_000) return "mid";
-  return "small";
 }
 
 function profileFor(score: number) {
@@ -77,7 +67,7 @@ export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] 
           : 0;
       if (totalValue <= 0 || value <= 0) return acc;
 
-      acc[categoryFor(asset)] += (value / totalValue) * 100;
+      acc[classifyPortfolioAsset(asset)] += (value / totalValue) * 100;
       return acc;
     },
     { btc: 0, eth: 0, large: 0, mid: 0, small: 0, stable: 0 },
@@ -144,7 +134,7 @@ export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] 
       <div className="mb-5 text-lg font-semibold">Portfolio Health</div>
 
       <div className="mb-5 rounded-2xl border border-[#DFC9FF] bg-[#F7F1FF] p-4">
-        <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#8D5BD8]">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8D5BD8]">
           Risk Profile
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
@@ -164,7 +154,7 @@ export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] 
       </div>
 
       <div className="rounded-2xl border border-[#EDF1F7] bg-[#FBFCFF] p-4">
-        <div className="mb-3 text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           Allocation
         </div>
 
@@ -174,10 +164,10 @@ export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] 
               key={row.key}
               className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 border-t border-[#EDF1F7] py-2.5 first:border-t-0 first:pt-0 last:pb-0"
             >
-              <div className="text-sm font-extrabold text-slate-700">
+              <div className="text-sm font-semibold text-slate-700">
                 {row.label}
               </div>
-              <div className={cls("text-sm font-black", row.textClass)}>
+              <div className={cls("text-sm font-semibold", row.textClass)}>
                 {pct(row.pct)}
               </div>
               <div className="col-span-2 h-2 overflow-hidden rounded-full bg-[#E5E7EB]">

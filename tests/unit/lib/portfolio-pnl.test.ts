@@ -45,4 +45,27 @@ describe("calculatePortfolioPnl", () => {
 
     expect(result.totalInvestedUsd).toBeCloseTo(15_769.88, 2);
   });
+
+  it("keeps trading fees in buy cost basis and sell proceeds", () => {
+    const result = calculatePortfolioPnl([
+      { kind: "buy", qty: 10, priceUsd: 100, feeUsd: 10 },
+      { kind: "sell", qty: 4, priceUsd: 150, feeUsd: 5 },
+    ]);
+
+    expect(result.costBasisUsd).toBe(606);
+    expect(result.realizedPnlUsd).toBe(191);
+    expect(result.transactions[0]).toEqual(
+      expect.objectContaining({
+        totalUsd: 1010,
+        feeUsd: 10,
+      }),
+    );
+    expect(result.transactions[1]).toEqual(
+      expect.objectContaining({
+        totalUsd: 595,
+        feeUsd: 5,
+        realizedPnlUsd: 191,
+      }),
+    );
+  });
 });
