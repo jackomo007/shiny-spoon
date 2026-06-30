@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { classifyPortfolioAsset } from "@/lib/portfolio-classification";
 
 describe("classifyPortfolioAsset", () => {
-  it("does not classify known large-cap alts as small when market cap is missing", () => {
+  it("uses a conservative mid-cap fallback when market cap is missing", () => {
     expect(classifyPortfolioAsset({ symbol: "ADA", marketCapUsd: null })).toBe(
-      "large",
+      "mid",
     );
   });
 
