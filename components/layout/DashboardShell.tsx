@@ -103,8 +103,11 @@ export default function DashboardShell({ children }: Props) {
                     isTopActive("/dashboard") ? topNavActive : topNavInactive
                   }`}
                 >
-                  Home
+                  Daily Analysis
                 </Link>
+                <span className="text-sm px-2 py-2 font-semibold text-[#6B6777] whitespace-nowrap">
+                  Short Term Trading
+                </span>
                 <Link
                   href="/journal"
                   className={`${topNavLinkBase} ${
@@ -226,12 +229,18 @@ export default function DashboardShell({ children }: Props) {
                             <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
                               🏠
                             </span>
-                            <span className="font-medium">Home</span>
+                            <span className="font-medium">Daily Analysis</span>
                           </div>
                           <span className="text-xs text-[#9C92D4]">
                             {isTopActive("/dashboard") ? "Current" : ""}
                           </span>
                         </Link>
+                      </li>
+
+                      <li>
+                        <div className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#6B6777]">
+                          Short Term Trading
+                        </div>
                       </li>
 
                       <li>
@@ -364,7 +373,7 @@ export default function DashboardShell({ children }: Props) {
               <ul className="grid gap-1">
                 <NavItem
                   href="/dashboard"
-                  label="Home"
+                  label="Daily Analysis"
                   icon="🏠"
                   showText={sidebarExpanded}
                   pathname={pathname}
@@ -379,15 +388,20 @@ export default function DashboardShell({ children }: Props) {
                 />
 
                 <NavGroup
-                  href="/journal"
-                  label="Trading Journal"
+                  label="Short Term Trading"
                   icon="🗒️"
                   showText={sidebarExpanded}
-                  pathname={pathname}
                   open={tradingGroupOpen}
                   setOpen={setTradingGroupOpen}
                   isActiveGroup={tradingGroupActive}
                 >
+                  <NavChildItem
+                    href="/journal"
+                    label="Trading Journal"
+                    icon="-"
+                    showText={sidebarExpanded}
+                    pathname={pathname}
+                  />
                   <NavChildItem
                     href="/manage-tags"
                     label="Manage Tags"
@@ -526,36 +540,32 @@ function NavItem({
 }
 
 function NavGroup({
-  href,
   label,
   icon,
   showText,
-  pathname,
   open,
   setOpen,
   isActiveGroup,
   children,
 }: {
-  href: string;
   label: string;
   icon: string;
   showText: boolean;
-  pathname?: string;
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isActiveGroup: boolean;
   children?: React.ReactNode;
 }) {
-  const isActive = pathname === href;
-
   return (
     <li className="select-none">
       <div className="flex items-center">
-        <Link
-          href={href}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
           title={!showText ? label : undefined}
+          aria-expanded={showText ? open : undefined}
           className={`flex-1 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-            isActive
+            isActiveGroup
               ? "bg-purple-50 text-purple-700"
               : "text-gray-700 hover:bg-gray-50"
           }`}
@@ -571,7 +581,7 @@ function NavGroup({
           >
             {label}
           </span>
-        </Link>
+        </button>
 
         {showText && (
           <button
