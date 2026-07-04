@@ -67,9 +67,6 @@ export default function TransactionsTable(props: {
           {rows.map((t) => {
             const dt = new Date(t.executedAt);
             const isSell = t.side === "sell";
-            const feeUsd = Number(t.feeUsd ?? 0);
-            const hasFee = Number.isFinite(feeUsd) && feeUsd > 0;
-
             const pnl = t.gainLossUsd;
             const pnlUp = (pnl ?? 0) >= 0;
 
@@ -109,11 +106,6 @@ export default function TransactionsTable(props: {
                 <Td className="text-[#0f172a]">
                   <div className="grid">
                     <span>{usd(t.totalUsd)}</span>
-                    {hasFee ? (
-                      <span className="text-xs font-medium text-red-600">
-                        -{usd(feeUsd)} fee
-                      </span>
-                    ) : null}
                   </div>
                 </Td>
 

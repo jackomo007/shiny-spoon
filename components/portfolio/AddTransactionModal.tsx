@@ -91,7 +91,6 @@ export default function AddTransactionModal(props: {
 
   const hasQuery = query.trim().length > 0;
   const feeUsd = numFromRaw(feeRaw);
-  const hasFee = feeUsd > 0;
 
   function resetAll() {
     setStep("pick");
@@ -651,11 +650,6 @@ export default function AddTransactionModal(props: {
                   placeholder="0"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"
                 />
-                {hasFee ? (
-                  <span className="text-xs font-medium text-red-600">
-                    -{usd(feeUsd)} fee
-                  </span>
-                ) : null}
               </label>
             </div>
 

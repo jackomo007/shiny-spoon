@@ -78,7 +78,6 @@ export function calculatePortfolioPnl(
     const pnlUsd = saleProceedsUsd - costRemovedUsd;
     const pnlPct = costRemovedUsd > 0 ? (pnlUsd / costRemovedUsd) * 100 : null;
 
-    totalInvestedUsd -= saleProceedsUsd;
     realizedPnlUsd += pnlUsd;
     qtyHeld -= reduceQty;
     costBasisUsd -= costRemovedUsd;

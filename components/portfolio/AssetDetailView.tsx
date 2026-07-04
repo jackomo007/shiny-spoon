@@ -746,8 +746,6 @@ export default function AssetDetailView({
               {data.transactions.map((tx) => {
                 const dt = new Date(tx.executedAt);
                 const isSell = tx.side === "sell";
-                const feeUsd = Number(tx.feeUsd ?? 0);
-                const hasFee = Number.isFinite(feeUsd) && feeUsd > 0;
                 const pnl = tx.gainLossUsd;
                 const pnlUp = (pnl ?? 0) >= 0;
 
@@ -787,11 +785,6 @@ export default function AssetDetailView({
                     <Td className="text-[#0f172a]">
                       <div className="grid">
                         <span>{usd(tx.totalUsd)}</span>
-                        {hasFee ? (
-                          <span className="text-xs font-medium text-red-600">
-                            -{usd(feeUsd)} fee
-                          </span>
-                        ) : null}
                       </div>
                     </Td>
 
