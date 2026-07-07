@@ -8,7 +8,7 @@ describe("calculatePortfolioPnl", () => {
       { kind: "sell", qty: 4, priceUsd: 150, feeUsd: 5 },
     ]);
 
-    expect(result.totalInvestedUsd).toBe(1000);
+    expect(result.totalInvestedUsd).toBe(600);
     expect(result.realizedPnlUsd).toBe(195);
     expect(result.qtyHeld).toBe(6);
     expect(result.costBasisUsd).toBe(600);
@@ -37,13 +37,13 @@ describe("calculatePortfolioPnl", () => {
     );
   });
 
-  it("calculates total invested as total buy spend", () => {
+  it("calculates total invested as open cost basis after sells", () => {
     const result = calculatePortfolioPnl([
       { kind: "buy", qty: 1, priceUsd: 21_841.28, feeUsd: 0 },
       { kind: "sell", qty: 0.1, priceUsd: 60_714, feeUsd: 0 },
     ]);
 
-    expect(result.totalInvestedUsd).toBeCloseTo(21_841.28, 2);
+    expect(result.totalInvestedUsd).toBeCloseTo(19_657.15, 2);
   });
 
   it("keeps trading fees in buy cost basis and sell proceeds", () => {
@@ -53,6 +53,7 @@ describe("calculatePortfolioPnl", () => {
     ]);
 
     expect(result.costBasisUsd).toBe(606);
+    expect(result.totalInvestedUsd).toBe(606);
     expect(result.realizedPnlUsd).toBe(191);
     expect(result.transactions[0]).toEqual(
       expect.objectContaining({

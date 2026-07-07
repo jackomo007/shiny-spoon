@@ -288,6 +288,7 @@ export async function GET() {
         const saleProceedsUsd = totalUsd - fee;
         s.qtyHeld = result.qtyHeld;
         s.costBasisUsd = result.costBasisUsd;
+        s.totalInvestedUsd = result.totalInvestedUsd;
         if (Number.isFinite(result.realizedPnlUsd)) {
           s.realizedProfitUsd += result.realizedPnlUsd;
         }
@@ -295,6 +296,7 @@ export async function GET() {
         if (s.qtyHeld < 1e-10) {
           s.qtyHeld = 0;
           s.costBasisUsd = 0;
+          s.totalInvestedUsd = 0;
         }
 
         txs.push({
@@ -360,14 +362,15 @@ export async function GET() {
       return (b.totalInvestedUsd ?? 0) - (a.totalInvestedUsd ?? 0);
     });
 
-    const currentBalanceUsd = assetsSorted.reduce(
-      (s, a) => s + (a.holdingsValueUsd ?? 0),
+    const positionValueUsd = assetsSorted.reduce(
+      (s, a) => s + (a.isStablecoin ? 0 : (a.holdingsValueUsd ?? 0)),
       0,
     );
     const stablecoinValueUsd = assetsSorted.reduce(
       (s, a) => s + (a.isStablecoin ? (a.holdingsValueUsd ?? 0) : 0),
       0,
     );
+    const currentBalanceUsd = positionValueUsd + stablecoinValueUsd;
     const previousBalanceUsd = assetsSorted.reduce((sum, asset) => {
       const currentValue = asset.holdingsValueUsd ?? 0;
       const change24hPct = asset.change24hPct ?? 0;
@@ -392,7 +395,7 @@ export async function GET() {
     );
 
     const unrealizedUsd = assetsSorted.reduce(
-      (s, a) => s + (a.currentProfitUsd ?? 0),
+      (s, a) => s + (a.isStablecoin ? 0 : (a.currentProfitUsd ?? 0)),
       0,
     );
 

@@ -104,7 +104,7 @@ describe("/api/portfolio/add-transaction", () => {
     setPortfolioAssetStablecoinMock.mockResolvedValue(undefined)
   })
 
-  it("subtracts buy fees from total before deriving quantity", async () => {
+  it("derives quantity from gross total without subtracting the buy fee", async () => {
     const response = await POST(
       new Request("http://localhost/api/portfolio/add-transaction", {
         method: "POST",
@@ -126,7 +126,7 @@ describe("/api/portfolio/add-transaction", () => {
         accountId: "acc_1",
         symbol: "HYPE",
         side: "buy",
-        qty: (4500 - 17.86) / 59,
+        qty: 4500 / 59,
         priceUsd: 59,
         feeUsd: 17.86,
       }),

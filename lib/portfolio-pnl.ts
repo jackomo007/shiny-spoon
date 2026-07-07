@@ -81,10 +81,12 @@ export function calculatePortfolioPnl(
     realizedPnlUsd += pnlUsd;
     qtyHeld -= reduceQty;
     costBasisUsd -= costRemovedUsd;
+    totalInvestedUsd -= costRemovedUsd;
 
     if (qtyHeld < 1e-10) {
       qtyHeld = 0;
       costBasisUsd = 0;
+      totalInvestedUsd = 0;
     }
 
     transactions.push({

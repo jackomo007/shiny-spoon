@@ -67,15 +67,15 @@ const RISK_STEPS = [
 
 const RISK_DESCRIPTIONS: Record<string, string> = {
   Conservative:
-    "Your portfolio is positioned defensively, prioritizing stability and capital preservation over high-growth upside.",
+    "Mostly cash-like or lower-volatility exposure.",
   Balanced:
-    "Your portfolio has a balanced mix of protection and growth exposure, giving you upside potential while keeping risk controlled.",
+    "A measured mix of stability and growth exposure.",
   Growth:
-    "Your portfolio is tilted toward higher-volatility positions, giving you more upside potential while still keeping more stable holdings.",
+    "Tilted toward upside while retaining some ballast.",
   Aggressive:
-    "Your portfolio is concentrated in higher-volatility positions, creating greater upside potential but also larger exposure to sharp market swings.",
+    "Concentrated in volatile positions with wider drawdown risk.",
   "Extremely Aggressive":
-    "Your portfolio is highly speculative, with heavy exposure to volatile assets that can produce large gains or sharp drawdowns.",
+    "Highly speculative exposure with large swing potential.",
 };
 
 export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] }) {
@@ -163,63 +163,75 @@ export default function PortfolioHealthCard({ assets }: { assets: HealthAsset[] 
 
   return (
     <Card className="rounded-[14px] p-5 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
-      <div className="mb-5 text-lg font-semibold">Portfolio Health</div>
-
-      <div className="mb-5 rounded-2xl border border-[#DFC9FF] bg-[#F7F1FF] p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8D5BD8]">
-            Risk Profile
-          </div>
-          <div
-            title="Your risk profile is derived from how your holdings are allocated across asset categories."
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-bold text-[#8D5BD8]"
-          >
-            ?
-          </div>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-lg font-semibold">Portfolio Health</div>
+        <div
+          title="Your risk profile is derived from how your holdings are allocated across asset categories."
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-[11px] font-bold text-slate-500"
+        >
+          ?
         </div>
+      </div>
 
-        <div className="text-[22px] font-black leading-tight text-slate-950">
-          {profile}
+      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase text-slate-500">
+              Risk Profile
+            </div>
+            <div className="mt-1 text-2xl font-bold text-slate-950">
+              {profile}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 px-2.5 py-1 text-sm font-semibold text-white">
+            {hasAssets ? Math.round(score) : 0}/100
+          </div>
         </div>
 
         {description && (
-          <div className="mt-1 text-sm leading-snug text-[#6B5A8C]">
+          <div className="mb-4 text-sm leading-snug text-slate-500">
             {description}
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-5 gap-0">
-          {RISK_STEPS.map(({ step }) => {
-            const isActive = step === activeStep;
-            return (
-              <div key={step} className="flex flex-col items-center">
-                <div className="relative flex h-4 w-full items-center">
-                  {step > 1 && (
-                    <div className="absolute right-1/2 h-[2px] w-full bg-[#DFC9FF]" />
-                  )}
-                  {isActive && (
-                    <div className="absolute -top-3 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#7C3AED]" />
-                  )}
-                </div>
-                <div
-                  className={cls(
-                    "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold",
-                    isActive
-                      ? "bg-[#7C3AED] text-white"
-                      : "bg-white text-slate-400",
-                  )}
-                >
-                  {step}
-                </div>
-              </div>
-            );
-          })}
+        <div className="relative h-3 overflow-hidden rounded-full bg-slate-100">
+          <div className="absolute inset-y-0 left-0 w-[35%] bg-emerald-500" />
+          <div className="absolute inset-y-0 left-[35%] w-[25%] bg-amber-400" />
+          <div className="absolute inset-y-0 left-[60%] w-[20%] bg-orange-500" />
+          <div className="absolute inset-y-0 left-[80%] w-[20%] bg-rose-500" />
+        </div>
+
+        <div className="relative mt-2 h-6">
+          {hasAssets ? (
+            <div
+              className="absolute top-0 h-5 w-1.5 -translate-x-1/2 rounded-full bg-slate-950"
+              style={{ left: `${score}%` }}
+            />
+          ) : null}
+          <div className="flex justify-between text-[11px] font-medium text-slate-400">
+            {RISK_STEPS.map(({ step }) => (
+              <span
+                key={step}
+                className={cls(
+                  step === activeStep ? "text-slate-900" : "text-slate-400",
+                )}
+              >
+                {step}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[#EDF1F7] bg-[#FBFCFF] p-4">
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-          Allocation
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase text-slate-500">
+            Allocation
+          </div>
+          <div className="text-xs font-medium text-slate-500">
+            {hasAssets ? pct(100) : "0%"}
+          </div>
         </div>
 
         <div className="grid gap-0">

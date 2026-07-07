@@ -85,18 +85,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Provide qty or totalUsd" }, { status: 400 })
     }
     if (qty == null && totalUsd != null) {
-      const grossUsd = input.side === "sell" ? totalUsd + feeUsd : totalUsd - feeUsd
-      if (!Number.isFinite(grossUsd) || grossUsd <= 0) {
-        return NextResponse.json(
-          { error: "Total must be greater than the trading fee" },
-          { status: 400 },
-        )
+      if (!Number.isFinite(totalUsd) || totalUsd <= 0) {
+        return NextResponse.json({ error: "Invalid totalUsd" }, { status: 400 })
       }
-      qty = grossUsd / priceUsd
+      qty = totalUsd / priceUsd
     }
     if (totalUsd == null && qty != null) {
-      const grossUsd = qty * priceUsd
-      totalUsd = input.side === "sell" ? grossUsd - feeUsd : grossUsd + feeUsd
+      totalUsd = qty * priceUsd
     }
 
     if (!qty || !Number.isFinite(qty) || qty <= 0) {
