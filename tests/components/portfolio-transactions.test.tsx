@@ -32,11 +32,11 @@ describe("Portfolio transaction UI", () => {
     );
   });
 
-  it("does not show the trading fee below the total", () => {
+  it("shows the trading fee below the total in the transaction table", () => {
     render(<TransactionsTable rows={[tx({ feeUsd: 2.5, totalUsd: 102.5 })]} />);
 
     expect(screen.getByText("$102.50")).toBeInTheDocument();
-    expect(screen.queryByText("-$2.50 fee")).not.toBeInTheDocument();
+    expect(screen.getByText("-$2.50 fee")).toBeInTheDocument();
   });
 
   it("does not recalculate amount in edit mode when only the fee changes", async () => {

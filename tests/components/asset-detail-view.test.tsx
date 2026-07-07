@@ -64,11 +64,11 @@ describe("AssetDetailView", () => {
     );
   });
 
-  it("does not show transaction fee below the total in the asset transaction table", async () => {
+  it("shows transaction fee below the total in the asset transaction table", async () => {
     render(<AssetDetailView symbol="HYPE" onBack={vi.fn()} />);
 
     expect(await screen.findByText("Hyperliquid Transactions")).toBeInTheDocument();
     expect(screen.getAllByText("$4,481.00")).toHaveLength(2);
-    expect(screen.queryByText("-$17.86 fee")).not.toBeInTheDocument();
+    expect(screen.getByText("-$17.86 fee")).toBeInTheDocument();
   });
 });

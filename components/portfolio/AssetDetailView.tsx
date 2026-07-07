@@ -785,6 +785,11 @@ export default function AssetDetailView({
                     <Td className="text-[#0f172a]">
                       <div className="grid">
                         <span>{usd(tx.totalUsd)}</span>
+                        {tx.feeUsd && tx.feeUsd > 0 ? (
+                          <span className="text-xs font-medium text-red-600">
+                            -{usd(tx.feeUsd)} fee
+                          </span>
+                        ) : null}
                       </div>
                     </Td>
 

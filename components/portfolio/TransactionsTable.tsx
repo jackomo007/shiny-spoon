@@ -106,6 +106,11 @@ export default function TransactionsTable(props: {
                 <Td className="text-[#0f172a]">
                   <div className="grid">
                     <span>{usd(t.totalUsd)}</span>
+                    {t.feeUsd && t.feeUsd > 0 ? (
+                      <span className="text-xs font-medium text-red-600">
+                        -{usd(t.feeUsd)} fee
+                      </span>
+                    ) : null}
                   </div>
                 </Td>
 
