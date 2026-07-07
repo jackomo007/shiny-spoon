@@ -364,6 +364,10 @@ export async function GET() {
       (s, a) => s + (a.holdingsValueUsd ?? 0),
       0,
     );
+    const stablecoinValueUsd = assetsSorted.reduce(
+      (s, a) => s + (a.isStablecoin ? (a.holdingsValueUsd ?? 0) : 0),
+      0,
+    );
     const previousBalanceUsd = assetsSorted.reduce((sum, asset) => {
       const currentValue = asset.holdingsValueUsd ?? 0;
       const change24hPct = asset.change24hPct ?? 0;
@@ -410,6 +414,7 @@ export async function GET() {
       summary: {
         currentBalanceUsd,
         totalInvestedUsd,
+        stablecoinValueUsd,
         profit: {
           realized: { usd: realizedProfitUsd },
           unrealized: { usd: unrealizedUsd },

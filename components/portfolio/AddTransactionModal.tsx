@@ -56,7 +56,6 @@ export default function AddTransactionModal(props: {
   const [selected, setSelected] = useState<AssetPick | null>(null);
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [priceMode, setPriceMode] = useState<"market" | "custom">("market");
 
   const [priceRaw, setPriceRaw] = useState<string>("");
 
@@ -99,7 +98,6 @@ export default function AddTransactionModal(props: {
     setSelected(null);
 
     setSide("buy");
-    setPriceMode("market");
     setPriceRaw("");
 
     setAmountRaw("");
@@ -127,7 +125,6 @@ export default function AddTransactionModal(props: {
 
     setStep("form");
     setSide(t.side);
-    setPriceMode("custom");
     setPriceRaw(String(t.priceUsd ?? ""));
     setAmountRaw(String(Math.abs(t.qty ?? 0)));
     setTotalRaw(String(Math.abs(t.totalUsd ?? 0)));
@@ -166,7 +163,6 @@ export default function AddTransactionModal(props: {
     setSelected(asset);
     setStep("form");
     setSide("buy");
-    setPriceMode("market");
     setPriceRaw(
       asset.priceUsd != null && asset.priceUsd > 0
         ? String(asset.priceUsd)
@@ -235,12 +231,6 @@ export default function AddTransactionModal(props: {
 
     return () => clearTimeout(t);
   }, [query, props.open]);
-
-  const priceLabel = useMemo(
-    () =>
-      priceMode === "market" ? "Market Price (USD)" : "Custom Price (USD)",
-    [priceMode],
-  );
 
   function revealConfirmDeleteIfOpen(open: boolean) {
     setConfirmDeleteOpen(open);
@@ -391,8 +381,8 @@ export default function AddTransactionModal(props: {
                           name: selected.name,
                         },
                         side,
-                        priceMode,
-                        priceUsd: priceMode === "custom" ? priceUsd : undefined,
+                        priceMode: "custom",
+                        priceUsd,
                         qty:
                           lastEdited.current === "total"
                             ? undefined
@@ -486,7 +476,6 @@ export default function AddTransactionModal(props: {
                         setSelected(a);
                         setStep("form");
                         setSide("buy");
-                        setPriceMode("market");
                         setPriceRaw("");
                         setAmountRaw("");
                         setTotalRaw("");
@@ -528,7 +517,6 @@ export default function AddTransactionModal(props: {
                         setSelected(a);
                         setStep("form");
                         setSide("buy");
-                        setPriceMode("market");
                         setPriceRaw("");
                         setAmountRaw("");
                         setTotalRaw("");
@@ -578,42 +566,18 @@ export default function AddTransactionModal(props: {
               </button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-xs text-gray-500">Price Mode</span>
-                <select
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                  value={priceMode}
-                  onChange={async (e) => {
-                    const next = e.target.value as "market" | "custom";
-                    setPriceMode(next);
-
-                    if (next === "market") {
-                      setPriceRaw("");
-                      if (selected) await loadMarketPrice(selected.id);
-                    }
-                  }}
-                >
-                  <option value="market">Market Price</option>
-                  <option value="custom">Custom Price</option>
-                </select>
-              </label>
-
-              <label className="grid gap-1">
-                <span className="text-xs text-gray-500">{priceLabel}</span>
-                <MoneyInputStandalone
-                  valueRaw={priceRaw}
-                  onChangeRaw={(v) => {
-                    if (priceMode === "market") return;
-                    setPriceRaw(v);
-                  }}
-                  maxDecimals={8}
-                  placeholder="0"
-                  readOnly={priceMode === "market"}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
-                />
-              </label>
-            </div>
+            <label className="grid gap-1">
+              <span className="text-xs text-gray-500">
+                Price (USD) <span className="text-red-600">*</span>
+              </span>
+              <MoneyInputStandalone
+                valueRaw={priceRaw}
+                onChangeRaw={(v) => setPriceRaw(v)}
+                maxDecimals={8}
+                placeholder="0"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2"
+              />
+            </label>
 
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="grid gap-1">
@@ -659,7 +623,7 @@ export default function AddTransactionModal(props: {
               </div>
               <label className="grid gap-1">
                 <span className="text-xs text-gray-500">
-                  Trading Fee <span className="text-red-600">*</span>
+                  Trading Fee (USD) <span className="text-red-600">*</span>
                 </span>
                 <MoneyInputStandalone
                   valueRaw={feeRaw}
@@ -711,8 +675,8 @@ export default function AddTransactionModal(props: {
             ) : null}
 
             <div className="text-xs text-gray-500">
-              Amount and Total are calculated from each other. In Market Price,
-              the price is automatically retrieved and remains read-only.
+              Price is pre-filled with the current market price and can be
+              edited. Amount and Total are calculated from each other.
             </div>
 
             {!hasLockedInitialAsset && (

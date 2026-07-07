@@ -17,6 +17,7 @@ import { usd, pct, cls } from "@/components/portfolio/format";
 type Summary = {
   currentBalanceUsd: number;
   totalInvestedUsd: number;
+  stablecoinValueUsd: number;
   profit: {
     realized: { usd: number };
     unrealized: { usd: number };
@@ -146,6 +147,11 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
         <div className="flex items-center justify-between py-3 border-t border-slate-200">
           <div className="text-slate-400">Total Invested</div>
           <div className="font-semibold">{usd(s.totalInvestedUsd)}</div>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-t border-slate-200">
+          <div className="text-slate-400">Stablecoins</div>
+          <div className="font-semibold">{usd(s.stablecoinValueUsd)}</div>
         </div>
       </div>
     </Card>
