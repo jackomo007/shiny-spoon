@@ -17,8 +17,12 @@ type HealthAsset = {
 type AllocationKey = PortfolioAllocationCategory;
 
 type AllocationRow = {
+  key: AllocationKey;
+  label: string;
   pct: number;
   points: number;
+  fillClass: string;
+  textClass: string;
 };
 
 const RISK_POINTS: Record<AllocationKey, number> = {
@@ -31,6 +35,10 @@ const RISK_POINTS: Record<AllocationKey, number> = {
 };
 function clamp(n: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, n));
+}
+
+function pct(n: number) {
+  return `${Math.round(clamp(n))}%`;
 }
 
 function profileFor(score: number) {
@@ -113,28 +121,52 @@ export default function PortfolioHealthCard({
 
   const rows: AllocationRow[] = [
     {
+      key: "btc",
+      label: "BTC",
       pct: allocation.btc,
       points: RISK_POINTS.btc,
+      fillClass: "bg-[#F7931A]",
+      textClass: "text-[#F7931A]",
     },
     {
+      key: "eth",
+      label: "ETH",
       pct: allocation.eth,
       points: RISK_POINTS.eth,
+      fillClass: "bg-[#627EEA]",
+      textClass: "text-[#627EEA]",
     },
     {
+      key: "large",
+      label: "Large Cap Alts",
       pct: allocation.large,
       points: RISK_POINTS.large,
+      fillClass: "bg-[#7C3AED]",
+      textClass: "text-[#7C3AED]",
     },
     {
+      key: "mid",
+      label: "Mid Cap Alts",
       pct: allocation.mid,
       points: RISK_POINTS.mid,
+      fillClass: "bg-[#4F46E5]",
+      textClass: "text-[#4F46E5]",
     },
     {
+      key: "small",
+      label: "Small Cap Alts",
       pct: allocation.small,
       points: RISK_POINTS.small,
+      fillClass: "bg-[#D946EF]",
+      textClass: "text-[#D946EF]",
     },
     {
+      key: "stable",
+      label: "Stablecoins",
       pct: allocation.stable,
       points: RISK_POINTS.stable,
+      fillClass: "bg-[#22C55E]",
+      textClass: "text-[#16A34A]",
     },
   ];
 
@@ -152,42 +184,42 @@ export default function PortfolioHealthCard({
 
   return (
     <section className="min-w-0 w-full">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xl font-extrabold leading-none tracking-normal text-[#07142F]">
+      <div className="mb-2.5 flex items-center justify-between">
+        <h2 className="text-lg font-extrabold leading-none tracking-normal text-[#07142F]">
           Portfolio Health
         </h2>
         <button
           type="button"
           aria-label="Risk profile help"
           title="Your risk profile is derived from how your holdings are allocated across asset categories."
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-xs font-extrabold text-[#07142F]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-xs font-extrabold text-[#07142F]"
         >
           ?
         </button>
       </div>
 
-      <Card className="min-w-0 overflow-hidden rounded-2xl border-[#DFE5EF] p-4 shadow-[0_8px_18px_rgba(17,33,65,0.07)]">
+      <Card className="min-w-0 overflow-hidden rounded-2xl border-[#DFE5EF] p-3.5 shadow-[0_8px_18px_rgba(17,33,65,0.07)]">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#6F7D98]">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6F7D98]">
               Risk Profile
             </div>
-            <div className="break-words text-[24px] font-extrabold leading-none tracking-normal text-[#07142F]">
+            <div className="text-[21px] font-extrabold leading-tight tracking-normal text-[#07142F]">
               {profile}
             </div>
           </div>
 
-          <div className="shrink-0 rounded-lg bg-[#07142F] px-2.5 py-1.5 text-xs font-extrabold tracking-normal text-white">
+          <div className="shrink-0 rounded-lg bg-[#07142F] px-2.5 py-1 text-xs font-extrabold tracking-normal text-white">
             {meterScore}/100
           </div>
         </div>
 
-        <div className="my-4 max-w-[520px] text-sm leading-[1.45] text-[#6F7D98]">
+        <div className="my-3 text-xs leading-[1.45] text-[#6F7D98]">
           {description ??
             "Add portfolio positions to calculate your risk profile."}
         </div>
 
-        <div className="relative mt-1 pt-8">
+        <div className="relative mt-1 pt-7">
           {hasAssets ? (
             <div
               className="absolute top-0 grid -translate-x-1/2 justify-items-center gap-1"
@@ -202,7 +234,7 @@ export default function PortfolioHealthCard({
 
           <div
             aria-label="Risk profile spectrum from conservative to extremely aggressive"
-            className="grid h-3 grid-cols-5 overflow-hidden rounded-full"
+            className="grid h-2.5 grid-cols-5 overflow-hidden rounded-full"
           >
             <div className="bg-[#08B76A]" />
             <div className="bg-[#72CA3D]" />
@@ -211,12 +243,12 @@ export default function PortfolioHealthCard({
             <div className="bg-[#F52159]" />
           </div>
 
-          <div className="mt-4 grid grid-cols-5 gap-2 text-center">
+          <div className="mt-3 grid grid-cols-5 gap-2 text-center">
             {RISK_STEPS.map(({ step, colorClass }) => (
               <div key={step}>
                 <span
                   className={cls(
-                    "block text-sm font-extrabold",
+                    "block text-xs font-extrabold",
                     step === activeStep ? colorClass : "text-[#07142F]",
                   )}
                 >
@@ -227,10 +259,43 @@ export default function PortfolioHealthCard({
           </div>
         </div>
 
-        <div className="mt-5 flex items-start gap-3 rounded-xl bg-[#F7F9FC] px-3 py-3 text-xs leading-[1.45] text-[#26385F]">
+        <div className="mt-4 border-t border-[#EDF1F7] pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6F7D98]">
+              Allocation
+            </div>
+            <div className="text-[11px] font-semibold text-[#6F7D98]">
+              {hasAssets ? pct(100) : "0%"}
+            </div>
+          </div>
+
+          <div className="grid gap-0">
+            {rows.map((row) => (
+              <div
+                key={row.key}
+                className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 border-t border-[#EDF1F7] py-2 first:border-t-0 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0 truncate text-xs font-semibold text-[#26385F]">
+                  {row.label}
+                </div>
+                <div className={cls("text-xs font-extrabold", row.textClass)}>
+                  {pct(row.pct)}
+                </div>
+                <div className="col-span-2 h-1.5 overflow-hidden rounded-full bg-[#E5E7EB]">
+                  <div
+                    className={cls("h-full rounded-full", row.fillClass)}
+                    style={{ width: `${clamp(row.pct)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-[#F7F9FC] px-3 py-2.5 text-[11px] leading-[1.4] text-[#26385F]">
           <div
             aria-hidden="true"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgba(8,183,106,0.12)] text-base font-bold text-[#08B76A]"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(8,183,106,0.12)] text-sm font-bold text-[#08B76A]"
           >
             i
           </div>
