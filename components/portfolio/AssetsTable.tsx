@@ -130,14 +130,14 @@ export default function AssetsTable(props: {
   }
 
   return (
-    <Card className="p-0 rounded-2xl overflow-hidden">
+    <Card className="min-w-0 p-0 rounded-2xl overflow-hidden">
       {props.title ? (
         <div className="pt-1 pb-3 flex items-center justify-between gap-3">
           <div className="font-semibold text-[#0f172a]">{props.title}</div>
         </div>
       ) : null}
 
-      <Table>
+      <Table className="min-w-[880px]">
         <thead className="border-b border-[#eef2f7]">
           <tr>
             <SortTh sortKey="asset">Asset</SortTh>

@@ -43,7 +43,7 @@ export default function TransactionsTable(props: {
   }
 
   return (
-    <Card className="p-0 rounded-2xl overflow-hidden">
+    <Card className="min-w-0 p-0 rounded-2xl overflow-hidden">
       <div className="pt-1 pb-3 flex items-center justify-between gap-3">
         <input
           className="w-[280px] max-w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
@@ -52,7 +52,7 @@ export default function TransactionsTable(props: {
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
-      <Table>
+      <Table className="min-w-[720px]">
         <thead className="border-b border-[#eef2f7]">
           <tr>
             <Th>Type</Th>

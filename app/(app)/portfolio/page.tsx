@@ -158,6 +158,32 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
   );
 }
 
+function PortfolioLoadingState() {
+  return (
+    <div
+      className="grid min-h-[520px] place-items-center rounded-[20px] bg-gray-50/70 px-4"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex min-w-[240px] flex-col items-center gap-4 rounded-[18px] border border-[#E9E6F2] bg-white/95 px-6 py-5 text-center shadow-[0_18px_48px_rgba(20,18,26,0.10)]">
+        <div className="relative h-12 w-12" aria-hidden="true">
+          <div className="absolute inset-0 rounded-full border-4 border-[#F1EAFE]" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#7C3AED]" />
+          <div className="absolute inset-[14px] rounded-full bg-[radial-gradient(circle_at_30%_30%,#B49BFF,#7C3AED)]" />
+        </div>
+        <div className="grid gap-1">
+          <div className="text-sm font-extrabold text-[#14121A]">
+            Loading portfolio
+          </div>
+          <div className="text-xs font-semibold text-[#6B6777]">
+            Syncing your assets and transactions...
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PortfolioPage() {
   const [data, setData] = useState<PortfolioApiRes | null>(null);
   const [exitStrategies, setExitStrategies] = useState<ExitStrategySummary[]>(
@@ -227,14 +253,14 @@ export default function PortfolioPage() {
 
   if (selectedAsset) {
     return (
-      <div className="p-4 md:p-8">
-        <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
-          <div className="flex flex-col gap-6">
+      <div className="min-w-0 overflow-x-hidden">
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="min-w-0 flex flex-col gap-6">
             {data && <BalanceCardFilled summary={data.summary} />}
             {data && <PortfolioHealthCard assets={data.assets} />}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <AssetDetailView
               symbol={selectedAsset}
               onBack={() => setSelectedAsset(null)}
@@ -247,16 +273,16 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div>
+    <div className="min-w-0 overflow-x-hidden">
       {loading ? (
-        <Card className="p-6">Loading…</Card>
+        <PortfolioLoadingState />
       ) : error ? (
         <Card className="p-6 text-red-600">{error}</Card>
       ) : !data ? (
         <Card className="p-6">No data.</Card>
       ) : !hasAssets ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8">
-          <div className="flex flex-col gap-6 lg:order-1 order-2">
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="min-w-0 flex flex-col gap-6 lg:order-1 order-2">
             <BalanceCardEmpty summary={data.summary} />
 
             <div className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] h-[420px] border-2 border-dashed border-slate-200 bg-white/35 p-6 flex flex-col gap-3">
@@ -267,7 +293,7 @@ export default function PortfolioPage() {
             </div>
           </div>
 
-          <div className="lg:order-2 order-1 flex items-center justify-center">
+          <div className="min-w-0 lg:order-2 order-1 flex items-center justify-center">
             <Card className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] w-full min-h-[620px] flex items-center justify-center text-center">
               <div className="max-w-[420px] px-6">
                 <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#f2eaff] text-[#5801cc] text-4xl font-bold">
@@ -291,18 +317,18 @@ export default function PortfolioPage() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="flex flex-col gap-6">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="min-w-0 flex flex-col gap-6">
             <BalanceCardFilled summary={data.summary} />
             <PortfolioHealthCard assets={data.assets} />
           </div>
 
-          <div className="flex flex-col gap-6">
+          <div className="min-w-0 flex flex-col gap-6">
             <HoldingsAllocationCard assets={allocationAssets} />
 
-            <Card className="rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] p-0 overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                <div className="flex items-center gap-2">
+            <Card className="min-w-0 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] p-0 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-b border-slate-200 sm:px-6">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <button
                     onClick={() => setActiveTab("assets")}
                     className={cls(
@@ -350,7 +376,7 @@ export default function PortfolioPage() {
                 )}
               </div>
 
-              <div className="p-6">
+              <div className="min-w-0 p-4 sm:p-6">
                 {activeTab === "assets" ? (
                   <AssetsTable
                     assets={data.assets}

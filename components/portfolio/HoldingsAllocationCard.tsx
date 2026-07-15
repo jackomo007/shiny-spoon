@@ -69,7 +69,7 @@ export default function HoldingsAllocationCard(props: {
   const hasData = pie.length > 0 && totalUsd > 0;
 
   return (
-    <Card className="p-6 rounded-2xl min-h-[356px]">
+    <Card className="min-w-0 p-6 rounded-2xl min-h-[356px]">
       <div className="text-lg font-semibold mb-1">Holdings Allocation</div>
 
       {!hasData ? (

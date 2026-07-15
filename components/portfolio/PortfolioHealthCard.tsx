@@ -151,7 +151,7 @@ export default function PortfolioHealthCard({
   const meterScore = hasAssets ? scoreLabel(score) : 0;
 
   return (
-    <section className="w-full">
+    <section className="min-w-0 w-full">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xl font-extrabold leading-none tracking-normal text-[#07142F]">
           Portfolio Health
@@ -166,7 +166,7 @@ export default function PortfolioHealthCard({
         </button>
       </div>
 
-      <Card className="rounded-2xl border-[#DFE5EF] p-4 shadow-[0_8px_18px_rgba(17,33,65,0.07)]">
+      <Card className="min-w-0 overflow-hidden rounded-2xl border-[#DFE5EF] p-4 shadow-[0_8px_18px_rgba(17,33,65,0.07)]">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#6F7D98]">
