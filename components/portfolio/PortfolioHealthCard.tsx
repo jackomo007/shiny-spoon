@@ -152,57 +152,57 @@ export default function PortfolioHealthCard({
 
   return (
     <section className="w-full">
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-[28px] font-extrabold leading-none tracking-normal text-[#07142F]">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-extrabold leading-none tracking-normal text-[#07142F]">
           Portfolio Health
         </h2>
         <button
           type="button"
           aria-label="Risk profile help"
           title="Your risk profile is derived from how your holdings are allocated across asset categories."
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-base font-extrabold text-[#07142F]"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-sm font-extrabold text-[#07142F]"
         >
           ?
         </button>
       </div>
 
-      <Card className="rounded-[28px] border-[#DFE5EF] p-6 shadow-[0_18px_50px_rgba(17,33,65,0.08)]">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+      <Card className="rounded-[20px] border-[#DFE5EF] p-5 shadow-[0_10px_24px_rgba(17,33,65,0.08)]">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <div className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-[#6F7D98] sm:text-[15px]">
+            <div className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-[#6F7D98]">
               Risk Profile
             </div>
-            <div className="break-words text-[34px] font-extrabold leading-none tracking-normal text-[#07142F] sm:text-[38px]">
+            <div className="break-words text-[28px] font-extrabold leading-[0.95] tracking-normal text-[#07142F]">
               {profile}
             </div>
           </div>
 
-          <div className="shrink-0 rounded-[14px] bg-[#07142F] px-3.5 py-2.5 text-[17px] font-extrabold tracking-normal text-white">
+          <div className="shrink-0 rounded-xl bg-[#07142F] px-3 py-2 text-sm font-extrabold tracking-normal text-white">
             {meterScore}/100
           </div>
         </div>
 
-        <div className="my-7 max-w-[520px] text-lg leading-[1.45] text-[#6F7D98] sm:mb-10 sm:mt-6 sm:text-[21px]">
+        <div className="my-6 max-w-[520px] text-base leading-[1.45] text-[#6F7D98]">
           {description ??
             "Add portfolio positions to calculate your risk profile."}
         </div>
 
-        <div className="relative mt-2 pt-10">
+        <div className="relative mt-1 pt-9">
           {hasAssets ? (
             <div
-              className="absolute top-0 grid -translate-x-1/2 justify-items-center gap-[7px]"
+              className="absolute top-0 grid -translate-x-1/2 justify-items-center gap-1.5"
               style={{ left: `${score}%` }}
             >
-              <div className="whitespace-nowrap rounded-[9px] bg-[#07142F] px-2.5 py-1.5 text-[13px] font-extrabold text-white">
+              <div className="whitespace-nowrap rounded-lg bg-[#07142F] px-2.5 py-1 text-xs font-extrabold text-white">
                 {meterScore}
               </div>
-              <div className="h-0 w-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-[#07142F]" />
+              <div className="h-0 w-0 border-l-[7px] border-r-[7px] border-t-[10px] border-l-transparent border-r-transparent border-t-[#07142F]" />
             </div>
           ) : null}
 
           <div
             aria-label="Risk profile spectrum from conservative to extremely aggressive"
-            className="grid h-[18px] grid-cols-5 overflow-hidden rounded-full sm:h-[22px]"
+            className="grid h-[18px] grid-cols-5 overflow-hidden rounded-full"
           >
             <div className="bg-[#08B76A]" />
             <div className="bg-[#72CA3D]" />
@@ -211,12 +211,12 @@ export default function PortfolioHealthCard({
             <div className="bg-[#F52159]" />
           </div>
 
-          <div className="mt-[18px] grid grid-cols-5 gap-2.5 text-center">
+          <div className="mt-4 grid grid-cols-5 gap-2 text-center">
             {RISK_STEPS.map(({ step, colorClass }) => (
               <div key={step}>
                 <span
                   className={cls(
-                    "block text-lg font-extrabold",
+                    "block text-base font-extrabold",
                     step === activeStep ? colorClass : "text-[#07142F]",
                   )}
                 >
@@ -227,10 +227,10 @@ export default function PortfolioHealthCard({
           </div>
         </div>
 
-        <div className="mt-9 flex items-start gap-[15px] rounded-[18px] bg-[#F7F9FC] px-5 py-5 text-[15px] leading-[1.45] text-[#26385F] sm:items-center sm:px-[22px] sm:text-[17px]">
+        <div className="mt-7 flex items-start gap-3 rounded-2xl bg-[#F7F9FC] px-4 py-4 text-sm leading-[1.45] text-[#26385F]">
           <div
             aria-hidden="true"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[rgba(8,183,106,0.12)] text-xl font-bold text-[#08B76A]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(8,183,106,0.12)] text-lg font-bold text-[#08B76A]"
           >
             i
           </div>
