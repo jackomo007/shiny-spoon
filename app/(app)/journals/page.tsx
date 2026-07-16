@@ -14,7 +14,6 @@ import Modal from "@/components/ui/Modal";
 import { MoneyField } from "@/components/form/MaskedFields";
 import JournalToolbar from "@/components/journal/JournalToolbar";
 import JournalSummaryCards from "@/components/journal/JournalSummaryCards";
-import JournalDateRangeCard from "@/components/journal/JournalDateRangeCard";
 import JournalTradesCard from "@/components/journal/JournalTradesCard";
 import ExportModal from "@/components/journal/ExportModal";
 import DeleteEntryModal from "@/components/journal/DeleteEntryModal";
@@ -26,6 +25,8 @@ import ManageJournalsModal from "@/components/journal/ManageJournalsModal";
 type TradeType = 1 | 2;
 type Status = "in_progress" | "win" | "loss" | "break_even";
 type Side = "buy" | "sell" | "long" | "short";
+type StatusFilter = "all" | "open" | "win" | "loss";
+type DirectionFilter = "all" | "long" | "short";
 
 export type JournalRow = {
   id: string;
@@ -186,11 +187,10 @@ function JournalsPageContent() {
 
   const [movedOutBanner, setMovedOutBanner] = useState<string | null>(null);
 
-  const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"new" | "az" | "za" | "tag_az" | "tag_za">("new");
-  const [showFilter, setShowFilter] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [directionFilter, setDirectionFilter] = useState<DirectionFilter>("all");
+  const [assetFilter, setAssetFilter] = useState("all");
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
@@ -216,7 +216,6 @@ function JournalsPageContent() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#7C3AED");
   const [showNewTagForm, setShowNewTagForm] = useState(false);
-  const [selectedTagName, setSelectedTagName] = useState("");
 
   const {
     register,
@@ -451,24 +450,6 @@ function JournalsPageContent() {
     }).toString();
   }
 
-  function resetToLast6Months() {
-    const now = new Date();
-    const s = new Date(new Date().setMonth(now.getMonth() - 6));
-    s.setHours(0, 0, 0, 0);
-
-    const startYMD = s.toISOString().slice(0, 10);
-    const endYMD = now.toISOString().slice(0, 10);
-
-    setStart(startYMD);
-    setEnd(endYMD);
-
-    try {
-      localStorage.removeItem("jrnl.range");
-    } catch {}
-
-    void load();
-  }
-
   function normalizeJournal(it: JournalApiItem): JournalRow {
     const unifiedFee =
       (it.trading_fee ?? null) != null
@@ -588,34 +569,42 @@ function JournalsPageContent() {
     const q = query.trim().toLowerCase();
     if (q)
       arr = arr.filter((i) =>
-        `${i.asset_name} ${i.status} ${i.side} ${(i.tags ?? []).join(" ")}`
+        `${i.asset_name} ${i.status} ${i.side} ${(i.tags ?? []).join(" ")} ${i.notes_entry ?? ""} ${i.notes_review ?? ""}`
           .toLowerCase()
           .includes(q),
       );
-    if (selectedTagName) {
-      arr = arr.filter((i) => (i.tags ?? []).includes(selectedTagName));
+    if (assetFilter !== "all") {
+      arr = arr.filter((i) => i.asset_name.toUpperCase() === assetFilter);
     }
-    switch (sort) {
-      case "az":
-        return [...arr].sort((a, b) =>
-          a.asset_name.localeCompare(b.asset_name),
-        );
-      case "za":
-        return [...arr].sort((a, b) =>
-          b.asset_name.localeCompare(a.asset_name),
-        );
-      case "tag_az":
-        return [...arr].sort((a, b) =>
-          ((a.tags ?? [])[0] ?? "").localeCompare((b.tags ?? [])[0] ?? ""),
-        );
-      case "tag_za":
-        return [...arr].sort((a, b) =>
-          ((b.tags ?? [])[0] ?? "").localeCompare((a.tags ?? [])[0] ?? ""),
-        );
-      default:
-        return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+    if (directionFilter !== "all") {
+      arr = arr.filter((i) => {
+        const longLike = i.side === "buy" || i.side === "long";
+        return directionFilter === "long" ? longLike : !longLike;
+      });
     }
-  }, [items, query, sort, selectedTagName]);
+    if (statusFilter !== "all") {
+      arr = arr.filter((i) => {
+        if (statusFilter === "open") return i.status === "in_progress";
+        return i.status === statusFilter;
+      });
+    }
+    return [...arr].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  }, [items, query, assetFilter, directionFilter, statusFilter]);
+
+  function updateDateRange(next: { start?: string; end?: string }) {
+    const nextStart = next.start ?? start;
+    const nextEnd = next.end ?? end;
+
+    setStart(nextStart);
+    setEnd(nextEnd);
+
+    try {
+      localStorage.setItem(
+        "jrnl.range",
+        JSON.stringify({ start: nextStart, end: nextEnd }),
+      );
+    } catch {}
+  }
 
   function openCreate() {
     setMode("create");
@@ -959,47 +948,25 @@ function JournalsPageContent() {
     : 0;
 
   const earnings = rows.reduce((acc, r) => acc + (r.pnl ?? 0), 0);
-
-  function renderStatusButton(r: JournalRow) {
-    if (r.status === "in_progress") {
-      return (
-        <button
-          title="Close Trade"
-          onClick={() => openCloseModal(r)}
-          className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700"
-        >
-          Close Trade
-        </button>
-      );
-    }
-
-    const label = r.status.replace(/_/g, " ");
-    const formatted =
-      label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
-
-    let bg = "bg-green-500";
-    let hover = "hover:bg-green-700";
-    let text = "text-white";
-
-    if (r.status === "loss") {
-      bg = "bg-orange-600";
-      hover = "hover:bg-orange-700";
-    } else if (r.status === "break_even") {
-      bg = "bg-gray-200";
-      hover = "hover:bg-gray-300";
-      text = "text-gray-700";
-    }
-
-    return (
-      <button
-        title={formatted}
-        onClick={() => {}}
-        className={`px-2 py-1 rounded ${bg} ${text} text-xs ${hover}`}
-      >
-        {formatted}
-      </button>
-    );
-  }
+  const grossProfit = finished.reduce(
+    (acc, r) => acc + Math.max(r.pnl ?? 0, 0),
+    0,
+  );
+  const grossLoss = Math.abs(
+    finished.reduce((acc, r) => acc + Math.min(r.pnl ?? 0, 0), 0),
+  );
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
+  const openTrades = rows.filter((r) => r.status === "in_progress").length;
+  const averagePositionSize = rows.length
+    ? rows.reduce((acc, r) => acc + r.amount_spent, 0) / rows.length
+    : 0;
+  const assets = useMemo(
+    () =>
+      Array.from(new Set(items.map((item) => item.asset_name.toUpperCase())))
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [items],
+  );
 
   function toggleRow(id: string) {
     setExpandedRowId((prev) => (prev === id ? null : id));
@@ -1360,48 +1327,30 @@ function JournalsPageContent() {
         totalTrades={totalTrades}
         winRate={winRate}
         earnings={earnings}
-      />
-
-      <JournalDateRangeCard
-        start={start}
-        end={end}
-        onStartChange={setStart}
-        onEndChange={setEnd}
-        onApply={() => {
-          try {
-            localStorage.setItem("jrnl.range", JSON.stringify({ start, end }));
-          } catch {}
-          void load();
-        }}
-        onReset={resetToLast6Months}
+        profitFactor={profitFactor}
+        openTrades={openTrades}
+        averagePositionSize={averagePositionSize}
       />
 
       <JournalTradesCard
         loading={loading}
         error={error}
         rows={rows}
-        showSearch={showSearch}
         query={query}
-        showFilter={showFilter}
-        showMenu={showMenu}
+        start={start}
+        end={end}
         availableTags={availableTags}
-        selectedTagName={selectedTagName}
+        statusFilter={statusFilter}
+        directionFilter={directionFilter}
+        assetFilter={assetFilter}
+        assets={assets}
         expandedRowId={expandedRowId}
-        onToggleSearch={() => setShowSearch((s) => !s)}
-        onCloseSearch={() => setShowSearch(false)}
         onQueryChange={setQuery}
-        onToggleFilter={() => {
-          setShowFilter((f) => !f);
-          setShowMenu(false);
-        }}
-        onCloseFilter={() => setShowFilter(false)}
-        onToggleMenu={() => {
-          setShowMenu((m) => !m);
-          setShowFilter(false);
-        }}
-        onCloseMenu={() => setShowMenu(false)}
-        onSortChange={setSort}
-        onSelectedTagChange={setSelectedTagName}
+        onStartChange={(value) => updateDateRange({ start: value })}
+        onEndChange={(value) => updateDateRange({ end: value })}
+        onStatusFilterChange={setStatusFilter}
+        onDirectionFilterChange={setDirectionFilter}
+        onAssetFilterChange={setAssetFilter}
         onRefresh={() => {
           void load();
         }}
@@ -1409,7 +1358,6 @@ function JournalsPageContent() {
         onOpenCloseModal={openCloseModal}
         onOpenEdit={openEdit}
         onAskDelete={askDelete}
-        renderStatusButton={renderStatusButton}
         fmt4={fmt4}
         money2={money2}
       />

@@ -1,10 +1,9 @@
-import React from "react";
-import Card from "@/components/ui/Card";
-import { Table, Th, Tr, Td } from "@/components/ui/Table";
+import React, { useRef } from "react";
 import DropdownActions from "@/components/journals/DropdownActions";
 import type { JournalRow } from "@/app/(app)/journal/journal-client";
 
-type SortOrder = "new" | "az" | "za" | "tag_az" | "tag_za";
+type StatusFilter = "all" | "open" | "win" | "loss";
+type DirectionFilter = "all" | "long" | "short";
 
 type TagOption = {
   id: string;
@@ -16,28 +15,26 @@ type JournalTradesCardProps = {
   loading: boolean;
   error: string | null;
   rows: JournalRow[];
-  showSearch: boolean;
   query: string;
-  showFilter: boolean;
-  showMenu: boolean;
+  start: string;
+  end: string;
   availableTags: TagOption[];
-  selectedTagName: string;
+  statusFilter: StatusFilter;
+  directionFilter: DirectionFilter;
+  assetFilter: string;
+  assets: string[];
   expandedRowId: string | null;
-  onToggleSearch: () => void;
-  onCloseSearch: () => void;
   onQueryChange: (value: string) => void;
-  onToggleFilter: () => void;
-  onCloseFilter: () => void;
-  onToggleMenu: () => void;
-  onCloseMenu: () => void;
-  onSortChange: (sort: SortOrder) => void;
-  onSelectedTagChange: (tagName: string) => void;
+  onStartChange: (value: string) => void;
+  onEndChange: (value: string) => void;
+  onStatusFilterChange: (value: StatusFilter) => void;
+  onDirectionFilterChange: (value: DirectionFilter) => void;
+  onAssetFilterChange: (value: string) => void;
   onRefresh: () => void;
   onToggleRow: (id: string) => void;
   onOpenCloseModal: (row: JournalRow) => void;
   onOpenEdit: (row: JournalRow) => void;
   onAskDelete: (id: string) => void;
-  renderStatusButton: (row: JournalRow) => React.ReactNode;
   fmt4: (n: number | null | undefined) => string;
   money2: (n: number) => string;
 };
@@ -46,456 +43,586 @@ export default function JournalTradesCard({
   loading,
   error,
   rows,
-  showSearch,
   query,
-  showFilter,
-  showMenu,
+  start,
+  end,
   availableTags,
-  selectedTagName,
+  statusFilter,
+  directionFilter,
+  assetFilter,
+  assets,
   expandedRowId,
-  onToggleSearch,
-  onCloseSearch,
   onQueryChange,
-  onToggleFilter,
-  onCloseFilter,
-  onToggleMenu,
-  onCloseMenu,
-  onSortChange,
-  onSelectedTagChange,
+  onStartChange,
+  onEndChange,
+  onStatusFilterChange,
+  onDirectionFilterChange,
+  onAssetFilterChange,
   onRefresh,
   onToggleRow,
   onOpenCloseModal,
   onOpenEdit,
   onAskDelete,
-  renderStatusButton,
   fmt4,
   money2,
 }: JournalTradesCardProps) {
   function tagColor(name: string) {
-    return availableTags.find((tag) => tag.name === name)?.color ?? "#9CA3AF";
+    return availableTags.find((tag) => tag.name === name)?.color ?? "#667085";
   }
 
   function renderTags(tags?: string[]) {
     const clean = (tags ?? []).filter(Boolean);
-    if (!clean.length) return <span className="text-gray-400">-</span>;
+    if (!clean.length) {
+      return (
+        <span className="inline-flex min-h-6 items-center rounded-full bg-[#f2f4f7] px-2 text-[11px] font-semibold text-[#667085]">
+          No setup tag
+        </span>
+      );
+    }
 
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {clean.map((tag) => (
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {clean.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
+            className="inline-flex min-h-6 items-center gap-1.5 rounded-full bg-[#f2f4f7] px-2 text-[11px] font-semibold text-[#475467]"
           >
             <span
-              className="h-2 w-2 rounded-full"
+              className="h-1.5 w-1.5 rounded-full"
               style={{ backgroundColor: tagColor(tag) }}
             />
             {tag}
           </span>
         ))}
+        {clean.length > 3 && (
+          <span className="inline-flex min-h-6 items-center rounded-full border border-[#d4dbe6] bg-white px-2 text-[11px] font-bold text-[#4f46e5]">
+            +{clean.length - 3} more
+          </span>
+        )}
       </div>
     );
   }
 
   return (
-    <Card className="p-0 overflow-hidden">
-      {showSearch && (
-        <div className="px-6 py-4 border-b">
-          <div className="flex items-center gap-3">
-            <span className="text-gray-400">🔍</span>
-            <input
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Type and hit enter ..."
-              className="flex-1 outline-none bg-transparent text-gray-700 placeholder:text-gray-400"
-            />
-            <button
-              onClick={onCloseSearch}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✖
-            </button>
-          </div>
+    <>
+      <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#e3e8f0] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.05)]">
+        <label className="relative min-w-[280px] flex-[1_1_320px]">
+          <span className="sr-only">Search trades</span>
+          <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-4-4" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Search asset, setup, tag, or note..."
+            type="search"
+            className="h-[42px] w-full rounded-xl border border-[#d4dbe6] bg-white pl-10 pr-3 text-sm text-[#344054] outline-none focus:border-[#4f46e5] focus:ring-4 focus:ring-[#eef2ff]"
+          />
+        </label>
+
+        <div className="flex min-h-[42px] items-center gap-2 whitespace-nowrap rounded-xl border border-[#d4dbe6] bg-white px-3 text-sm text-[#344054]">
+          <svg aria-hidden="true" className="h-4 w-4 text-[#667085]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect height="16" rx="2" width="18" x="3" y="5" />
+            <path d="M16 3v4M8 3v4M3 10h18" />
+          </svg>
+          <DatePickerText
+            label="Start date"
+            value={start}
+            onChange={onStartChange}
+          />
+          <span className="text-[#98a2b3]">-</span>
+          <DatePickerText label="End date" value={end} onChange={onEndChange} />
         </div>
-      )}
 
-      <div className="px-6 pt-5 pb-3 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-800">Trades</h3>
-        <div className="flex items-center gap-3 relative">
-          <button
-            onClick={onToggleSearch}
-            className="p-2 rounded-full hover:bg-gray-100"
-          >
-            🔍
-          </button>
+        <select
+          aria-label="Asset filter"
+          value={assetFilter}
+          onChange={(e) => onAssetFilterChange(e.target.value)}
+          className="h-[42px] rounded-xl border border-[#d4dbe6] bg-white px-3 text-sm font-medium text-[#344054] outline-none focus:border-[#4f46e5] focus:ring-4 focus:ring-[#eef2ff]"
+        >
+          <option value="all">All assets</option>
+          {assets.map((asset) => (
+            <option key={asset} value={asset}>
+              {asset}
+            </option>
+          ))}
+        </select>
 
-          <div className="relative">
+        <select
+          aria-label="Direction filter"
+          value={directionFilter}
+          onChange={(e) => onDirectionFilterChange(e.target.value as DirectionFilter)}
+          className="h-[42px] rounded-xl border border-[#d4dbe6] bg-white px-3 text-sm font-medium text-[#344054] outline-none focus:border-[#4f46e5] focus:ring-4 focus:ring-[#eef2ff]"
+        >
+          <option value="all">Long & short</option>
+          <option value="long">Long only</option>
+          <option value="short">Short only</option>
+        </select>
+
+        <div className="flex-[1_1_auto]" />
+
+        <div className="flex rounded-xl border border-[#e3e8f0] bg-[#f8fafc] p-1">
+          {[
+            ["all", "All"],
+            ["open", "Open"],
+            ["win", "Wins"],
+            ["loss", "Losses"],
+          ].map(([value, label]) => (
             <button
-              onClick={onToggleFilter}
-              className="p-2 rounded-full hover:bg-gray-100"
+              key={value}
+              type="button"
+              onClick={() => onStatusFilterChange(value as StatusFilter)}
+              className={`h-8 rounded-lg px-3 text-xs font-bold ${
+                statusFilter === value
+                  ? "bg-white text-[#152033] shadow-sm"
+                  : "text-[#667085] hover:text-[#152033]"
+              }`}
             >
-              🧰
+              {label}
             </button>
-            {showFilter && (
-              <div
-                className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                onMouseLeave={onCloseFilter}
-              >
-                <MenuItem
-                  label="Newest"
-                  onClick={() => {
-                    onSortChange("new");
-                    onCloseFilter();
-                  }}
-                  icon="🧾"
-                />
-                <MenuItem
-                  label="From A-Z"
-                  onClick={() => {
-                    onSortChange("az");
-                    onCloseFilter();
-                  }}
-                  icon="🔤"
-                />
-                <MenuItem
-                  label="From Z-A"
-                  onClick={() => {
-                    onSortChange("za");
-                    onCloseFilter();
-                  }}
-                  icon="🔠"
-                />
-                <MenuItem
-                  label="Tag A-Z"
-                  onClick={() => {
-                    onSortChange("tag_az");
-                    onCloseFilter();
-                  }}
-                />
-                <MenuItem
-                  label="Tag Z-A"
-                  onClick={() => {
-                    onSortChange("tag_za");
-                    onCloseFilter();
-                  }}
-                />
-                <div className="my-1 border-t border-gray-100" />
-                <button
-                  onClick={() => onSelectedTagChange("")}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                    selectedTagName
-                      ? "text-gray-600"
-                      : "font-semibold text-gray-900"
-                  }`}
-                >
-                  All tags
-                </button>
-                {availableTags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    onClick={() => onSelectedTagChange(tag.name)}
-                    className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                      selectedTagName === tag.name
-                        ? "font-semibold text-gray-900"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: tag.color ?? "#9CA3AF" }}
-                    />
-                    {tag.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={onToggleMenu}
-              className="p-2 rounded-full hover:bg-gray-100"
-            >
-              ⋯
-            </button>
-            {showMenu && (
-              <div
-                className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
-                onMouseLeave={onCloseMenu}
-              >
-                <MenuItem
-                  label="Refresh"
-                  onClick={() => {
-                    onRefresh();
-                    onCloseMenu();
-                  }}
-                />
-                <MenuItem label="Manage Widgets" onClick={onCloseMenu} />
-              </div>
-            )}
-          </div>
+          ))}
         </div>
+      </section>
+
+      <section className="journal-trades rounded-2xl border border-[#e3e8f0] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.05)]">
+      <div className="flex items-center justify-between gap-4 border-b border-[#e3e8f0] px-5 py-4">
+        <div>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-[17px] font-bold text-[#152033]">
+              Trade history
+            </h2>
+            <span className="text-xs text-[#667085]">
+              {rows.length} {rows.length === 1 ? "trade" : "trades"}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-[#667085] md:hidden">
+            Tap the chevron to view additional trade details.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="grid h-10 w-10 place-items-center rounded-xl border border-[#d4dbe6] bg-white text-[#667085] hover:bg-[#f8fafc]"
+          aria-label="Refresh trades"
+        >
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" viewBox="0 0 24 24">
+            <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+            <path d="M3 21v-5h5" />
+            <path d="M3 12A9 9 0 0 1 18.3 5.6L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+        </button>
       </div>
 
-      {selectedTagName && (
-        <div className="px-6 pb-3">
-          <button
-            type="button"
-            onClick={() => onSelectedTagChange("")}
-            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
-          >
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: tagColor(selectedTagName) }}
-            />
-            {selectedTagName}
-            <span className="text-gray-500">x</span>
-          </button>
+      {loading ? (
+        <div className="py-12 text-center text-sm text-[#667085]">Loading...</div>
+      ) : error ? (
+        <div className="py-12 text-center text-sm text-[#d83a52]">{error}</div>
+      ) : rows.length === 0 ? (
+        <div className="py-12 text-center text-sm text-[#667085]">
+          No trades match these filters.
         </div>
-      )}
-
-      <div className="px-6 pb-2 overflow-x-auto hidden md:block">
-        {loading ? (
-          <div className="py-10 text-center text-sm text-gray-500">
-            Loading…
-          </div>
-        ) : error ? (
-          <div className="py-10 text-center text-sm text-red-600">{error}</div>
-        ) : (
-          <Table className="min-w-[800px] md:min-w-full text-xs [&_td]:py-1 [&_th]:py-1">
-            <thead>
-              <tr>
-                <Th className="w-6"></Th>
-                <Th className="whitespace-nowrap w-28 md:w-36">Asset</Th>
-                <Th className="whitespace-nowrap w-20 md:w-24">Type</Th>
-                <Th className="whitespace-nowrap w-28">Entry</Th>
-                <Th className="whitespace-nowrap w-28">Exit</Th>
-                <Th className="whitespace-nowrap w-36">
-                  Amount
-                  <br />
-                  Spent
-                </Th>
-                <Th className="whitespace-nowrap w-28">PnL</Th>
-                <Th className="whitespace-nowrap hidden md:table-cell w-56">
-                  Date
-                </Th>
-                <Th className="whitespace-nowrap w-40">Tags</Th>
-                <Th className="whitespace-nowrap w-40">Status / Action</Th>
-                <Th className="w-40"></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <React.Fragment key={r.id}>
-                  <Tr
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => onToggleRow(r.id)}
-                  >
-                    <Td className="w-6">
-                      <span>{expandedRowId === r.id ? "▾" : "▸"}</span>
-                    </Td>
-
-                    <Td className="whitespace-nowrap w-28 md:w-36">
-                      {r.asset_name}
-                    </Td>
-
-                    <Td className="whitespace-nowrap w-20 md:w-24">
-                      {r.trade_type === 2 ? "Futures" : "Spot"} ({r.side})
-                    </Td>
-
-                    <Td className="font-mono w-28">${fmt4(r.entry_price)}</Td>
-
-                    <Td className="font-mono w-28">
-                      {r.exit_price != null ? `$${fmt4(r.exit_price)}` : "—"}
-                    </Td>
-
-                    <Td className="font-mono w-36">{money2(r.amount_spent)}</Td>
-
-                    <Td className="font-mono w-28">
-                      {r.pnl != null ? money2(r.pnl) : "—"}
-                    </Td>
-
-                    <Td className="hidden md:table-cell leading-tight">
-                      {new Date(r.date).toLocaleDateString()},
-                      <br />
-                      {new Date(r.date).toLocaleTimeString()}
-                    </Td>
-
-                    <Td className="w-40">{renderTags(r.tags)}</Td>
-
-                    <Td className="w-32 relative">{renderStatusButton(r)}</Td>
-
-                    <Td className="w-32 relative">
-                      <DropdownActions
-                        r={r}
-                        openEdit={onOpenEdit}
-                        askDelete={onAskDelete}
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1240px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  <HeaderCell className="w-[150px]">Asset</HeaderCell>
+                  <HeaderCell className="w-[92px]">Direction</HeaderCell>
+                  <HeaderCell className="w-[300px]">Entry -&gt; Exit</HeaderCell>
+                  <HeaderCell className="w-[138px]">Position size</HeaderCell>
+                  <HeaderCell className="w-[92px]">P&amp;L</HeaderCell>
+                  <HeaderCell className="w-[128px]">Opened</HeaderCell>
+                  <HeaderCell className="min-w-[275px]">Setups / tags</HeaderCell>
+                  <HeaderCell className="w-[138px] text-right">Status/actions</HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const expanded = expandedRowId === row.id;
+                  return (
+                    <React.Fragment key={row.id}>
+                      <TradeRow
+                        row={row}
+                        expanded={expanded}
+                        renderTags={renderTags}
+                        onToggleRow={onToggleRow}
+                        onOpenCloseModal={onOpenCloseModal}
+                        onOpenEdit={onOpenEdit}
+                        onAskDelete={onAskDelete}
+                        fmt4={fmt4}
+                        money2={money2}
                       />
-                    </Td>
-                  </Tr>
-
-                  {expandedRowId === r.id && (
-                    <Tr className="bg-gray-50">
-                      <Td
-                        colSpan={11}
-                        className="px-6 py-2 text-xs text-gray-700"
-                      >
-                        <div className="flex flex-wrap gap-6">
-                          <div>
-                            <span className="font-semibold mr-1">
-                              Quantity:
-                            </span>
-                            <span className="font-mono">
-                              {r.entry_price > 0
-                                ? fmt4(r.amount_spent / r.entry_price)
-                                : "—"}
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="font-semibold mr-1">
-                              Stop Loss:
-                            </span>
-                            <span className="font-mono">
-                              {r.stop_loss_price != null
-                                ? fmt4(r.stop_loss_price)
-                                : "—"}
-                            </span>
-                          </div>
-                        </div>
-                      </Td>
-                    </Tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </div>
-
-      <div className="px-6 pb-4 md:hidden">
-        {loading ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading…</div>
-        ) : error ? (
-          <div className="py-8 text-center text-sm text-red-600">{error}</div>
-        ) : (
-          <div className="grid gap-3">
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-xl border bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">
-                    {r.asset_name}{" "}
-                    <span className="text-xs text-gray-500">
-                      ({r.trade_type === 2 ? "Futures" : "Spot"})
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div className="text-gray-500 text-xs">Side</div>
-                    <div className="font-mono">{r.side}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-gray-500 text-xs">Date</div>
-                    <div>{new Date(r.date).toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 text-xs">Entry</div>
-                    <div className="font-mono">{fmt4(r.entry_price)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-gray-500 text-xs">Exit</div>
-                    <div className="font-mono">
-                      {r.exit_price != null ? fmt4(r.exit_price) : "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 text-xs">Amount Spent</div>
-                    <div className="font-mono">{money2(r.amount_spent)}</div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <div className="text-gray-500 text-xs">Tags</div>
-                    <div className="mt-1">{renderTags(r.tags)}</div>
-                  </div>
-
-                  <div>
-                    <div className="text-gray-500 text-xs">Quantity</div>
-                    <div className="font-mono">
-                      {r.entry_price > 0
-                        ? fmt4(r.amount_spent / r.entry_price)
-                        : "—"}
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-gray-500 text-xs">PnL</div>
-                    <div className="font-mono">
-                      {r.pnl != null ? money2(r.pnl) : "—"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
-                  {r.status === "in_progress" ? (
-                    <button
-                      title="Close Trade"
-                      onClick={() => onOpenCloseModal(r)}
-                      className="px-3 py-2 rounded bg-red-600 text-white text-xs hover:bg-red-700"
-                    >
-                      Close Trade
-                    </button>
-                  ) : (
-                    <span className="text-xs text-gray-600">
-                      {r.status.replace("_", " ")}
-                    </span>
-                  )}
-                  <div className="flex gap-3">
-                    <button
-                      title="Edit"
-                      onClick={() => onOpenEdit(r)}
-                      className="text-gray-600 hover:text-gray-800"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      title="Delete"
-                      onClick={() => onAskDelete(r.id)}
-                      className="text-orange-600 hover:text-orange-700"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                      {expanded && (
+                        <tr className="bg-[#fbfcff]">
+                          <td colSpan={8} className="border-b border-[#edf0f4] px-14 pb-4">
+                            <DetailCard row={row} fmt4={fmt4} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </Card>
+          <div className="flex items-center justify-between gap-4 px-5 py-4 text-xs text-[#667085]">
+            <span>
+              Showing 1-{rows.length} of {rows.length} trades
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button className="h-8 w-8 rounded-lg border border-[#e3e8f0] bg-white text-[#667085]" type="button">
+                &lt;
+              </button>
+              <button className="h-8 w-8 rounded-lg border border-[#4f46e5] bg-[#4f46e5] text-white" type="button">
+                1
+              </button>
+              <button className="h-8 w-8 rounded-lg border border-[#e3e8f0] bg-white text-[#667085]" type="button">
+                &gt;
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+      </section>
+    </>
   );
 }
 
-function MenuItem({
-  label,
-  onClick,
-  icon,
+function HeaderCell({
+  children,
+  className = "",
 }: {
-  label: string;
-  onClick: () => void;
-  icon?: string;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-xl flex items-center gap-3"
-    >
-      {icon && <span>{icon}</span>}
-      <span className="text-sm">{label}</span>
-    </button>
+    <th className={`border-b border-[#e3e8f0] bg-[#fbfcfe] px-3.5 py-3 text-left text-[11px] font-bold uppercase tracking-[.04em] text-[#667085] ${className}`}>
+      {children}
+    </th>
   );
+}
+
+function DatePickerText({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function openPicker() {
+    const input = inputRef.current;
+    if (!input) return;
+
+    input.focus();
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.click();
+  }
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onClick={openPicker}
+        className="cursor-pointer bg-transparent p-0 text-left text-sm text-[#344054]"
+      >
+        {formatFilterDate(value)}
+      </button>
+      <input
+        ref={inputRef}
+        aria-label={label}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="journal-date-input absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        tabIndex={-1}
+      />
+    </span>
+  );
+}
+
+function TradeRow({
+  row,
+  expanded,
+  renderTags,
+  onToggleRow,
+  onOpenCloseModal,
+  onOpenEdit,
+  onAskDelete,
+  fmt4,
+  money2,
+}: {
+  row: JournalRow;
+  expanded: boolean;
+  renderTags: (tags?: string[]) => React.ReactNode;
+  onToggleRow: (id: string) => void;
+  onOpenCloseModal: (row: JournalRow) => void;
+  onOpenEdit: (row: JournalRow) => void;
+  onAskDelete: (id: string) => void;
+  fmt4: (n: number | null | undefined) => string;
+  money2: (n: number) => string;
+}) {
+  const quantity = row.entry_price > 0 ? row.amount_spent / row.entry_price : null;
+  const estimate = estimateMove(row);
+  const opened = formatOpened(row.date);
+
+  return (
+    <tr className={`transition hover:bg-[#fafbff] ${expanded ? "bg-[#fbfcff]" : ""}`}>
+      <BodyCell dataLabel="Asset">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button
+            aria-label="Toggle trade details"
+            type="button"
+            onClick={() => onToggleRow(row.id)}
+            className="grid h-[26px] w-[26px] place-items-center rounded-lg text-[#667085] hover:bg-[#f8fafc]"
+          >
+            <svg
+              aria-hidden="true"
+              className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
+          <div className={`grid h-[34px] w-[34px] place-items-center rounded-xl text-xs font-extrabold ${assetTone(row.asset_name)}`}>
+            {assetGlyph(row.asset_name)}
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-[#152033]">{row.asset_name}</div>
+            <div className="mt-0.5 text-[11px] text-[#98a2b3]">
+              {row.trade_type === 2 ? "Futures" : "Spot"}
+            </div>
+          </div>
+        </div>
+      </BodyCell>
+
+      <BodyCell dataLabel="Direction">
+        <DirectionPill side={row.side} />
+      </BodyCell>
+
+      <BodyCell dataLabel="Entry -> Exit">
+        <div className="font-mono text-xs tabular-nums">
+          <strong className="block font-bold text-[#152033]">
+            ${fmt4(row.entry_price)} -&gt; {row.exit_price != null ? `$${fmt4(row.exit_price)}` : "-"}
+          </strong>
+          {estimate && (
+            <span className={`mt-1 block font-bold ${estimate.pnl >= 0 ? "text-[#11895a]" : "text-[#d83a52]"}`}>
+              Estimated PnL: {estimate.pnl >= 0 ? "+" : "-"}${Math.abs(estimate.pnl).toFixed(2)} ({estimate.percent >= 0 ? "+" : "-"}{Math.abs(estimate.percent).toFixed(2)}%)
+            </span>
+          )}
+        </div>
+      </BodyCell>
+
+      <BodyCell dataLabel="Position size">
+        <div className="font-mono tabular-nums">
+          <strong className="block text-sm font-bold text-[#152033]">
+            {money2(row.amount_spent)}
+          </strong>
+          <span className="mt-1 block text-[11px] font-semibold text-[#667085]">
+            {quantity != null ? `${fmt4(quantity)} ${row.asset_name}` : "-"}
+          </span>
+        </div>
+      </BodyCell>
+
+      <BodyCell dataLabel="P&L">
+        {row.pnl == null || row.status === "in_progress" ? (
+          <div className="font-bold text-[#b76e00]">-</div>
+        ) : (
+          <div className={`font-mono font-bold tabular-nums ${row.pnl >= 0 ? "text-[#11895a]" : "text-[#d83a52]"}`}>
+            {row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)}
+          </div>
+        )}
+      </BodyCell>
+
+      <BodyCell dataLabel="Opened">
+        <div>
+          <strong className="block text-xs font-bold text-[#152033]">{opened.date}</strong>
+          <span className="text-[11px] text-[#98a2b3]">{opened.time}</span>
+        </div>
+      </BodyCell>
+
+      <BodyCell dataLabel="Setups / tags">{renderTags(row.tags)}</BodyCell>
+
+      <BodyCell className="text-right" dataLabel="Status/actions">
+        <div className="flex items-center justify-end gap-2.5">
+          <StatusPill status={row.status} />
+          <DropdownActions
+            r={row}
+            openEdit={onOpenEdit}
+            askDelete={onAskDelete}
+            onQuickClose={onOpenCloseModal}
+          />
+        </div>
+      </BodyCell>
+    </tr>
+  );
+}
+
+function BodyCell({
+  children,
+  className = "",
+  dataLabel,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  dataLabel: string;
+}) {
+  return (
+    <td
+      data-label={dataLabel}
+      className={`border-b border-[#edf0f4] px-3.5 py-3.5 align-middle text-[#344054] ${className}`}
+    >
+      {children}
+    </td>
+  );
+}
+
+function DetailCard({
+  row,
+  fmt4,
+}: {
+  row: JournalRow;
+  fmt4: (n: number | null | undefined) => string;
+}) {
+  const note = row.notes_review || row.notes_entry || "-";
+
+  return (
+    <div className="grid gap-4 rounded-xl border border-[#e3e8f0] bg-white p-3.5 md:grid-cols-4">
+      <DetailItem label="Stop loss" value={row.stop_loss_price != null ? `$${fmt4(row.stop_loss_price)}` : "-"} mono />
+      <DetailItem label="Risk / reward" value={riskReward(row)} />
+      <DetailItem label="Duration" value={tradeDuration(row)} />
+      <DetailItem label="Note" value={note} />
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.04em] text-[#98a2b3]">
+        {label}
+      </span>
+      <strong className={`text-xs font-bold text-[#344054] ${mono ? "font-mono" : ""}`}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function DirectionPill({ side }: { side: JournalRow["side"] }) {
+  const short = side === "sell" || side === "short";
+  return (
+    <span className={`inline-flex min-h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold ${short ? "border-[#f5c9cf] bg-[#fff0f2] text-[#d83a52]" : "border-[#c9eadb] bg-[#eaf8f1] text-[#11895a]"}`}>
+      <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {short ? (
+          <>
+            <path d="M5 7h10v10" />
+            <path d="m5 17 10-10" />
+          </>
+        ) : (
+          <>
+            <path d="M5 17h10V7" />
+            <path d="m5 7 10 10" />
+          </>
+        )}
+      </svg>
+      {short ? "Short" : "Long"}
+    </span>
+  );
+}
+
+function StatusPill({ status }: { status: JournalRow["status"] }) {
+  const config = {
+    in_progress: ["Open", "bg-[#fff7e6] text-[#b76e00]"],
+    win: ["Win", "bg-[#eaf8f1] text-[#11895a]"],
+    loss: ["Loss", "bg-[#fff0f2] text-[#d83a52]"],
+    break_even: ["Break even", "bg-[#f2f4f7] text-[#667085]"],
+  } as const;
+  const [label, className] = config[status];
+
+  return (
+    <span className={`inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold ${className}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {label}
+    </span>
+  );
+}
+
+function estimateMove(row: JournalRow) {
+  if (row.exit_price == null || !(row.entry_price > 0)) return null;
+  const longLike = row.side === "buy" || row.side === "long";
+  const change = (row.exit_price - row.entry_price) / row.entry_price;
+  const pnl = (longLike ? 1 : -1) * row.amount_spent * change;
+  return { pnl, percent: (longLike ? 1 : -1) * change * 100 };
+}
+
+function tradeDuration(row: JournalRow) {
+  if (row.exit_price == null || row.status === "in_progress") return "-";
+  return "Closed trade";
+}
+
+function riskReward(row: JournalRow) {
+  if (row.stop_loss_price == null || row.exit_price == null) return "-";
+  const risk = Math.abs(row.entry_price - row.stop_loss_price);
+  const reward = Math.abs(row.exit_price - row.entry_price);
+  if (!(risk > 0) || !(reward > 0)) return "-";
+  return `1 : ${(reward / risk).toFixed(1)}`;
+}
+
+function formatOpened(value: string | Date) {
+  const date = new Date(value);
+  return {
+    date: date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    time: date.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
+}
+
+function formatFilterDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function assetGlyph(asset: string) {
+  const normalized = asset.toUpperCase();
+  if (normalized === "BTC") return "B";
+  if (normalized === "ETH") return "E";
+  return normalized.slice(0, 2);
+}
+
+function assetTone(asset: string) {
+  const normalized = asset.toUpperCase();
+  if (normalized === "BTC") return "bg-[#fff3df] text-[#b56200]";
+  if (normalized === "ETH") return "bg-[#eef1ff] text-[#4f46e5]";
+  return "bg-[#f2f4f7] text-[#475467]";
 }
