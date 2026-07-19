@@ -38,6 +38,7 @@ export type JournalRow = {
   exit_price: number | null;
   amount_spent: number;
   date: string | Date;
+  closed_at: string | Date | null;
   strategy_id: string;
   pnl: number | null;
   trading_fee: number;
@@ -52,6 +53,7 @@ type JournalForm = {
   asset_name: string;
   trade_type: TradeType | string;
   trade_datetime: string;
+  closed_datetime?: string;
 
   trading_fee?: string;
   amount_spent?: string;
@@ -85,6 +87,7 @@ type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
   trading_fee?: number | null;
   buy_fee?: number | null;
   sell_fee?: number | null;
+  closed_at?: string | null;
   tags?: string[];
 };
 
@@ -151,6 +154,7 @@ const money2 = (n: number) => `$${n.toFixed(3)}`;
 type BasePayload = {
   asset_name: string;
   trade_datetime: string;
+  closed_at: string | null;
   side: Side;
   status: Status;
   amount_spent: number;
@@ -231,6 +235,7 @@ function JournalsPageContent() {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
+      closed_datetime: "",
       trading_fee: "0",
       notes_entry: "",
       notes_review: "",
@@ -466,6 +471,7 @@ function JournalsPageContent() {
       exit_price: it.exit_price == null ? null : Number(it.exit_price),
       amount_spent: Number(it.amount_spent),
       date: it.date,
+      closed_at: it.closed_at ?? null,
       strategy_id: it.strategy_id,
       pnl: it.pnl == null ? null : Number(it.pnl),
       stop_loss_price:
@@ -623,6 +629,7 @@ function JournalsPageContent() {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
+      closed_datetime: "",
       amount: "",
       notes_entry: "",
       notes_review: "",
@@ -653,6 +660,7 @@ function JournalsPageContent() {
       asset_name: row.asset_name,
       trade_type: row.trade_type,
       trade_datetime: toLocalInputValue(row.date),
+      closed_datetime: row.closed_at ? toLocalInputValue(row.closed_at) : "",
       side: row.side,
       status: row.status,
       amount_spent: String(row.amount_spent),
@@ -757,6 +765,13 @@ function JournalsPageContent() {
       setTargets && form.stop_loss_price && form.stop_loss_price.trim()
         ? toNum(form.stop_loss_price)
         : null;
+    const status = (form.status ?? "in_progress") as Status;
+    const closedAt =
+      status === "in_progress"
+        ? null
+        : form.closed_datetime?.trim()
+          ? toISO(form.closed_datetime)
+          : new Date().toISOString();
 
     if (!(amt > 0) || !(entry > 0) || !(fee >= 0)) {
       alert("Please enter valid numbers (you can use commas).");
@@ -787,8 +802,9 @@ function JournalsPageContent() {
     const base: BasePayload = {
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
+      closed_at: closedAt,
       side: coercedSide,
-      status: (form.status ?? "in_progress") as Status,
+      status,
       amount_spent: amt,
       entry_price: entry,
       exit_price: exit,
@@ -835,6 +851,7 @@ function JournalsPageContent() {
         status: Status;
         exit_price: number | null;
         trading_fee: number;
+        closed_at: string | null;
       };
       const saved: PutReturn = await r.json();
 
@@ -845,6 +862,10 @@ function JournalsPageContent() {
                 ...it,
                 status: saved.status ?? it.status,
                 exit_price: saved.exit_price ?? it.exit_price,
+                closed_at:
+                  typeof saved.closed_at === "string" || saved.closed_at === null
+                    ? saved.closed_at
+                    : it.closed_at,
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
@@ -1010,6 +1031,7 @@ function JournalsPageContent() {
       const baseClose: BasePayload = {
         asset_name: rowToClose.asset_name,
         trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
+        closed_at: new Date().toISOString(),
         side: rowToClose.side,
         status: computedStatus,
         amount_spent: rowToClose.amount_spent,
@@ -1042,6 +1064,10 @@ function JournalsPageContent() {
                 ...it,
                 status: saved.status ?? it.status,
                 exit_price: saved.exit_price ?? it.exit_price,
+                closed_at:
+                  typeof saved.closed_at === "string" || saved.closed_at === null
+                    ? saved.closed_at
+                    : it.closed_at,
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
@@ -1853,6 +1879,19 @@ function JournalsPageContent() {
                       )}
                     </div>
                   </>
+                )}
+
+                {wStatus && wStatus !== "in_progress" && (
+                  <div>
+                    <div className="text-sm mb-1">
+                      Date & Time Closed
+                    </div>
+                    <input
+                      type="datetime-local"
+                      {...register("closed_datetime")}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                  </div>
                 )}
 
                 <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm">

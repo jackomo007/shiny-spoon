@@ -73,11 +73,7 @@ export default function JournalTradesCard({
   function renderTags(tags?: string[]) {
     const clean = (tags ?? []).filter(Boolean);
     if (!clean.length) {
-      return (
-        <span className="inline-flex min-h-6 items-center rounded-full bg-[#f2f4f7] px-2 text-[11px] font-semibold text-[#667085]">
-          No setup tag
-        </span>
-      );
+      return null;
     }
 
     return (
@@ -495,14 +491,14 @@ function DetailCard({
   row: JournalRow;
   fmt4: (n: number | null | undefined) => string;
 }) {
-  const note = row.notes_review || row.notes_entry || "-";
+  const note = truncateText(row.notes_entry?.trim() || "-", 90);
 
   return (
     <div className="grid gap-4 rounded-xl border border-[#e3e8f0] bg-white p-3.5 md:grid-cols-4">
       <DetailItem label="Stop loss" value={row.stop_loss_price != null ? `$${fmt4(row.stop_loss_price)}` : "-"} mono />
       <DetailItem label="Risk / reward" value={riskReward(row)} />
       <DetailItem label="Duration" value={tradeDuration(row)} />
-      <DetailItem label="Note" value={note} />
+      <DetailItem label="Notes" value={note} />
     </div>
   );
 }
@@ -576,8 +572,28 @@ function estimateMove(row: JournalRow) {
 }
 
 function tradeDuration(row: JournalRow) {
-  if (row.exit_price == null || row.status === "in_progress") return "-";
-  return "Closed trade";
+  if (!row.closed_at || row.status === "in_progress") return "-";
+
+  const opened = new Date(row.date).getTime();
+  const closed = new Date(row.closed_at).getTime();
+  if (!Number.isFinite(opened) || !Number.isFinite(closed) || closed < opened) {
+    return "-";
+  }
+
+  const minutes = Math.max(1, Math.round((closed - opened) / 60000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+
+  if (days > 0) {
+    if (hours > 0) return `${days} day${days === 1 ? "" : "s"} ${hours} h`;
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (hours > 0) {
+    if (mins > 0) return `${hours} h ${mins} min`;
+    return `${hours} h`;
+  }
+  return `${mins} min`;
 }
 
 function riskReward(row: JournalRow) {
@@ -611,6 +627,11 @@ function formatFilterDate(value: string) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trimEnd()}...`;
 }
 
 function assetGlyph(asset: string) {

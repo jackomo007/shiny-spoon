@@ -101,6 +101,7 @@ model journal_entry {
   exit_price          Decimal?             @db.Decimal(18, 8)
   amount              Decimal              @db.Decimal(18, 8)
   trade_datetime      DateTime             @db.DateTime(0)
+  closed_at           DateTime?            @db.DateTime(0)
   strategy_id         String               @db.Char(36)
   notes_entry         String?              @db.Text
   notes_review        String?              @db.Text

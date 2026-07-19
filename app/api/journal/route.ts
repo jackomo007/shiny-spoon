@@ -16,6 +16,7 @@ const BaseSchema = z
     asset_name: z.string().min(1),
     trade_type: z.union([z.number(), z.string()]),
     trade_datetime: z.string().min(1),
+    closed_at: z.string().optional().nullable(),
     side: z.enum(["buy", "sell", "long", "short"]),
     status: z.enum(["in_progress", "win", "loss", "break_even"]),
     entry_price: z.number().positive(),
@@ -126,6 +127,7 @@ export async function GET(req: Request) {
       exit_price: r.exit_price != null ? Number(r.exit_price) : null,
       amount_spent: Number(r.amount_spent),
       date: r.trade_datetime.toISOString(),
+      closed_at: r.closed_at ? r.closed_at.toISOString() : null,
       strategy_id: r.strategy_id,
       buy_fee: Number(r.buy_fee),
       sell_fee: Number(r.sell_fee),
@@ -164,6 +166,16 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    const closedDate =
+      data.closed_at && data.status !== "in_progress"
+        ? new Date(data.closed_at)
+        : null;
+    if (closedDate && isNaN(closedDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid closed date/time" },
+        { status: 400 },
+      );
+    }
 
     const tagNames = Array.from(
       new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean)),
@@ -199,6 +211,10 @@ export async function POST(req: Request) {
 
     const statusToPersist: Status = data.status as Status;
     const exitToPersist = data.exit_price ?? null;
+    const closedAtToPersist =
+      statusToPersist === "in_progress"
+        ? null
+        : closedDate ?? new Date();
     const sellFeeToPersist = data.sell_fee ?? 0;
 
     const created = await prisma.$transaction(async (tx) => {
@@ -215,6 +231,7 @@ export async function POST(req: Request) {
           trade_type: tradeType,
           asset_name: data.asset_name.toUpperCase(),
           trade_datetime: tradeDate,
+          closed_at: closedAtToPersist,
           side: data.side,
           status: statusToPersist,
           amount_spent: data.amount_spent,

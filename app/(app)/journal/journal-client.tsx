@@ -37,6 +37,7 @@ export type JournalRow = {
   exit_price: number | null;
   amount_spent: number;
   date: string | Date;
+  closed_at: string | Date | null;
   strategy_id: string;
   pnl: number | null;
   trading_fee: number;
@@ -51,6 +52,7 @@ type JournalForm = {
   asset_name: string;
   trade_type: TradeType | string;
   trade_datetime: string;
+  closed_datetime?: string;
 
   trading_fee?: string;
   amount_spent?: string;
@@ -153,6 +155,7 @@ const DEFAULT_NEW_TAG_COLOR = "#7C3AED";
 type BasePayload = {
   asset_name: string;
   trade_datetime: string;
+  closed_at: string | null;
   side: Side;
   status: Status;
   amount_spent: number;
@@ -232,6 +235,7 @@ export default function JournalPage() {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
+      closed_datetime: "",
       trading_fee: "0",
       notes_entry: "",
       notes_review: "",
@@ -471,6 +475,7 @@ useEffect(() => {
       exit_price: it.exit_price == null ? null : Number(it.exit_price),
       amount_spent: Number(it.amount_spent),
       date: it.date,
+      closed_at: it.closed_at ?? null,
       strategy_id: it.strategy_id,
       pnl: it.pnl == null ? null : Number(it.pnl),
       stop_loss_price:
@@ -629,6 +634,7 @@ useEffect(() => {
       asset_name: "",
       trade_type: 1,
       trade_datetime: toLocalInputValue(new Date()),
+      closed_datetime: "",
       amount: "",
       notes_entry: "",
       notes_review: "",
@@ -660,6 +666,7 @@ useEffect(() => {
       asset_name: row.asset_name,
       trade_type: row.trade_type,
       trade_datetime: toLocalInputValue(row.date),
+      closed_datetime: row.closed_at ? toLocalInputValue(row.closed_at) : "",
       side: row.side,
       status: row.status,
       amount_spent: String(row.amount_spent),
@@ -764,6 +771,13 @@ useEffect(() => {
       setTargets && form.stop_loss_price && form.stop_loss_price.trim()
         ? toNum(form.stop_loss_price)
         : null;
+    const status = (form.status ?? "in_progress") as Status;
+    const closedAt =
+      status === "in_progress"
+        ? null
+        : form.closed_datetime?.trim()
+          ? toISO(form.closed_datetime)
+          : new Date().toISOString();
 
     if (!(amt > 0) || !(entry > 0) || !(fee >= 0)) {
       alert("Please enter valid numbers (you can use commas).");
@@ -794,8 +808,9 @@ useEffect(() => {
     const base: BasePayload = {
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
+      closed_at: closedAt,
       side: coercedSide,
-      status: (form.status ?? "in_progress") as Status,
+      status,
       amount_spent: amt,
       entry_price: entry,
       exit_price: exit,
@@ -842,6 +857,7 @@ useEffect(() => {
         status: Status;
         exit_price: number | null;
         trading_fee: number;
+        closed_at: string | null;
       };
       const saved: PutReturn = await r.json();
 
@@ -850,9 +866,13 @@ useEffect(() => {
           it.id === editingId
             ? {
                 ...it,
-                status: saved.status ?? it.status,
-                exit_price: saved.exit_price ?? it.exit_price,
-                trading_fee:
+        status: saved.status ?? it.status,
+        exit_price: saved.exit_price ?? it.exit_price,
+        closed_at:
+          typeof saved.closed_at === "string" || saved.closed_at === null
+            ? saved.closed_at
+            : it.closed_at,
+        trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
                     : it.trading_fee,
@@ -1005,6 +1025,7 @@ async function fetchAssets(q: string) {
       const baseClose: BasePayload = {
         asset_name: rowToClose.asset_name,
         trade_datetime: toISO(toLocalInputValue(rowToClose.date)),
+        closed_at: new Date().toISOString(),
         side: rowToClose.side,
         status: computedStatus,
         amount_spent: rowToClose.amount_spent,
@@ -1037,6 +1058,10 @@ async function fetchAssets(q: string) {
                 ...it,
                 status: saved.status ?? it.status,
                 exit_price: saved.exit_price ?? it.exit_price,
+                closed_at:
+                  typeof saved.closed_at === "string" || saved.closed_at === null
+                    ? saved.closed_at
+                    : it.closed_at,
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
@@ -1866,6 +1891,19 @@ async function fetchAssets(q: string) {
                       )}
                     </div>
                   </>
+                )}
+
+                {wStatus && wStatus !== "in_progress" && (
+                  <div>
+                    <div className="text-sm mb-1">
+                      Date & Time Closed
+                    </div>
+                    <input
+                      type="datetime-local"
+                      {...register("closed_datetime")}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                    />
+                  </div>
                 )}
 
                 {wTradeType === 2 && renderTargetsSection()}

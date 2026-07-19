@@ -15,6 +15,7 @@ const BaseSchema = z
     asset_name: z.string().min(1),
     trade_type: z.union([z.number(), z.string()]),
     trade_datetime: z.string().min(1),
+    closed_at: z.string().optional().nullable(),
     side: z.enum(["buy", "sell", "long", "short"]),
     status: z.enum(["in_progress", "win", "loss", "break_even"]),
     entry_price: z.number().positive(),
@@ -139,6 +140,19 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       : data.exit_price ?? null
 
   const statusToPersist: Status = data.status as Status
+  const closedAtToPersist =
+    statusToPersist === "in_progress"
+      ? null
+      : data.closed_at
+        ? new Date(data.closed_at)
+        : existing.closed_at ?? new Date()
+
+  if (closedAtToPersist && isNaN(closedAtToPersist.getTime())) {
+    return NextResponse.json(
+      { error: "Invalid closed date/time" },
+      { status: 400 },
+    )
+  }
 
   const sellFeeToPersist: Prisma.Decimal | undefined =
     data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined
@@ -158,6 +172,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         trade_type: tradeType,
         asset_name: data.asset_name,
         trade_datetime: new Date(data.trade_datetime),
+        closed_at: closedAtToPersist,
         side: data.side,
         amount_spent: data.amount_spent,
         amount: amountQty,
@@ -173,7 +188,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         exit_price: exitToPersist,
         stop_loss_price: data.stop_loss_price ?? null,
       },
-      select: { id: true, status: true, exit_price: true, trading_fee: true },
+      select: {
+        id: true,
+        status: true,
+        exit_price: true,
+        trading_fee: true,
+        closed_at: true,
+      },
     })
 
     if (tradeType === 1) {
@@ -255,6 +276,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     status: updated.status as Status,
     exit_price: updated.exit_price != null ? Number(updated.exit_price) : null,
     trading_fee: Number(updated.trading_fee ?? 0),
+    closed_at: updated.closed_at ? updated.closed_at.toISOString() : null,
   })
 }
 
