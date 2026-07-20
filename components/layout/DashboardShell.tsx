@@ -10,6 +10,12 @@ import AccountSwitcher from "@/components/account/AccountSwitcher";
 
 type Props = { children: React.ReactNode };
 
+type PortfolioSidebarData = {
+  summary?: {
+    currentBalanceUsd?: number;
+  };
+};
+
 function initials(from: string): string {
   const base = (from || "").trim();
   if (!base) return "U";
@@ -20,452 +26,337 @@ function initials(from: string): string {
   return one.slice(0, 2).toUpperCase();
 }
 
+function formatSidebarUsd(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return "$0";
+  return value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function DashboardShell({ children }: Props) {
   const { data } = useSession();
+  const pathname = usePathname();
+
   const displayName =
     data?.user?.name ??
     (data?.user?.email ? data.user.email.split("@")[0] : undefined) ??
     "Trader";
-
   const avatarText = initials(displayName);
   const isAdmin = !!data?.user?.isAdmin;
 
   const [openProfile, setOpenProfile] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
-  const [courseOpen, setCourseOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
-
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tradingGroupOpen, setTradingGroupOpen] = useState(true);
-  const pathname = usePathname();
+  const [portfolioValueUsd, setPortfolioValueUsd] = useState<number | null>(
+    null,
+  );
+
+  const tradingGroupActive =
+    isActivePath(pathname, "/journal") || isActivePath(pathname, "/manage-tags");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("stakk-sidebar-collapsed");
+    if (stored) setSidebarCollapsed(stored === "true");
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchPortfolioValue() {
+      try {
+        const res = await fetch("/api/portfolio", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+
+        const payload = (await res.json()) as PortfolioSidebarData;
+        const value = payload.summary?.currentBalanceUsd;
+        if (typeof value === "number" && Number.isFinite(value)) {
+          setPortfolioValueUsd(value);
+        }
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setPortfolioValueUsd(null);
+        }
+      }
+    }
+
+    void fetchPortfolioValue();
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
+    setOpenProfile(false);
   }, [pathname]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        setOpenProfile(false);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    function handleScroll() {
-      setIsScrolled(window.scrollY > 88);
-    }
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const tradingGroupActive =
-    pathname === "/journal" ||
-    pathname === "/manage-tags";
-
-  const topNavLinkBase =
-    "text-sm px-3 py-2 rounded-xl transition-colors whitespace-nowrap";
-  const topNavInactive = "text-[#6B6777] hover:bg-white";
-  const topNavActive = "bg-[#F1EAFE] text-[#7C3AED] font-semibold";
-
-  const isTopActive = (href: string) => pathname === href;
+  function toggleSidebar() {
+    setSidebarCollapsed((value) => {
+      const next = !value;
+      window.localStorage.setItem("stakk-sidebar-collapsed", String(next));
+      return next;
+    });
+  }
 
   return (
-    <div className="min-h-dvh bg-gray-50">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-[#E9E6F2] text-[#14121A]">
-        <div className="mx-auto max-w-7xl px-4 md:px-6 py-3">
-          <div className="relative flex items-center justify-between gap-4">
-            <div className="flex items-center gap-6 min-w-0">
-              <Link
-                href="/"
-                className="flex items-center gap-3"
-                aria-label="Stakk AI – Home"
-                title="Stakk AI"
-              >
-                <div className="h-9 w-9 rounded-[12px] bg-[radial-gradient(circle_at_30%_30%,#B49BFF,#7C3AED)] shadow-[0_10px_22px_rgba(124,58,237,0.25)] relative overflow-hidden">
-                  <div className="absolute inset-[9px] rounded-[10px] bg-white/70 rotate-[14deg] [clip-path:polygon(0_40%,55%_0,100%_40%,55%_100%)]" />
-                </div>
-                <span className="font-extrabold tracking-[0.02em] text-[18px]">
-                  Stakk <b className="text-[#7C3AED] font-extrabold">AI</b>
-                </span>
-              </Link>
+    <div className="min-h-dvh bg-[#F6F7FB] text-[#171821]">
+      <button
+        type="button"
+        className="fixed left-4 top-4 z-[55] grid h-11 w-11 place-items-center rounded-[13px] border border-[#E7E8F0] bg-white text-[#171821] shadow-[0_10px_30px_rgba(35,21,76,0.08)] md:hidden"
+        onClick={() => setMobileOpen((value) => !value)}
+        aria-label="Open menu"
+        aria-expanded={mobileOpen}
+        aria-controls="app-sidebar"
+      >
+        <MenuIcon />
+      </button>
 
-              <nav
-                className="hidden lg:flex items-center gap-2 text-[14px]"
-                aria-label="Primary navigation"
-              >
-                <Link
-                  href="/dashboard"
-                  className={`${topNavLinkBase} ${
-                    isTopActive("/dashboard") ? topNavActive : topNavInactive
-                  }`}
-                >
-                  Daily Analysis
-                </Link>
-                <span className="text-sm px-2 py-2 font-semibold text-[#6B6777] whitespace-nowrap">
-                  Short Term Trading
-                </span>
-                <Link
-                  href="/journal"
-                  className={`${topNavLinkBase} ${
-                    isTopActive("/journal") ? topNavActive : topNavInactive
-                  }`}
-                >
-                  Trading Journal
-                </Link>
-                <Link
-                  href="/manage-tags"
-                  className={`${topNavLinkBase} ${
-                    isTopActive("/manage-tags") ? topNavActive : topNavInactive
-                  }`}
-                >
-                  Manage Tags
-                </Link>
-                {isAdmin && (
-                  <Link
-                    href="/admin"
-                    className={`${topNavLinkBase} ${
-                      isTopActive("/admin") ? topNavActive : topNavInactive
-                    }`}
-                  >
-                    Admin
-                  </Link>
-                )}
-              </nav>
-            </div>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-[#151220]/45 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close menu"
+        />
+      )}
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setAccOpen(true)}
-                className="hidden sm:inline-flex items-center gap-2 rounded-full border border-[#E9E6F2] bg-white px-3 py-2 text-[13px] text-[#6B6777] shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
-                title="Switch account"
-              >
-                <span className="text-[#6D28D9] font-black text-base">⎈</span>
-                <span>Accounts</span>
-              </button>
-
-              <div className="relative">
-                <button
-                  onClick={() => setOpenProfile((v) => !v)}
-                  className="flex items-center gap-2 rounded-full border border-[#E9E6F2] bg-white px-3 py-2 text-[13px] text-[#14121A] shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
-                >
-                  <span className="h-7 w-7 rounded-full bg-gradient-to-br from-[#B49BFF] to-[#7C3AED] grid place-items-center overflow-hidden relative text-[11px] font-extrabold text-white">
-                    {data?.user?.image ? (
-                      <Image
-                        src={data.user.image}
-                        alt="avatar"
-                        fill
-                        className="object-cover"
-                        sizes="28px"
-                      />
-                    ) : (
-                      avatarText
-                    )}
-                  </span>
-                  <span className="hidden sm:inline font-semibold truncate max-w-[140px]">
-                    {displayName}
-                  </span>
-                </button>
-
-                {openProfile && (
-                  <div
-                    className="absolute right-0 mt-2 w-64 bg-white text-gray-800 rounded-2xl shadow-xl p-2 z-50 border border-gray-100"
-                    onMouseLeave={() => setOpenProfile(false)}
-                  >
-                    <div className="px-3 py-2 text-sm text-gray-500">
-                      Hi, {displayName.split(" ")[0]}!
-                    </div>
-                    <MenuItem href="/profile" label="My profile" emoji="🙋‍♂️" />
-
-                    <button
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 cursor-pointer"
-                      onClick={() => signOut({ callbackUrl: "/login" })}
-                    >
-                      <span className="text-lg">🚪</span> Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <button
-                className="inline-flex lg:hidden flex-col items-center justify-center rounded-full border border-[#E9E6F2] bg-white p-2 shadow-[0_6px_16px_rgba(20,18,26,0.04)] cursor-pointer"
-                onClick={() => setMobileOpen((v) => !v)}
-                aria-label="Open menu"
-                aria-expanded={mobileOpen}
-                aria-controls="mobile-nav"
-              >
-                <span className="block h-0.5 w-5 bg-[#14121A] mb-1.5 rounded-full" />
-                <span className="block h-0.5 w-5 bg-[#14121A] mb-1.5 rounded-full" />
-                <span className="block h-0.5 w-5 bg-[#14121A] rounded-full" />
-              </button>
-            </div>
-
-            {mobileOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-[45] bg-black/30 lg:hidden"
-                  onClick={() => setMobileOpen(false)}
-                />
-                <div
-                  id="mobile-nav"
-                  className="absolute left-0 right-0 top-full z-50 lg:hidden border-t border-[#E9E6F2] bg-gradient-to-b from-white via-[#F7F4FF] to-[#EFE9FF] backdrop-blur shadow-[0_18px_40px_rgba(20,18,26,0.22)] rounded-b-2xl"
-                >
-                  <div className="mx-auto max-w-7xl px-4 md:px-6 py-3">
-                    <ul className="grid gap-2 text-sm animate-[fadeDown_160ms_ease-out]">
-                      <li>
-                        <Link
-                          href="/dashboard"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/dashboard")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              🏠
-                            </span>
-                            <span className="font-medium">Daily Analysis</span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/dashboard") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
-                      <li>
-                        <div className="px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#6B6777]">
-                          Short Term Trading
-                        </div>
-                      </li>
-
-                      <li>
-                        <Link
-                          href="/journal"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/journal")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              🗒️
-                            </span>
-                            <span className="font-medium">Trading Journal</span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/journal") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
-                      <li>
-                        <Link
-                          href="/manage-tags"
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                            isTopActive("/manage-tags")
-                              ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                              : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                              #
-                            </span>
-                            <span className="font-medium">Manage Tags</span>
-                          </div>
-                          <span className="text-xs text-[#9C92D4]">
-                            {isTopActive("/manage-tags") ? "Current" : ""}
-                          </span>
-                        </Link>
-                      </li>
-
-                      {isAdmin && (
-                        <li>
-                          <Link
-                            href="/admin"
-                            onClick={() => setMobileOpen(false)}
-                            className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-all ${
-                              isTopActive("/admin")
-                                ? "border-transparent bg-[#F1EAFE] text-[#4C1D95] shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                                : "border-transparent text-[#14121A] hover:bg-white/80 hover:border-[#E3DEF7]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="h-8 w-8 rounded-full bg-white/80 grid place-items-center text-lg">
-                                🛡️
-                              </span>
-                              <span className="font-medium">Admin</span>
-                            </div>
-                            <span className="text-xs text-[#9C92D4]">
-                              {isTopActive("/admin") ? "Current" : ""}
-                            </span>
-                          </Link>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto w-full max-w-7xl md:max-w-none px-4 md:px-6 py-6 relative">
-        <aside
-          className={`hidden md:block fixed left-0 bottom-0 z-40 transition-all duration-300 ease-in-out bg-white shadow-lg ${
-            isScrolled ? "top-0" : "top-[88px]"
+      <aside
+        id="app-sidebar"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[252px] flex-col border-r border-[#E7E8F0] bg-white transition-[transform,width] duration-200 ease-out md:z-40 ${
+          sidebarCollapsed ? "md:w-[72px]" : "md:w-[252px]"
+        } ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        aria-label="Primary navigation"
+      >
+        <div
+          className={`flex h-[72px] items-center gap-3 overflow-hidden border-b border-[#E7E8F0] px-5 ${
+            sidebarCollapsed ? "md:justify-center md:px-0" : ""
           }`}
-          onMouseEnter={() => setSidebarExpanded(true)}
-          style={{
-            width: sidebarExpanded ? "260px" : "64px",
-          }}
         >
-          <div className="h-full overflow-y-auto overflow-x-hidden">
-            {sidebarExpanded && (
-              <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex justify-end z-10">
-                <button
-                  onClick={() => setSidebarExpanded(false)}
-                  className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-                  title="Close sidebar"
-                  aria-label="Close sidebar"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
+          <Link
+            href="/dashboard"
+            className="flex min-w-0 items-center gap-3"
+            aria-label="Stakk AI home"
+            title="Stakk AI"
+          >
+            <span className="grid h-10 w-10 flex-none place-items-center rounded-[13px] bg-[linear-gradient(145deg,#6F39F4_10%,#A873FF_100%)] text-white shadow-[0_10px_22px_rgba(124,58,237,0.26)]">
+              <BrandIcon />
+            </span>
+            <span
+              className={`whitespace-nowrap text-xl font-black tracking-[-0.04em] ${
+                sidebarCollapsed ? "md:hidden" : ""
+              }`}
+            >
+              Stakk <span className="text-[#7C3AED]">AI</span>
+            </span>
+          </Link>
+        </div>
 
-            <div className="px-3 pt-4 pb-3 flex justify-center">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-700 grid place-items-center text-white text-base font-semibold flex-shrink-0 overflow-hidden relative">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="absolute right-[-14px] top-[88px] hidden h-7 w-7 place-items-center rounded-[9px] border border-[#E7E8F0] bg-white text-[#6F7283] shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:grid"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <ChevronLeftIcon
+            className={`transition-transform ${
+              sidebarCollapsed ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <div
+          className={`flex-1 overflow-y-auto overflow-x-hidden px-[14px] py-[18px] ${
+            sidebarCollapsed ? "md:px-2.5" : ""
+          }`}
+        >
+          <div
+            className={`mb-5 flex items-center gap-3 overflow-hidden rounded-[15px] border border-[#E4DBFB] bg-[linear-gradient(145deg,#FBF9FF_0%,#F5F0FF_100%)] p-3 shadow-[0_8px_20px_rgba(75,42,140,0.06)] ${
+              sidebarCollapsed ? "md:justify-center md:p-[7px]" : ""
+            }`}
+          >
+            <span className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[11px] border border-[#E8DEFC] bg-white text-[#7C3AED] shadow-[0_5px_14px_rgba(90,48,166,0.08)]">
+              <BarsIcon />
+            </span>
+            <div
+              className={`min-w-0 whitespace-nowrap ${
+                sidebarCollapsed ? "md:hidden" : ""
+              }`}
+            >
+              <div className="text-[10px] font-black uppercase tracking-[0.08em] text-[#6F7283]">
+                Portfolio Value
+              </div>
+              <div className="mt-1 text-lg font-black leading-none tracking-[-0.035em]">
+                {formatSidebarUsd(portfolioValueUsd)}
+              </div>
+            </div>
+          </div>
+
+          <SidebarSection label="Overview" collapsed={sidebarCollapsed}>
+            <NavItem
+              href="/dashboard"
+              label="Daily Analysis"
+              icon={<HomeIcon />}
+              collapsed={sidebarCollapsed}
+              active={isActivePath(pathname, "/dashboard")}
+            />
+            <NavItem
+              href="/portfolio"
+              label="Portfolio Manager"
+              icon={<PortfolioIcon />}
+              collapsed={sidebarCollapsed}
+              active={isActivePath(pathname, "/portfolio")}
+            />
+          </SidebarSection>
+
+          <div className="mt-[18px]">
+            <NavGroup
+              label="Short Term Trading"
+              icon={<TrendIcon />}
+              collapsed={sidebarCollapsed}
+              open={tradingGroupOpen}
+              setOpen={setTradingGroupOpen}
+              active={tradingGroupActive}
+            >
+              <SubNavItem
+                href="/journal"
+                label="Trading Journal"
+                active={isActivePath(pathname, "/journal")}
+              />
+              <SubNavItem
+                href="/manage-tags"
+                label="Manage Tags"
+                active={isActivePath(pathname, "/manage-tags")}
+              />
+            </NavGroup>
+          </div>
+
+          <SidebarSection
+            label="Settings"
+            collapsed={sidebarCollapsed}
+            className="mt-[18px]"
+          >
+            <ActionNavItem
+              label="Accounts"
+              icon={<AccountsIcon />}
+              collapsed={sidebarCollapsed}
+              onClick={() => setAccOpen(true)}
+            />
+            <NavItem
+              href="/profile"
+              label="My Profile"
+              icon={<ProfileIcon />}
+              collapsed={sidebarCollapsed}
+              active={isActivePath(pathname, "/profile")}
+            />
+            {isAdmin && (
+              <NavItem
+                href="/admin"
+                label="Admin"
+                icon={<ShieldIcon />}
+                collapsed={sidebarCollapsed}
+                active={isActivePath(pathname, "/admin")}
+              />
+            )}
+            <NavItem
+              href="/add-coin"
+              label="Coin Tracker"
+              icon={<SearchIcon />}
+              collapsed={sidebarCollapsed}
+              active={isActivePath(pathname, "/add-coin")}
+            />
+          </SidebarSection>
+        </div>
+
+        <div className="border-t border-[#E7E8F0] p-3">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenProfile((value) => !value)}
+              className={`flex w-full items-center gap-3 rounded-[13px] px-2 py-2 text-left text-sm text-[#171821] transition-colors hover:bg-[#F7F7FB] ${
+                sidebarCollapsed ? "md:justify-center md:px-0" : ""
+              }`}
+              aria-expanded={openProfile}
+              aria-label="Open profile menu"
+            >
+              <span className="relative grid h-10 w-10 flex-none place-items-center overflow-hidden rounded-full bg-[linear-gradient(145deg,#B49BFF,#7C3AED)] text-[12px] font-extrabold text-white">
                 {data?.user?.image ? (
                   <Image
                     src={data.user.image}
                     alt="avatar"
                     fill
                     className="object-cover"
-                    sizes="48px"
+                    sizes="40px"
                   />
                 ) : (
                   avatarText
                 )}
-              </div>
-            </div>
-
-            <nav className="px-2 pb-4">
-              <ul className="grid gap-1">
-                <NavItem
-                  href="/dashboard"
-                  label="Daily Analysis"
-                  icon="🏠"
-                  showText={sidebarExpanded}
-                  pathname={pathname}
-                />
-
-                <NavItem
-                  href="/portfolio"
-                  label="Portfolio Manager"
-                  icon="💼"
-                  showText={sidebarExpanded}
-                  pathname={pathname}
-                />
-
-                <NavGroup
-                  label="Short Term Trading"
-                  icon="🗒️"
-                  showText={sidebarExpanded}
-                  open={tradingGroupOpen}
-                  setOpen={setTradingGroupOpen}
-                  isActiveGroup={tradingGroupActive}
-                >
-                  <NavChildItem
-                    href="/journal"
-                    label="Trading Journal"
-                    icon="-"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                  <NavChildItem
-                    href="/manage-tags"
-                    label="Manage Tags"
-                    icon="-"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                </NavGroup>
-
-                {isAdmin && (
-                  <NavItem
-                    href="/admin"
-                    label="Admin"
-                    icon="🛡️"
-                    showText={sidebarExpanded}
-                    pathname={pathname}
-                  />
-                )}
-
-                <NavItem
-                  href="/add-coin"
-                  label="Coin Tracker"
-                  icon="🔍"
-                  showText={sidebarExpanded}
-                  pathname={pathname}
-                />
-              </ul>
-            </nav>
-          </div>
-        </aside>
-
-        <main
-          className={`min-w-0 transition-all duration-300 ease-in-out ${
-            sidebarExpanded ? "md:ml-[260px]" : "md:ml-[64px]"
-          }`}
-        >
-          {children}
-        </main>
-      </div>
-
-      {courseOpen && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/30 backdrop-blur-[1px] grid place-items-center"
-          onClick={() => setCourseOpen(false)}
-        >
-          <div
-            className="w-[440px] max-w-[92vw] rounded-2xl bg-white p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-lg font-semibold mb-2">Coming soon…</div>
-            <p className="text-sm text-gray-600">
-              Our Trading Course is almost ready. Stay tuned! 🚀
-            </p>
-            <div className="mt-4 text-right">
-              <button
-                className="rounded-xl bg-black text-white px-4 py-2 cursor-pointer"
-                onClick={() => setCourseOpen(false)}
+              </span>
+              <span
+                className={`min-w-0 flex-1 ${
+                  sidebarCollapsed ? "md:hidden" : ""
+                }`}
               >
-                Close
-              </button>
-            </div>
+                <span className="block truncate font-extrabold">
+                  {displayName}
+                </span>
+                <span className="block truncate text-xs font-semibold text-[#6F7283]">
+                  {data?.user?.email ?? "Signed in"}
+                </span>
+              </span>
+            </button>
+
+            {openProfile && (
+              <div
+                className={`absolute bottom-full mb-2 w-64 rounded-2xl border border-[#E7E8F0] bg-white p-2 text-gray-800 shadow-xl ${
+                  sidebarCollapsed ? "left-0 md:left-[52px]" : "left-0"
+                }`}
+                onMouseLeave={() => setOpenProfile(false)}
+              >
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  Hi, {displayName.split(" ")[0]}!
+                </div>
+                <MenuItem href="/profile" label="My profile" icon={<ProfileIcon />} />
+                <button
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-gray-100"
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                >
+                  <LogoutIcon /> Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </aside>
+
+      <main
+        className={`min-w-0 px-4 pb-6 pt-[74px] transition-[margin] duration-200 ease-out md:px-6 md:py-7 ${
+          sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[252px]"
+        }`}
+      >
+        {children}
+      </main>
 
       {accOpen && (
         <div
@@ -473,18 +364,18 @@ export default function DashboardShell({ children }: Props) {
           onClick={() => setAccOpen(false)}
         >
           <div
-            className="fixed right-4 top-16 w-[460px] max-w-[95vw] rounded-2xl bg-white text-gray-800 shadow-2xl p-4"
+            className="fixed right-4 top-16 w-[460px] max-w-[95vw] rounded-2xl bg-white p-4 text-gray-800 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-2 border-b">
+            <div className="flex items-center justify-between border-b pb-2">
               <div className="font-semibold">Switch account</div>
               <button
-                className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100 cursor-pointer"
+                className="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100"
                 onClick={() => setAccOpen(false)}
                 aria-label="Close"
                 title="Close"
               >
-                ✖
+                x
               </button>
             </div>
 
@@ -498,177 +389,392 @@ export default function DashboardShell({ children }: Props) {
   );
 }
 
+function SidebarSection({
+  label,
+  collapsed,
+  className = "",
+  children,
+}: {
+  label: string;
+  collapsed: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={className}>
+      <div
+        className={`mb-2 px-3 text-[10px] font-black uppercase tracking-[0.12em] text-[#9A9CAD] ${
+          collapsed ? "md:hidden" : ""
+        }`}
+      >
+        {label}
+      </div>
+      <nav className="grid gap-[5px]">{children}</nav>
+    </section>
+  );
+}
+
 function NavItem({
   href,
   label,
   icon,
-  showText = true,
-  pathname,
+  collapsed,
+  active,
 }: {
   href: string;
   label: string;
-  icon: string;
-  showText?: boolean;
-  pathname?: string;
+  icon: React.ReactNode;
+  collapsed: boolean;
+  active: boolean;
 }) {
-  const isActive = pathname === href;
-
   return (
-    <li>
-      <Link
-        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-          isActive
-            ? "bg-purple-50 text-purple-700"
-            : "text-gray-700 hover:bg-gray-50"
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      className={`relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-sm font-bold transition-colors ${
+        collapsed ? "md:mx-auto md:w-12 md:justify-center md:px-0" : ""
+      } ${
+        active
+          ? "bg-[#F4EFFF] text-[#6127D9] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.06)] before:absolute before:bottom-[9px] before:left-0 before:top-[9px] before:w-[3px] before:rounded-r before:bg-[#7C3AED]"
+          : "text-[#55596B] hover:bg-[#F7F7FB] hover:text-[#171821]"
+      }`}
+    >
+      <span className="grid h-5 w-5 flex-none place-items-center">{icon}</span>
+      <span
+        className={`min-w-0 flex-1 truncate whitespace-nowrap ${
+          collapsed ? "md:hidden" : ""
         }`}
-        href={href}
-        title={!showText ? label : undefined}
       >
-        <span className="w-5 text-center flex-shrink-0 text-lg">{icon}</span>
-        <span
-          className="whitespace-nowrap text-sm font-medium overflow-hidden transition-all duration-300"
-          style={{
-            width: showText ? "auto" : "0",
-            opacity: showText ? 1 : 0,
-          }}
-        >
-          {label}
-        </span>
-      </Link>
-    </li>
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+function ActionNavItem({
+  label,
+  icon,
+  collapsed,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={collapsed ? label : undefined}
+      onClick={onClick}
+      className={`flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-left text-sm font-bold text-[#55596B] transition-colors hover:bg-[#F7F7FB] hover:text-[#171821] ${
+        collapsed ? "md:mx-auto md:w-12 md:justify-center md:px-0" : ""
+      }`}
+    >
+      <span className="grid h-5 w-5 flex-none place-items-center">{icon}</span>
+      <span
+        className={`min-w-0 flex-1 truncate whitespace-nowrap ${
+          collapsed ? "md:hidden" : ""
+        }`}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 
 function NavGroup({
   label,
   icon,
-  showText,
+  collapsed,
   open,
   setOpen,
-  isActiveGroup,
+  active,
   children,
 }: {
   label: string;
-  icon: string;
-  showText: boolean;
+  icon: React.ReactNode;
+  collapsed: boolean;
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isActiveGroup: boolean;
+  active: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <li className="select-none">
-      <div className="flex items-center">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          title={!showText ? label : undefined}
-          aria-expanded={showText ? open : undefined}
-          className={`flex-1 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-            isActiveGroup
-              ? "bg-purple-50 text-purple-700"
-              : "text-gray-700 hover:bg-gray-50"
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        title={collapsed ? label : undefined}
+        aria-expanded={open}
+        className={`relative flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 text-left text-sm font-bold transition-colors ${
+          collapsed ? "md:mx-auto md:w-12 md:justify-center md:px-0" : ""
+        } ${
+          active
+            ? "bg-[#F4EFFF] text-[#6127D9] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.06)] before:absolute before:bottom-[9px] before:left-0 before:top-[9px] before:w-[3px] before:rounded-r before:bg-[#7C3AED]"
+            : "text-[#55596B] hover:bg-[#F7F7FB] hover:text-[#171821]"
+        }`}
+      >
+        <span className="grid h-5 w-5 flex-none place-items-center">{icon}</span>
+        <span
+          className={`min-w-0 flex-1 truncate whitespace-nowrap ${
+            collapsed ? "md:hidden" : ""
           }`}
         >
-          <span className="w-5 text-center flex-shrink-0 text-lg">{icon}</span>
+          {label}
+        </span>
+        <ChevronDownIcon
+          className={`h-4 w-4 flex-none transition-transform ${
+            open ? "rotate-180" : ""
+          } ${collapsed ? "md:hidden" : ""}`}
+        />
+      </button>
 
-          <span
-            className="whitespace-nowrap text-sm font-medium overflow-hidden transition-all duration-300"
-            style={{
-              width: showText ? "auto" : "0",
-              opacity: showText ? 1 : 0,
-            }}
-          >
-            {label}
-          </span>
-        </button>
-
-        {showText && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen((v) => !v);
-            }}
-            className={`ml-1 h-10 w-10 grid place-items-center rounded-lg transition-colors ${
-              isActiveGroup ? "text-purple-700" : "text-gray-500"
-            } hover:bg-gray-50`}
-            aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
-            title={open ? "Collapse" : "Expand"}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform ${open ? "rotate-180" : ""}`}
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {showText && open && (
-        <ul className="mt-1 grid gap-1">{children}</ul>
+      {open && (
+        <div
+          className={`my-1 ml-[31px] grid gap-[3px] border-l border-[#E6DEF8] pl-[13px] ${
+            collapsed ? "md:hidden" : ""
+          }`}
+        >
+          {children}
+        </div>
       )}
-    </li>
+    </div>
   );
 }
 
-function NavChildItem({
+function SubNavItem({
   href,
   label,
-  icon,
-  showText = true,
-  pathname,
+  active,
 }: {
   href: string;
   label: string;
-  icon: string;
-  showText?: boolean;
-  pathname?: string;
+  active: boolean;
 }) {
-  const isActive = pathname === href;
-
   return (
-    <li>
-      <Link
-        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ml-6 ${
-          isActive
-            ? "bg-purple-50 text-purple-700"
-            : "text-gray-700 hover:bg-gray-50"
-        }`}
-        href={href}
-        title={!showText ? label : undefined}
-      >
-        <span className="w-5 text-center flex-shrink-0 text-lg">{icon}</span>
-        <span className="whitespace-nowrap text-sm font-medium">{label}</span>
-      </Link>
-    </li>
+    <Link
+      href={href}
+      className={`flex h-[38px] items-center rounded-[10px] px-2.5 text-[13px] font-semibold ${
+        active
+          ? "bg-[#F8F5FF] text-[#6127D9]"
+          : "text-[#6F7283] hover:bg-[#F8F5FF] hover:text-[#6127D9]"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
 
 function MenuItem({
   href,
   label,
-  emoji,
+  icon,
 }: {
   href: string;
   label: string;
-  emoji: string;
+  icon: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100"
+      className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-100"
     >
-      <span className="text-lg">{emoji}</span> {label}
+      {icon} {label}
     </Link>
+  );
+}
+
+function BrandIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5 8.7 12 4l7 4.7-2.7 8.1L12 20l-4.3-3.2L5 8.7Z"
+        fill="currentColor"
+        opacity=".96"
+      />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 7h16M4 12h16M4 17h16"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8.5Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function PortfolioIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 7.5h16M6 4h12l1 3.5H5L6 4Zm-1 3.5V20h14V7.5M9 12h6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function TrendIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 17.5 9 12l3.5 3.5L20 7m-4 0h4v4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function BarsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 18V9m5 9V5m5 13v-7m5 7V3"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function AccountsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5 7h14M7 4h10l2 3H5l2-3Zm-2 3v13h14V7M9 12h6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.9" />
+      <path
+        d="M5 20c.8-4 3.1-6 7-6s6.2 2 7 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+      <path
+        d="M9.5 12 11 13.5l3.5-4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="m20 20-4.2-4.2M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M10 6H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h4M14 8l4 4-4 4M18 12H9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="m14.5 6-6 6 6 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+      />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }
