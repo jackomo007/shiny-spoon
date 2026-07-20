@@ -491,7 +491,10 @@ function DetailCard({
   row: JournalRow;
   fmt4: (n: number | null | undefined) => string;
 }) {
-  const note = truncateText(row.notes_entry?.trim() || "-", 90);
+  const note = truncateText(
+    row.notes_entry?.trim() || row.notes_review?.trim() || "-",
+    90,
+  );
 
   return (
     <div className="grid gap-4 rounded-xl border border-[#e3e8f0] bg-white p-3.5 md:grid-cols-4">
