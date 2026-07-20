@@ -496,11 +496,6 @@ function JournalsPageContent() {
         fetch(`/api/journals`, { cache: "no-store" }),
       ]);
 
-      if (!jr.ok) throw new Error(await jr.text());
-
-      const j: JournalIndexResponse = await jr.json();
-      setItems((j.items ?? []).map(normalizeJournal));
-
       if (!jn.ok) throw new Error(await jn.text());
       const jnPayload = (await jn.json()) as JournalsPayload;
       const list = jnPayload.items ?? [];
@@ -511,6 +506,11 @@ function JournalsPageContent() {
         list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ??
         "";
       setActiveJournalName(name);
+
+      if (!jr.ok) throw new Error(await jr.text());
+
+      const j: JournalIndexResponse = await jr.json();
+      setItems((j.items ?? []).map(normalizeJournal));
 
       return (j.items ?? []).map(normalizeJournal);
     } catch (e) {
