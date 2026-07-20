@@ -22,13 +22,13 @@ export async function GET() {
     return NextResponse.json({ error: "Account not found" }, { status: 404 })
   }
 
+  const activeJournalId = await getActiveJournalId(userId)
+
   const items = await prisma.journal.findMany({
     where: { account_id: accountId },
     orderBy: { created_at: "asc" },
     select: { id: true, name: true, created_at: true },
   })
-
-  const activeJournalId = await getActiveJournalId(userId)
 
   return NextResponse.json({ items, activeJournalId })
 }

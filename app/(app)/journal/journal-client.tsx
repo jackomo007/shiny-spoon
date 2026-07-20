@@ -253,6 +253,7 @@ export default function JournalPage() {
   const amountSyncRef = useRef<"amount_spent" | "amount" | null>(null);
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
+  const [journalsLoaded, setJournalsLoaded] = useState(false);
   const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
   const [manageJournalsOpen, setManageJournalsOpen] = useState(false);
@@ -370,6 +371,7 @@ export default function JournalPage() {
 useEffect(() => {
   if (typeof window === "undefined") return;
   if (loading) return;
+  if (!journalsLoaded) return;
 
   if (journals.length === 0) {
     setFirstRunName("");
@@ -378,7 +380,7 @@ useEffect(() => {
   }
 
   setFirstRunOpen(false);
-}, [loading, journals.length]);
+}, [journalsLoaded, loading, journals.length]);
 
 
   useEffect(() => {
@@ -493,6 +495,7 @@ useEffect(() => {
       setLoading(true);
       setError(null);
       setMovedOutBanner(null);
+      setJournalsLoaded(false);
 
       const qs = buildRangeQS(start, end);
       const [jr, jn] = await Promise.all([
@@ -510,6 +513,7 @@ useEffect(() => {
       const list = jnPayload.items ?? [];
       setJournals(list);
       setActiveJournalId(jnPayload.activeJournalId ?? null);
+      setJournalsLoaded(true);
 
       const name =
         list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ??
@@ -1204,6 +1208,12 @@ async function fetchAssets(q: string) {
     }
   }
 
+  async function openManageJournals() {
+    setManageJournalsError(null);
+    await load();
+    setManageJournalsOpen(true);
+  }
+
   function renderTargetsSection() {
     return (
       <>
@@ -1425,7 +1435,9 @@ async function fetchAssets(q: string) {
       <JournalToolbar
         activeJournalName={activeJournalName}
         movedOutBanner={movedOutBanner}
-        onOpenManageJournals={() => setManageJournalsOpen(true)}
+        onOpenManageJournals={() => {
+          void openManageJournals();
+        }}
         onOpenExport={() => setExportOpen(true)}
         onOpenCreate={openCreate}
       />
