@@ -99,6 +99,7 @@ export async function GET(req: Request) {
       exit_price: true,
       amount_spent: true,
       trade_datetime: true,
+      created_at: true,
       strategy_id: true,
       buy_fee: true,
       sell_fee: true,
@@ -141,7 +142,8 @@ export async function GET(req: Request) {
       exit_price: r.exit_price != null ? Number(r.exit_price) : null,
       amount_spent: Number(r.amount_spent),
       date: r.trade_datetime.toISOString(),
-      closed_at: null,
+      closed_at:
+        r.status === "in_progress" ? null : r.created_at.toISOString(),
       strategy_id: r.strategy_id,
       buy_fee: Number(r.buy_fee),
       sell_fee: Number(r.sell_fee),

@@ -554,12 +554,12 @@ function StatusPill({ status }: { status: JournalRow["status"] }) {
     in_progress: ["Open", "bg-[#fff7e6] text-[#b76e00]"],
     win: ["Win", "bg-[#eaf8f1] text-[#11895a]"],
     loss: ["Loss", "bg-[#fff0f2] text-[#d83a52]"],
-    break_even: ["Break even", "bg-[#f2f4f7] text-[#667085]"],
+    break_even: ["Break-even", "bg-[#eef4ff] text-[#4f46e5]"],
   } as const;
   const [label, className] = config[status];
 
   return (
-    <span className={`inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold ${className}`}>
+    <span className={`inline-flex min-h-7 min-w-[68px] items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[11px] font-bold ${className}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {label}
     </span>

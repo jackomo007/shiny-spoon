@@ -863,9 +863,9 @@ function JournalsPageContent() {
                 status: saved.status ?? it.status,
                 exit_price: saved.exit_price ?? it.exit_price,
                 closed_at:
-                  typeof saved.closed_at === "string" || saved.closed_at === null
+                  typeof saved.closed_at === "string"
                     ? saved.closed_at
-                    : it.closed_at,
+                    : closedAt ?? it.closed_at,
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
@@ -1065,9 +1065,9 @@ function JournalsPageContent() {
                 status: saved.status ?? it.status,
                 exit_price: saved.exit_price ?? it.exit_price,
                 closed_at:
-                  typeof saved.closed_at === "string" || saved.closed_at === null
+                  typeof saved.closed_at === "string"
                     ? saved.closed_at
-                    : it.closed_at,
+                    : baseClose.closed_at ?? it.closed_at,
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee

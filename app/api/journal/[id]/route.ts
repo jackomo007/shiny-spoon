@@ -261,7 +261,8 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     status: updated.status as Status,
     exit_price: updated.exit_price != null ? Number(updated.exit_price) : null,
     trading_fee: Number(updated.trading_fee ?? 0),
-    closed_at: null,
+    closed_at:
+      updated.status === "in_progress" ? null : new Date().toISOString(),
   })
 }
 
