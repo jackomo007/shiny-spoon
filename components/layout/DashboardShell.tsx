@@ -279,6 +279,7 @@ export default function DashboardShell({ children }: Props) {
                 active={isActivePath(pathname, "/admin")}
               />
             )}
+            {/*
             <NavItem
               href="/add-coin"
               label="Coin Tracker"
@@ -286,6 +287,7 @@ export default function DashboardShell({ children }: Props) {
               collapsed={sidebarCollapsed}
               active={isActivePath(pathname, "/add-coin")}
             />
+            */}
           </SidebarSection>
         </div>
 
@@ -712,18 +714,18 @@ function ShieldIcon() {
   );
 }
 
-function SearchIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="m20 20-4.2-4.2M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.9"
-      />
-    </svg>
-  );
-}
+// function SearchIcon() {
+//   return (
+//     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+//       <path
+//         d="m20 20-4.2-4.2M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+//         stroke="currentColor"
+//         strokeLinecap="round"
+//         strokeWidth="1.9"
+//       />
+//     </svg>
+//   );
+// }
 
 function LogoutIcon() {
   return (
