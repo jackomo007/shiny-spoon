@@ -430,3 +430,21 @@ export async function cgMarketsByIds(ids: string[]): Promise<CgMarketCoin[]> {
 
   return out
 }
+
+export async function cgMarketsByIdsSafe(
+  ids: string[],
+): Promise<
+  | { ok: true; markets: CgMarketCoin[] }
+  | { ok: false; markets: []; error: string }
+> {
+  try {
+    const markets = await cgMarketsByIds(ids)
+    return { ok: true, markets }
+  } catch (e: unknown) {
+    return {
+      ok: false,
+      markets: [],
+      error: e instanceof Error ? e.message : "Unknown error",
+    }
+  }
+}

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   cgCoinMetaByIdSafe,
-  cgMarketsByIds,
+  cgMarketsByIdsSafe,
   cgPriceUsdByIdSafe,
 } from "@/lib/markets/coingecko";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
@@ -164,14 +164,12 @@ export async function GET() {
         { name: m.name, coingeckoId: m.coingeckoId, iconUrl: m.iconUrl },
       ]),
     );
-    const marketRows = await cgMarketsByIds(
+    const marketResult = await cgMarketsByIdsSafe(
       enriched
         .map((m) => m.coingeckoId)
         .filter((id): id is string => !!id),
-    ).catch((error: unknown) => {
-      console.warn("[GET /api/portfolio] market cap lookup failed:", error);
-      return [];
-    });
+    );
+    const marketRows = marketResult.markets;
     const marketById = new Map(
       marketRows.map((market) => [market.id, market.market_cap ?? null]),
     );
