@@ -16,6 +16,8 @@ const BaseSchema = z
     asset_name: z.string().min(1),
     trade_type: z.union([z.number(), z.string()]),
     trade_datetime: z.string().min(1),
+    closed_at: z.string().min(1).optional().nullable(),
+    journal_id: z.string().min(1).optional(),
     side: z.enum(["buy", "sell", "long", "short"]),
     status: z.enum(["in_progress", "win", "loss", "break_even"]),
     entry_price: z.number().positive(),
@@ -71,17 +73,30 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
   const url = new URL(req.url);
-  const end = url.searchParams.get("end")
-    ? new Date(url.searchParams.get("end")!)
-    : new Date();
-  const start = url.searchParams.get("start")
-    ? new Date(url.searchParams.get("start")!)
+  const startParam = url.searchParams.get("start");
+  const endParam = url.searchParams.get("end");
+  const end = endParam ? new Date(endParam) : new Date();
+  const start = startParam
+    ? new Date(startParam)
     : new Date(new Date().setMonth(end.getMonth() - 6));
 
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  if (!startParam) start.setHours(0, 0, 0, 0);
+  if (!endParam) end.setHours(23, 59, 59, 999);
 
-  const journalId = await getActiveJournalId(userId);
+  const requestedJournalId = url.searchParams.get("journal_id");
+  const journalId = requestedJournalId ?? (await getActiveJournalId(userId));
+  if (requestedJournalId) {
+    const okJournal = await prisma.journal.findFirst({
+      where: { id: requestedJournalId, account_id: accountId },
+      select: { id: true },
+    });
+    if (!okJournal) {
+      return NextResponse.json(
+        { error: "Journal not found for active account" },
+        { status: 404 },
+      );
+    }
+  }
 
   const rows = await prisma.journal_entry.findMany({
     where: {
@@ -108,6 +123,7 @@ export async function GET(req: Request) {
       notes_entry: true,
       notes_review: true,
       stop_loss_price: true,
+      closed_at: true,
       tags: {
         include: {
           tag: true,
@@ -143,7 +159,7 @@ export async function GET(req: Request) {
       amount_spent: Number(r.amount_spent),
       date: r.trade_datetime.toISOString(),
       closed_at:
-        r.status === "in_progress" ? null : r.created_at.toISOString(),
+        r.status === "in_progress" ? null : r.closed_at?.toISOString() ?? null,
       strategy_id: r.strategy_id,
       buy_fee: Number(r.buy_fee),
       sell_fee: Number(r.sell_fee),
@@ -182,6 +198,18 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    const closedAt =
+      data.status === "in_progress"
+        ? null
+        : data.closed_at
+          ? new Date(data.closed_at)
+          : new Date();
+    if (closedAt && isNaN(closedAt.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid close date/time" },
+        { status: 400 },
+      );
+    }
     const tagNames = Array.from(
       new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean)),
     );
@@ -191,7 +219,7 @@ export async function POST(req: Request) {
     if (!accountId)
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
-    const journalId = await getActiveJournalId(userId);
+    const journalId = data.journal_id ?? (await getActiveJournalId(userId));
     const okJournal = await prisma.journal.findFirst({
       where: { id: journalId, account_id: accountId },
       select: { id: true },
@@ -232,6 +260,7 @@ export async function POST(req: Request) {
           trade_type: tradeType,
           asset_name: data.asset_name.toUpperCase(),
           trade_datetime: tradeDate,
+          closed_at: closedAt,
           side: data.side,
           status: statusToPersist,
           amount_spent: data.amount_spent,

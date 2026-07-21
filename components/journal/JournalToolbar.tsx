@@ -2,7 +2,8 @@ import React from "react";
 
 type JournalToolbarProps = {
   activeJournalName: string;
-  movedOutBanner: string | null;
+  movedOutBanner: string | { message: string; date: string } | null;
+  onShowMovedOutTrade?: (date: string) => void;
   onOpenManageJournals: () => void;
   onOpenExport: () => void;
   onOpenCreate: () => void;
@@ -11,6 +12,7 @@ type JournalToolbarProps = {
 export default function JournalToolbar({
   activeJournalName,
   movedOutBanner,
+  onShowMovedOutTrade,
   onOpenManageJournals,
   onOpenExport,
   onOpenCreate,
@@ -67,8 +69,21 @@ export default function JournalToolbar({
       </div>
 
       {movedOutBanner && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {movedOutBanner}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>
+            {typeof movedOutBanner === "string"
+              ? movedOutBanner
+              : movedOutBanner.message}
+          </span>
+          {typeof movedOutBanner !== "string" && onShowMovedOutTrade && (
+            <button
+              type="button"
+              onClick={() => onShowMovedOutTrade(movedOutBanner.date)}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+            >
+              Show trade
+            </button>
+          )}
         </div>
       )}
     </>

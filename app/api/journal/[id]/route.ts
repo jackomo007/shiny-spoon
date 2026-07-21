@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { z } from "zod"
-import { getActiveAccountId } from "@/lib/account"
-import { Prisma } from "@prisma/client"
-import { getDefaultStrategyId } from "@/lib/trade-helpers"
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { getActiveAccountId } from "@/lib/account";
+import { Prisma } from "@prisma/client";
+import { getDefaultStrategyId } from "@/lib/trade-helpers";
 
-type Status = "in_progress" | "win" | "loss" | "break_even"
+type Status = "in_progress" | "win" | "loss" | "break_even";
 
 const BaseSchema = z
   .object({
@@ -15,6 +15,7 @@ const BaseSchema = z
     asset_name: z.string().min(1),
     trade_type: z.union([z.number(), z.string()]),
     trade_datetime: z.string().min(1),
+    closed_at: z.string().min(1).optional().nullable(),
     side: z.enum(["buy", "sell", "long", "short"]),
     status: z.enum(["in_progress", "win", "loss", "break_even"]),
     entry_price: z.number().positive(),
@@ -36,121 +37,145 @@ const BaseSchema = z
         code: z.ZodIssueCode.custom,
         path: ["amount_spent"],
         message: "Required",
-      })
+      });
     }
-    const t = Number(v.trade_type)
+    const t = Number(v.trade_type);
     if (t === 1 && !["buy", "sell"].includes(v.side)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["side"],
         message: "Spot trades must be buy/sell",
-      })
+      });
     }
     if (t === 2 && !["long", "short"].includes(v.side)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["side"],
         message: "Futures trades must be long/short",
-      })
+      });
     }
 
-    const dt = new Date(v.trade_datetime)
-    const now = new Date()
+    const dt = new Date(v.trade_datetime);
+    const now = new Date();
     if (isNaN(dt.getTime()) || dt.getTime() > now.getTime() + 2 * 60 * 1000) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["trade_datetime"],
         message: "Trade time cannot be in the future",
-      })
+      });
     }
   })
   .transform((v) => ({
     ...v,
     trade_type: Number(v.trade_type),
     amount_spent: v.amount_spent ?? v.amount!,
-  }))
+  }));
 
-const UpdateSchema = BaseSchema
+const UpdateSchema = BaseSchema;
 
-function qtyFrom(params: {
-  amountSpent: number
-  entryPrice: number
-}): number {
-  const { amountSpent, entryPrice } = params
-  if (entryPrice <= 0) return 0
-  return amountSpent / entryPrice
+function qtyFrom(params: { amountSpent: number; entryPrice: number }): number {
+  const { amountSpent, entryPrice } = params;
+  if (entryPrice <= 0) return 0;
+  return amountSpent / entryPrice;
 }
 
 async function isValidSymbol(sym: string): Promise<boolean> {
-  const key = process.env.CMC_API_KEY
-  if (!key) return true
+  const key = process.env.CMC_API_KEY;
+  if (!key) return true;
   const u = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/map?listing_status=active&symbol=${encodeURIComponent(
     sym,
-  )}&limit=1`
-  const resp = await fetch(u, { headers: { "X-CMC_PRO_API_KEY": key }, cache: "no-store" })
-  if (!resp.ok) return true
-  const js = (await resp.json()) as { data?: Array<{ symbol: string }> }
-  return (js.data ?? []).some((d) => d.symbol.toUpperCase() === sym.toUpperCase())
+  )}&limit=1`;
+  const resp = await fetch(u, {
+    headers: { "X-CMC_PRO_API_KEY": key },
+    cache: "no-store",
+  });
+  if (!resp.ok) return true;
+  const js = (await resp.json()) as { data?: Array<{ symbol: string }> };
+  return (js.data ?? []).some(
+    (d) => d.symbol.toUpperCase() === sym.toUpperCase(),
+  );
 }
 
-export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params
+export async function PUT(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id } = await ctx.params;
 
-  const session = await getServerSession(authOptions)
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = Number(session.user.id)
-  const accountId = await getActiveAccountId(userId)
+  const userId = Number(session.user.id);
+  const accountId = await getActiveAccountId(userId);
   if (!accountId)
-    return NextResponse.json({ error: "Active account not found" }, { status: 404 })
+    return NextResponse.json(
+      { error: "Active account not found" },
+      { status: 404 },
+    );
 
-  const parsed = UpdateSchema.safeParse(await req.json())
+  const parsed = UpdateSchema.safeParse(await req.json());
   if (!parsed.success)
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-  const data = parsed.data
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
+  const data = parsed.data;
 
   if (!(await isValidSymbol(data.asset_name))) {
-    return NextResponse.json({ error: "Invalid asset symbol" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Invalid asset symbol" },
+      { status: 400 },
+    );
   }
 
   const existing = await prisma.journal_entry.findFirst({
     where: { id, account_id: accountId },
     select: { id: true, exit_price: true },
-  })
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  });
+  if (!existing)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const strategyId = data.strategy_id ?? (await getDefaultStrategyId(accountId))
+  const strategyId =
+    data.strategy_id ?? (await getDefaultStrategyId(accountId));
   const okStrategy = await prisma.strategy.findFirst({
     where: { id: strategyId, account_id: accountId },
     select: { id: true },
-  })
+  });
   if (!okStrategy)
-    return NextResponse.json({ error: "Strategy not found" }, { status: 404 })
+    return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
 
-  const tradeType = data.trade_type
+  const tradeType = data.trade_type;
   const amountQty = qtyFrom({
     amountSpent: data.amount_spent,
     entryPrice: data.entry_price,
-  })
+  });
 
   const exitToPersist =
     data.exit_price === undefined
       ? (existing.exit_price as number | null)
-      : data.exit_price ?? null
+      : (data.exit_price ?? null);
 
-  const statusToPersist: Status = data.status as Status
+  const statusToPersist: Status = data.status as Status;
+  const closedAtToPersist =
+    statusToPersist === "in_progress"
+      ? null
+      : data.closed_at
+        ? new Date(data.closed_at)
+        : new Date();
+  if (closedAtToPersist && isNaN(closedAtToPersist.getTime())) {
+    return NextResponse.json(
+      { error: "Invalid close date/time" },
+      { status: 400 },
+    );
+  }
 
   const sellFeeToPersist: Prisma.Decimal | undefined =
-    data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined
+    data.sell_fee != null ? new Prisma.Decimal(data.sell_fee) : undefined;
 
   const tagNames = Array.from(
-    new Set(
-      (data.tags ?? [])
-        .map((t) => t.trim())
-        .filter(Boolean),
-    ),
-  )
+    new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean)),
+  );
 
   const updated = await prisma.$transaction(async (tx) => {
     const u = await tx.journal_entry.update({
@@ -159,6 +184,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         trade_type: tradeType,
         asset_name: data.asset_name,
         trade_datetime: new Date(data.trade_datetime),
+        closed_at: closedAtToPersist,
         side: data.side,
         amount_spent: data.amount_spent,
         amount: amountQty,
@@ -167,7 +193,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         notes_entry: data.notes_entry ?? null,
         notes_review: data.notes_review ?? null,
         buy_fee: new Prisma.Decimal(data.buy_fee ?? 0),
-        ...(sellFeeToPersist !== undefined ? { sell_fee: sellFeeToPersist } : {}),
+        ...(sellFeeToPersist !== undefined
+          ? { sell_fee: sellFeeToPersist }
+          : {}),
         trading_fee: Number(data.trading_fee ?? 0),
         strategy_rule_match: data.strategy_rule_match ?? 0,
         entry_price: data.entry_price,
@@ -179,20 +207,22 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         status: true,
         exit_price: true,
         trading_fee: true,
+        closed_at: true,
       },
-    })
+    });
 
     if (tradeType === 1) {
-      await tx.futures_trade.deleteMany({ where: { journal_entry_id: id } })
+      await tx.futures_trade.deleteMany({ where: { journal_entry_id: id } });
       const hasSpot = await tx.spot_trade.findFirst({
         where: { journal_entry_id: id },
-      })
-      if (!hasSpot) await tx.spot_trade.create({ data: { journal_entry_id: id } })
+      });
+      if (!hasSpot)
+        await tx.spot_trade.create({ data: { journal_entry_id: id } });
     } else {
-      await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } })
+      await tx.spot_trade.deleteMany({ where: { journal_entry_id: id } });
       const existF = await tx.futures_trade.findFirst({
         where: { journal_entry_id: id },
-      })
+      });
       if (existF) {
         await tx.futures_trade.update({
           where: { id: existF.id },
@@ -200,7 +230,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             leverage: 1,
             margin_used: data.amount_spent,
           },
-        })
+        });
       } else {
         await tx.futures_trade.create({
           data: {
@@ -208,13 +238,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             leverage: 1,
             margin_used: data.amount_spent,
           },
-        })
+        });
       }
     }
 
     await tx.journal_entry_tag.deleteMany({
       where: { journal_entry_id: id },
-    })
+    });
 
     if (tagNames.length) {
       const existingTags = await tx.tag.findMany({
@@ -222,10 +252,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
           account_id: accountId,
           name: { in: tagNames },
         },
-      })
+      });
 
-      const existingByName = new Map(existingTags.map((t) => [t.name, t]))
-      const missingNames = tagNames.filter((name) => !existingByName.has(name))
+      const existingByName = new Map(existingTags.map((t) => [t.name, t]));
+      const missingNames = tagNames.filter((name) => !existingByName.has(name));
 
       if (missingNames.length) {
         await tx.tag.createMany({
@@ -234,7 +264,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             account_id: accountId,
           })),
           skipDuplicates: true,
-        })
+        });
       }
 
       const allTags = await tx.tag.findMany({
@@ -243,7 +273,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
           name: { in: tagNames },
         },
         select: { id: true },
-      })
+      });
 
       await tx.journal_entry_tag.createMany({
         data: allTags.map((t) => ({
@@ -251,10 +281,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
           tag_id: t.id,
         })),
         skipDuplicates: true,
-      })
+      });
     }
-    return u
-  })
+    return u;
+  });
 
   return NextResponse.json({
     id: updated.id,
@@ -262,32 +292,65 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     exit_price: updated.exit_price != null ? Number(updated.exit_price) : null,
     trading_fee: Number(updated.trading_fee ?? 0),
     closed_at:
-      updated.status === "in_progress" ? null : new Date().toISOString(),
-  })
+      updated.status === "in_progress"
+        ? null
+        : updated.closed_at?.toISOString() ?? null,
+  });
 }
 
-export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params
+export async function DELETE(
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await ctx.params;
 
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = Number(session.user.id)
-  const accountId = await getActiveAccountId(userId)
-  if (!accountId)
-    return NextResponse.json({ error: "Active account not found" }, { status: 404 })
+    const userId = Number(session.user.id);
+    const accountId = await getActiveAccountId(userId);
+    if (!accountId)
+      return NextResponse.json(
+        { error: "Active account not found" },
+        { status: 404 },
+      );
 
-  const existing = await prisma.journal_entry.findFirst({
-    where: { id, account_id: accountId },
-    select: { id: true },
-  })
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    const existing = await prisma.journal_entry.findFirst({
+      where: { id, account_id: accountId },
+      select: { id: true },
+    });
+    if (!existing)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.journal_entry_tag.deleteMany({
-    where: { journal_entry_id: id },
-  })
+    await prisma.$transaction(async (tx) => {
+      await tx.journal_entry_tag.deleteMany({
+        where: { journal_entry_id: id },
+      });
+      await tx.futures_trade.deleteMany({
+        where: { journal_entry_id: id },
+      });
+      await tx.spot_trade.deleteMany({
+        where: { journal_entry_id: id },
+      });
+      await tx.journal_entry.delete({ where: { id } });
+    });
 
-  await prisma.journal_entry.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[DELETE /api/journal/[id]]", e);
+
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2025"
+    ) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { error: "Failed to delete trade" },
+      { status: 500 },
+    );
+  }
 }

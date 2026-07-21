@@ -90,7 +90,7 @@ type JournalApiItem = Omit<JournalRow, "trading_fee"> & {
   tags?: string[];
 };
 
-type JournalIndexResponse = { items: JournalApiItem[] };
+type JournalIndexResponse = { items: JournalApiItem[]; journalId?: string };
 
 function toLocalInputValue(dt: string | Date) {
   const d = new Date(dt);
@@ -139,6 +139,19 @@ function parseDecimal(input: string | number | null | undefined): number {
   return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const body = await response.text();
+  if (!body.trim()) return fallback;
+
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error;
+    }
+  } catch {}
+
+  return body;
+}
 
 function decimalOrZero(input: string | number | null | undefined): number {
   const n = parseDecimal(input ?? "");
@@ -152,10 +165,24 @@ function toNum(input: string | number | null | undefined): number {
 const money2 = (n: number) => `$${n.toFixed(3)}`;
 const DEFAULT_NEW_TAG_COLOR = "#7C3AED";
 
+function getDefaultJournalRange() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - 6);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
 type BasePayload = {
   asset_name: string;
   trade_datetime: string;
   closed_at: string | null;
+  journal_id?: string;
   side: Side;
   status: Status;
   amount_spent: number;
@@ -172,29 +199,24 @@ type BasePayload = {
 type CreateSpotPayload = BasePayload & { trade_type: 1 };
 type CreateFuturesPayload = BasePayload & { trade_type: 2 };
 type CreatePayload = CreateSpotPayload | CreateFuturesPayload;
+type MovedOutBanner = { message: string; date: string };
 
 export default function JournalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<JournalRow[]>([]);
+  const loadSeqRef = useRef(0);
 
-  const [start, setStart] = useState<string>(() => {
-    const end = new Date();
-    const s = new Date(new Date().setMonth(end.getMonth() - 6));
-    s.setHours(0, 0, 0, 0);
-    return s.toISOString().slice(0, 10);
-  });
-  const [end, setEnd] = useState<string>(() => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d.toISOString().slice(0, 10);
-  });
+  const [start, setStart] = useState<string>(() => getDefaultJournalRange().start);
+  const [end, setEnd] = useState<string>(() => getDefaultJournalRange().end);
 
-  const [movedOutBanner, setMovedOutBanner] = useState<string | null>(null);
+  const [movedOutBanner, setMovedOutBanner] =
+    useState<MovedOutBanner | null>(null);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [directionFilter, setDirectionFilter] = useState<DirectionFilter>("all");
+  const [directionFilter, setDirectionFilter] =
+    useState<DirectionFilter>("all");
   const [assetFilter, setAssetFilter] = useState("all");
 
   const [open, setOpen] = useState(false);
@@ -257,9 +279,9 @@ export default function JournalPage() {
   const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [activeJournalName, setActiveJournalName] = useState<string>("");
   const [manageJournalsOpen, setManageJournalsOpen] = useState(false);
-  const [pendingJournalAction, setPendingJournalAction] = useState<string | null>(
-    null,
-  );
+  const [pendingJournalAction, setPendingJournalAction] = useState<
+    string | null
+  >(null);
   const [manageJournalsError, setManageJournalsError] = useState<string | null>(
     null,
   );
@@ -297,7 +319,7 @@ export default function JournalPage() {
       if (!r.ok) throw new Error(await r.text());
 
       const data = (await r.json()) as { items?: Tag[] } | Tag[];
-      const list = Array.isArray(data) ? data : data.items ?? [];
+      const list = Array.isArray(data) ? data : (data.items ?? []);
 
       setAvailableTags(list);
     } catch {
@@ -368,20 +390,19 @@ export default function JournalPage() {
     void loadTagsList();
   }, []);
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  if (loading) return;
-  if (!journalsLoaded) return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (loading) return;
+    if (!journalsLoaded) return;
 
-  if (journals.length === 0) {
-    setFirstRunName("");
-    setFirstRunOpen(true);
-    return;
-  }
+    if (journals.length === 0) {
+      setFirstRunName("");
+      setFirstRunOpen(true);
+      return;
+    }
 
-  setFirstRunOpen(false);
-}, [journalsLoaded, loading, journals.length]);
-
+    setFirstRunOpen(false);
+  }, [journalsLoaded, loading, journals.length]);
 
   useEffect(() => {
     const cur = watch("side") as Side | undefined;
@@ -490,42 +511,58 @@ useEffect(() => {
     };
   }
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (range?: { start: string; end: string }) => {
+    const requestId = ++loadSeqRef.current;
+    const rangeStart = range?.start ?? start;
+    const rangeEnd = range?.end ?? end;
+
     try {
       setLoading(true);
       setError(null);
       setMovedOutBanner(null);
       setJournalsLoaded(false);
 
-      const qs = buildRangeQS(start, end);
-      const [jr, jn] = await Promise.all([
-        fetch(`/api/journal?${qs}`, { cache: "no-store" }),
-        fetch(`/api/journals`, { cache: "no-store" }),
-      ]);
-
+      const jn = await fetch(`/api/journals`, { cache: "no-store" });
       if (!jn.ok) throw new Error(await jn.text());
       const jnPayload = (await jn.json()) as JournalsPayload;
+      if (requestId !== loadSeqRef.current) return [];
+
       const list = jnPayload.items ?? [];
+      const activeId = jnPayload.activeJournalId ?? null;
       setJournals(list);
-      setActiveJournalId(jnPayload.activeJournalId ?? null);
+      setActiveJournalId(activeId);
       setJournalsLoaded(true);
 
-      const name =
-        list.find((x) => x.id === (jnPayload.activeJournalId ?? ""))?.name ??
-        "";
+      const name = list.find((x) => x.id === (activeId ?? ""))?.name ?? "";
       setActiveJournalName(name);
 
+      const params = new URLSearchParams(buildRangeQS(rangeStart, rangeEnd));
+      if (activeId) params.set("journal_id", activeId);
+      const jr = await fetch(`/api/journal?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!jr.ok) throw new Error(await jr.text());
 
       const j: JournalIndexResponse = await jr.json();
-      setItems((j.items ?? []).map(normalizeJournal));
+      if (requestId !== loadSeqRef.current) return [];
 
-      return (j.items ?? []).map(normalizeJournal);
+      if (j.journalId && j.journalId !== activeId) {
+        setActiveJournalId(j.journalId);
+        setActiveJournalName(
+          list.find((x) => x.id === j.journalId)?.name ?? "",
+        );
+      }
+
+      const normalized = (j.items ?? []).map(normalizeJournal);
+      setItems(normalized);
+
+      return normalized;
     } catch (e) {
+      if (requestId !== loadSeqRef.current) return [];
       setError(e instanceof Error ? e.message : "Failed to load journal");
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === loadSeqRef.current) setLoading(false);
     }
   }, [start, end]);
 
@@ -547,7 +584,7 @@ useEffect(() => {
     if (assetName) {
       const candidates = items
         .filter(
-          (r) => r.trade_type === 1 && r.asset_name.toUpperCase() === assetName
+          (r) => r.trade_type === 1 && r.asset_name.toUpperCase() === assetName,
         )
         .sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
@@ -570,14 +607,6 @@ useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading, items, handledFromPortfolio, setValue]);
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("jrnl.range") || "{}");
-      if (saved.start) setStart(saved.start);
-      if (saved.end) setEnd(saved.end);
-    } catch {}
-  }, []);
-
   const rows = useMemo(() => {
     let arr = items;
     const q = query.trim().toLowerCase();
@@ -585,7 +614,7 @@ useEffect(() => {
       arr = arr.filter((i) =>
         `${i.asset_name} ${i.status} ${i.side} ${(i.tags ?? []).join(" ")} ${i.notes_entry ?? ""} ${i.notes_review ?? ""}`
           .toLowerCase()
-          .includes(q)
+          .includes(q),
       );
     if (assetFilter !== "all") {
       arr = arr.filter((i) => i.asset_name.toUpperCase() === assetFilter);
@@ -611,13 +640,14 @@ useEffect(() => {
 
     setStart(nextStart);
     setEnd(nextEnd);
+    setMovedOutBanner(null);
+  }
 
-    try {
-      localStorage.setItem(
-        "jrnl.range",
-        JSON.stringify({ start: nextStart, end: nextEnd }),
-      );
-    } catch {}
+  async function showTradeDate(date: string) {
+    setStart(date);
+    setEnd(date);
+    setMovedOutBanner(null);
+    await load({ start: date, end: date });
   }
 
   function openCreate() {
@@ -703,7 +733,11 @@ useEffect(() => {
     try {
       setDeleting(true);
       const r = await fetch(`/api/journal/${deleteId}`, { method: "DELETE" });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) {
+        throw new Error(
+          await readErrorMessage(r, `Failed to delete trade (${r.status})`),
+        );
+      }
       setConfirmOpen(false);
       setDeleteId(null);
       await load();
@@ -717,11 +751,7 @@ useEffect(() => {
 
   async function validateAndNext() {
     if (wizardStep === 1) {
-      const ok = await trigger([
-        "asset_name",
-        "trade_type",
-        "trade_datetime",
-      ]);
+      const ok = await trigger(["asset_name", "trade_type", "trade_datetime"]);
       if (ok) setWizardStep(2);
       return;
     }
@@ -813,6 +843,7 @@ useEffect(() => {
       asset_name: form.asset_name,
       trade_datetime: toISO(form.trade_datetime),
       closed_at: closedAt,
+      journal_id: activeJournalId ?? undefined,
       side: coercedSide,
       status,
       amount_spent: amt,
@@ -844,15 +875,9 @@ useEffect(() => {
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
-      const body = await r.text();
-      let msg = body;
-      try {
-        const parsed = JSON.parse(body) as { error?: unknown };
-        if (typeof parsed.error === "string" && parsed.error.trim()) {
-          msg = parsed.error;
-        }
-      } catch {}
-      throw new Error(msg || `Failed to save trade (${r.status})`);
+      throw new Error(
+        await readErrorMessage(r, `Failed to save trade (${r.status})`),
+      );
     }
 
     if (method === "PUT" && editingId) {
@@ -870,19 +895,19 @@ useEffect(() => {
           it.id === editingId
             ? {
                 ...it,
-        status: saved.status ?? it.status,
-        exit_price: saved.exit_price ?? it.exit_price,
-        closed_at:
-          typeof saved.closed_at === "string"
-            ? saved.closed_at
-            : closedAt ?? it.closed_at,
-        trading_fee:
+                status: saved.status ?? it.status,
+                exit_price: saved.exit_price ?? it.exit_price,
+                closed_at:
+                  typeof saved.closed_at === "string"
+                    ? saved.closed_at
+                    : (closedAt ?? it.closed_at),
+                trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
                     : it.trading_fee,
               }
-            : it
-        )
+            : it,
+        ),
       );
     } else {
       await r.json().catch(() => undefined);
@@ -891,14 +916,15 @@ useEffect(() => {
     const savedYMD = (form.trade_datetime || "").slice(0, 10);
 
     if (savedYMD < start || savedYMD > end) {
-      setStart(savedYMD);
-      setEnd(savedYMD);
       await load();
+      setMovedOutBanner({
+        date: savedYMD,
+        message: `Trade saved for ${savedYMD}, outside the current date range.`,
+      });
     } else {
       await load();
+      setMovedOutBanner(null);
     }
-
-    setMovedOutBanner(null);
   }
 
   const onSubmit = async (form: JournalForm) => {
@@ -910,60 +936,71 @@ useEffect(() => {
     }
   };
 
-const STABLE_SUFFIXES = ["USDT", "USDC", "BUSD", "TUSD", "DAI", "USD"] as const;
+  const STABLE_SUFFIXES = [
+    "USDT",
+    "USDC",
+    "BUSD",
+    "TUSD",
+    "DAI",
+    "USD",
+  ] as const;
 
-function isPureAssetSymbol(symbolRaw: string) {
-  const s = (symbolRaw ?? "").trim().toUpperCase();
+  function isPureAssetSymbol(symbolRaw: string) {
+    const s = (symbolRaw ?? "").trim().toUpperCase();
 
-  if (!s) return false;
-  if (s.includes("/") || s.includes("-") || s.includes("_")) return false;
+    if (!s) return false;
+    if (s.includes("/") || s.includes("-") || s.includes("_")) return false;
 
-  for (const suf of STABLE_SUFFIXES) {
-    if (s.length > suf.length && s.endsWith(suf)) return false;
+    for (const suf of STABLE_SUFFIXES) {
+      if (s.length > suf.length && s.endsWith(suf)) return false;
+    }
+
+    if (!/^[A-Z0-9]{2,15}$/.test(s)) return false;
+
+    return true;
   }
 
-  if (!/^[A-Z0-9]{2,15}$/.test(s)) return false;
+  async function fetchAssets(q: string) {
+    try {
+      setAssetError(null);
 
-  return true;
-}
+      const cleaned = q.trim();
+      if (cleaned.length < 1) {
+        setAssetOptions([]);
+        setShowAssetMenu(false);
+        validSymbolsRef.current = new Set();
+        return;
+      }
 
-async function fetchAssets(q: string) {
-  try {
-    setAssetError(null);
+      const r = await fetch(
+        `/api/assets/coins?q=${encodeURIComponent(cleaned)}`,
+      );
+      if (!r.ok) throw new Error("Lookup failed");
 
-    const cleaned = q.trim();
-    if (cleaned.length < 1) {
+      const data = (await r.json()) as { items: AssetOption[] };
+      const all = data.items ?? [];
+
+      const filtered = all.filter((i) => isPureAssetSymbol(i.symbol));
+
+      setAssetOptions(filtered);
+      validSymbolsRef.current = new Set(
+        filtered.map((i) => i.symbol.toUpperCase()),
+      );
+      setShowAssetMenu(filtered.length > 0);
+    } catch {
+      setAssetError("Could not load assets");
       setAssetOptions([]);
       setShowAssetMenu(false);
       validSymbolsRef.current = new Set();
-      return;
     }
-
-    const r = await fetch(`/api/assets/coins?q=${encodeURIComponent(cleaned)}`);
-    if (!r.ok) throw new Error("Lookup failed");
-
-    const data = (await r.json()) as { items: AssetOption[] };
-    const all = data.items ?? [];
-
-    const filtered = all.filter((i) => isPureAssetSymbol(i.symbol));
-
-    setAssetOptions(filtered);
-    validSymbolsRef.current = new Set(filtered.map((i) => i.symbol.toUpperCase()));
-    setShowAssetMenu(filtered.length > 0);
-  } catch {
-    setAssetError("Could not load assets");
-    setAssetOptions([]);
-    setShowAssetMenu(false);
-    validSymbolsRef.current = new Set();
   }
-}
 
   const totalTrades = rows.length;
   const finished = rows.filter((r) => r.status !== "in_progress");
   const winRate = finished.length
     ? Math.round(
         (finished.filter((i) => i.status === "win").length * 100) /
-          finished.length
+          finished.length,
       )
     : 0;
 
@@ -1012,7 +1049,8 @@ async function fetchAssets(q: string) {
     try {
       setClosing(true);
       const longLike = rowToClose.side === "buy" || rowToClose.side === "long";
-      const change = (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
+      const change =
+        (exitNum - rowToClose.entry_price) / rowToClose.entry_price;
       const notional = rowToClose.amount_spent;
 
       const gross = (longLike ? 1 : -1) * notional * change;
@@ -1065,14 +1103,14 @@ async function fetchAssets(q: string) {
                 closed_at:
                   typeof saved.closed_at === "string"
                     ? saved.closed_at
-                    : baseClose.closed_at ?? it.closed_at,
+                    : (baseClose.closed_at ?? it.closed_at),
                 trading_fee:
                   typeof saved.trading_fee === "number"
                     ? saved.trading_fee
                     : it.trading_fee,
               }
-            : it
-        )
+            : it,
+        ),
       );
       setCloseOpen(false);
       await load();
@@ -1258,8 +1296,9 @@ async function fetchAssets(q: string) {
   function renderTagsSection() {
     const normalizedQuery = tagQuery.trim().toLowerCase();
     const selectedTags = new Set(wTags.map((tag: string) => tag.toLowerCase()));
-    const unselectedTags = availableTags
-      .filter((tag) => !selectedTags.has(tag.name.toLowerCase()))
+    const unselectedTags = availableTags.filter(
+      (tag) => !selectedTags.has(tag.name.toLowerCase()),
+    );
     const filteredTags = normalizedQuery
       ? unselectedTags
           .filter((tag) => tag.name.toLowerCase().includes(normalizedQuery))
@@ -1278,7 +1317,9 @@ async function fetchAssets(q: string) {
     const selectionFull = wTags.length >= 10;
 
     function addTag(name: string) {
-      if (wTags.some((tag: string) => tag.toLowerCase() === name.toLowerCase())) {
+      if (
+        wTags.some((tag: string) => tag.toLowerCase() === name.toLowerCase())
+      ) {
         setTagQuery("");
         return;
       }
@@ -1435,6 +1476,9 @@ async function fetchAssets(q: string) {
       <JournalToolbar
         activeJournalName={activeJournalName}
         movedOutBanner={movedOutBanner}
+        onShowMovedOutTrade={(date) => {
+          void showTradeDate(date);
+        }}
         onOpenManageJournals={() => {
           void openManageJournals();
         }}
@@ -1553,7 +1597,6 @@ async function fetchAssets(q: string) {
                       if (assetOptions.length > 0) setShowAssetMenu(true);
                     }}
                     placeholder="e.g. BTC"
-
                     className="w-full rounded-xl border border-gray-200 px-3 py-2"
                   />
                   {showAssetMenu && (
@@ -1642,7 +1685,6 @@ async function fetchAssets(q: string) {
 
                 <hr className="my-2 border-gray-200" />
                 {renderTagsSection()}
-
               </>
             )}
 
@@ -1907,9 +1949,7 @@ async function fetchAssets(q: string) {
 
                 {wStatus && wStatus !== "in_progress" && (
                   <div>
-                    <div className="text-sm mb-1">
-                      Date & Time Closed
-                    </div>
+                    <div className="text-sm mb-1">Date & Time Closed</div>
                     <input
                       type="datetime-local"
                       {...register("closed_datetime")}
