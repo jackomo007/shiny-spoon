@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -16,6 +16,8 @@ type PortfolioSidebarData = {
   };
 };
 
+const PORTFOLIO_BALANCE_EVENT = "stakk:portfolio-balance-loaded";
+
 function initials(from: string): string {
   const base = (from || "").trim();
   if (!base) return "U";
@@ -27,7 +29,7 @@ function initials(from: string): string {
 }
 
 function formatSidebarUsd(value: number | null) {
-  if (value == null || !Number.isFinite(value)) return "$0";
+  if (value == null || !Number.isFinite(value)) return null;
   return value.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -58,6 +60,8 @@ export default function DashboardShell({ children }: Props) {
   const [portfolioValueUsd, setPortfolioValueUsd] = useState<number | null>(
     null,
   );
+  const [portfolioValueLoading, setPortfolioValueLoading] = useState(true);
+  const portfolioPageValueSyncedRef = useRef(false);
 
   const tradingGroupActive =
     isActivePath(pathname, "/journal") || isActivePath(pathname, "/manage-tags");
@@ -80,18 +84,51 @@ export default function DashboardShell({ children }: Props) {
 
         const payload = (await res.json()) as PortfolioSidebarData;
         const value = payload.summary?.currentBalanceUsd;
-        if (typeof value === "number" && Number.isFinite(value)) {
+        if (
+          !portfolioPageValueSyncedRef.current &&
+          typeof value === "number" &&
+          Number.isFinite(value)
+        ) {
           setPortfolioValueUsd(value);
         }
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           setPortfolioValueUsd(null);
         }
+      } finally {
+        if (!controller.signal.aborted) {
+          setPortfolioValueLoading(false);
+        }
       }
     }
 
     void fetchPortfolioValue();
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    function onPortfolioBalanceLoaded(event: Event) {
+      const value = (event as CustomEvent<{ currentBalanceUsd?: number }>)
+        .detail?.currentBalanceUsd;
+
+      portfolioPageValueSyncedRef.current = true;
+      setPortfolioValueLoading(false);
+      if (typeof value === "number" && Number.isFinite(value)) {
+        setPortfolioValueUsd(value);
+      }
+    }
+
+    window.addEventListener(
+      PORTFOLIO_BALANCE_EVENT,
+      onPortfolioBalanceLoaded,
+    );
+
+    return () => {
+      window.removeEventListener(
+        PORTFOLIO_BALANCE_EVENT,
+        onPortfolioBalanceLoaded,
+      );
+    };
   }, []);
 
   useEffect(() => {
@@ -208,7 +245,9 @@ export default function DashboardShell({ children }: Props) {
                 Portfolio Value
               </div>
               <div className="mt-1 text-lg font-black leading-none tracking-[-0.035em]">
-                {formatSidebarUsd(portfolioValueUsd)}
+                {portfolioValueLoading
+                  ? "Loading..."
+                  : (formatSidebarUsd(portfolioValueUsd) ?? "$0")}
               </div>
             </div>
           </div>
@@ -230,7 +269,7 @@ export default function DashboardShell({ children }: Props) {
             />
           </SidebarSection>
 
-          <div className="mt-[18px]">
+          <div>
             <NavGroup
               label="Short Term Trading"
               icon={<TrendIcon />}

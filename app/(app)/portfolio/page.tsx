@@ -56,6 +56,16 @@ type ExitStrategiesApiRes = {
 
 type PortfolioTab = "assets" | "transactions" | "exitStrategies";
 
+const PORTFOLIO_BALANCE_EVENT = "stakk:portfolio-balance-loaded";
+
+function publishPortfolioBalance(summary: Summary) {
+  window.dispatchEvent(
+    new CustomEvent(PORTFOLIO_BALANCE_EVENT, {
+      detail: { currentBalanceUsd: summary.currentBalanceUsd },
+    }),
+  );
+}
+
 function BalanceCardEmpty({ summary: s }: { summary: Summary }) {
   const change24Up = s.portfolio24h.pct >= 0;
 
@@ -209,6 +219,7 @@ export default function PortfolioPage() {
       if (!portfolioRes.ok) throw new Error(`HTTP ${portfolioRes.status}`);
       const portfolioJson = (await portfolioRes.json()) as PortfolioApiRes;
       setData(portfolioJson);
+      publishPortfolioBalance(portfolioJson.summary);
 
       try {
         const strategiesRes = await fetch("/api/exit-strategies", {
