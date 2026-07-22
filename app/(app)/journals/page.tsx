@@ -246,6 +246,7 @@ function JournalsPageContent() {
 
   const wTradeType = Number(watch("trade_type") ?? 1) as TradeType;
   const wStatus = watch("status") as Status | undefined;
+  const wClosedDatetime = watch("closed_datetime");
   const wTags = watch("tags") ?? [];
   const wAmountSpent = watch("amount_spent");
   const wAmount = watch("amount");
@@ -388,6 +389,16 @@ function JournalsPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wTradeType]);
+
+  useEffect(() => {
+    if (!open || !wStatus || wStatus === "in_progress") return;
+    if (wClosedDatetime?.trim()) return;
+
+    setValue("closed_datetime", toLocalInputValue(new Date()), {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
+  }, [open, wStatus, wClosedDatetime, setValue]);
 
   useEffect(() => {
     const entry = parseDecimal(wEntryPrice ?? "");
