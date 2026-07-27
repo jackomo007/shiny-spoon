@@ -1279,7 +1279,7 @@ export default function JournalPage() {
         {setTargets && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <div className="text-sm mb-1">Take Profit Price</div>
+              <div className="text-sm mb-1">Exit Price</div>
               <MoneyField<JournalForm>
                 name="exit_price"
                 control={control}

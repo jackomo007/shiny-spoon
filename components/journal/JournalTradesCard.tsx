@@ -414,7 +414,7 @@ function TradeRow({
           </strong>
           {estimate && (
             <span className={`mt-1 block font-bold ${estimate.pnl >= 0 ? "text-[#11895a]" : "text-[#d83a52]"}`}>
-              Estimated PnL: {estimate.pnl >= 0 ? "+" : "-"}${Math.abs(estimate.pnl).toFixed(2)} ({estimate.percent >= 0 ? "+" : "-"}{Math.abs(estimate.percent).toFixed(2)}%)
+              Est PnL: {estimate.pnl >= 0 ? "+" : "-"}${Math.abs(estimate.pnl).toFixed(2)} ({estimate.percent >= 0 ? "+" : "-"}{Math.abs(estimate.percent).toFixed(2)}%)
             </span>
           )}
         </div>

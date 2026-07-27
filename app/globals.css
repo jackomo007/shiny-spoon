@@ -16,6 +16,25 @@ body {
   background: var(--color-bg);
 }
 
+@keyframes page-loading-bar {
+  0% {
+    left: -35%;
+    width: 35%;
+  }
+  55% {
+    left: 35%;
+    width: 45%;
+  }
+  100% {
+    left: 100%;
+    width: 35%;
+  }
+}
+
+.page-loading-bar {
+  animation: page-loading-bar 1.1s ease-in-out infinite;
+}
+
 .journal-date-input::-webkit-calendar-picker-indicator {
   cursor: pointer;
   height: 100%;
