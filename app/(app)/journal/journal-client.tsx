@@ -273,6 +273,9 @@ export default function JournalPage() {
   const wAmountSpent = watch("amount_spent");
   const wAmount = watch("amount");
   const wEntryPrice = watch("entry_price");
+  const wExitPrice = watch("exit_price");
+  const wTradingFee = watch("trading_fee");
+  const wSide = watch("side") as Side | undefined;
   const amountSyncRef = useRef<"amount_spent" | "amount" | null>(null);
 
   const [journals, setJournals] = useState<JournalSummary[]>([]);
@@ -1263,6 +1266,87 @@ export default function JournalPage() {
     setManageJournalsOpen(true);
   }
 
+  function getTargetPnlPreview() {
+    if (!setTargets || !wExitPrice || !wExitPrice.trim()) return null;
+
+    const entry = parseDecimal(wEntryPrice);
+    const exit = parseDecimal(wExitPrice);
+    const notional = parseDecimal(wAmountSpent);
+    if (!(entry > 0) || !(exit > 0) || !(notional > 0) || !wSide) {
+      return { pnl: null, percent: null, positive: true };
+    }
+
+    const fee = decimalOrZero(wTradingFee);
+    const longLike = wSide === "buy" || wSide === "long";
+    const change = (exit - entry) / entry;
+    const gross = (longLike ? 1 : -1) * notional * change;
+    const pnl = Number((gross - fee).toFixed(3));
+    const percent = Number(((pnl / notional) * 100).toFixed(2));
+    return { pnl, percent, positive: pnl >= 0 };
+  }
+
+  function renderTargetPnlPreview() {
+    const preview = getTargetPnlPreview();
+    if (!preview) return null;
+
+    const tone = preview.positive
+      ? {
+          card: "border-emerald-200 bg-emerald-50/80",
+          value: "text-emerald-700",
+          icon: "bg-emerald-100 text-emerald-700",
+        }
+      : {
+          card: "border-red-200 bg-red-50/80",
+          value: "text-red-600",
+          icon: "bg-red-100 text-red-600",
+        };
+
+    return (
+      <section
+        className={`flex items-center justify-between gap-4 rounded-2xl border p-5 ${tone.card}`}
+        aria-live="polite"
+      >
+        <div>
+          <div className="mb-1 text-sm font-bold text-gray-600">PnL (Net)</div>
+          <div className={`font-mono text-3xl font-extrabold tabular-nums ${tone.value}`}>
+            {preview.pnl == null
+              ? "-"
+              : `${preview.pnl >= 0 ? "+" : "-"}${money2(Math.abs(preview.pnl))}`}
+          </div>
+          <div className={`mt-2 text-sm font-bold ${tone.value}`}>
+            {preview.percent == null
+              ? "-"
+              : `${preview.percent >= 0 ? "+" : "-"}${Math.abs(preview.percent).toFixed(2)}%`}
+          </div>
+        </div>
+
+        <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${tone.icon}`}>
+          <svg
+            aria-hidden="true"
+            className={`h-6 w-6 ${preview.positive ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M4 6l7 7 4-4 5 5"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2.25"
+            />
+            <path
+              d="M15 14h5V9"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2.25"
+            />
+          </svg>
+        </div>
+      </section>
+    );
+  }
+
   function renderTargetsSection() {
     return (
       <>
@@ -1277,28 +1361,31 @@ export default function JournalPage() {
         </label>
 
         {setTargets && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm mb-1">Exit Price</div>
-              <MoneyField<JournalForm>
-                name="exit_price"
-                control={control}
-                decimalPlaces={8}
-                placeholder="e.g. 28000.00"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm mb-1">Exit Price</div>
+                <MoneyField<JournalForm>
+                  name="exit_price"
+                  control={control}
+                  decimalPlaces={8}
+                  placeholder="e.g. 28000.00"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
+              <div>
+                <div className="text-sm mb-1">Stop Loss Price</div>
+                <MoneyField<JournalForm>
+                  name="stop_loss_price"
+                  control={control}
+                  decimalPlaces={8}
+                  placeholder="e.g. 25000.00"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
             </div>
-            <div>
-              <div className="text-sm mb-1">Stop Loss Price</div>
-              <MoneyField<JournalForm>
-                name="stop_loss_price"
-                control={control}
-                decimalPlaces={8}
-                placeholder="e.g. 25000.00"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2"
-              />
-            </div>
-          </div>
+            {renderTargetPnlPreview()}
+          </>
         )}
       </>
     );
