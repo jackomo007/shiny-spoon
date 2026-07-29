@@ -1303,27 +1303,27 @@ export default function JournalPage() {
 
     return (
       <section
-        className={`flex items-center justify-between gap-4 rounded-2xl border p-5 ${tone.card}`}
+        className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${tone.card}`}
         aria-live="polite"
       >
         <div>
-          <div className="mb-1 text-sm font-bold text-gray-600">PnL (Net)</div>
-          <div className={`font-mono text-3xl font-extrabold tabular-nums ${tone.value}`}>
+          <div className="mb-0.5 text-xs font-bold text-gray-600">PnL (Net)</div>
+          <div className={`font-mono text-xl font-extrabold tabular-nums ${tone.value}`}>
             {preview.pnl == null
               ? "-"
               : `${preview.pnl >= 0 ? "+" : "-"}${money2(Math.abs(preview.pnl))}`}
           </div>
-          <div className={`mt-2 text-sm font-bold ${tone.value}`}>
+          <div className={`mt-1 text-xs font-bold ${tone.value}`}>
             {preview.percent == null
               ? "-"
               : `${preview.percent >= 0 ? "+" : "-"}${Math.abs(preview.percent).toFixed(2)}%`}
           </div>
         </div>
 
-        <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${tone.icon}`}>
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone.icon}`}>
           <svg
             aria-hidden="true"
-            className={`h-6 w-6 ${preview.positive ? "rotate-180" : ""}`}
+            className={`h-4 w-4 ${preview.positive ? "rotate-180" : ""}`}
             fill="none"
             viewBox="0 0 24 24"
           >
