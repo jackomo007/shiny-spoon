@@ -16,6 +16,23 @@ body {
   background: var(--color-bg);
 }
 
+button:not(:disabled),
+select:not(:disabled),
+summary,
+[role="button"],
+input[type="button"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="submit"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
+
 @keyframes page-loading-bar {
   0% {
     left: -35%;
