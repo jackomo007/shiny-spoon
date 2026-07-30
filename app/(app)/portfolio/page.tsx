@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import AddTransactionModal from "@/components/portfolio/AddTransactionModal";
 import AssetsTable, { AssetRow } from "@/components/portfolio/AssetsTable";
 import TransactionsTable, {
@@ -11,8 +12,16 @@ import HoldingsAllocationCard, {
 } from "@/components/portfolio/HoldingsAllocationCard";
 import PortfolioHealthCard from "@/components/portfolio/PortfolioHealthCard";
 import AssetDetailView from "@/components/portfolio/AssetDetailView";
+import ChainView from "@/components/portfolio/ChainView";
 import Card from "@/components/ui/Card";
 import { usd, pct, cls } from "@/components/portfolio/format";
+import {
+  ChainIcon,
+  GridIcon,
+  PlusIcon,
+  ReceiptIcon,
+  StrategyIcon,
+} from "@/components/portfolio/icons";
 
 type Summary = {
   currentBalanceUsd: number;
@@ -54,7 +63,11 @@ type ExitStrategiesApiRes = {
   data: ExitStrategySummary[];
 };
 
-type PortfolioTab = "assets" | "transactions" | "exitStrategies";
+type PortfolioTab =
+  | "assets"
+  | "chains"
+  | "transactions"
+  | "exitStrategies";
 
 const PORTFOLIO_BALANCE_EVENT = "stakk:portfolio-balance-loaded";
 
@@ -194,6 +207,39 @@ function PortfolioLoadingState() {
   );
 }
 
+function PortfolioTabButton({
+  active,
+  disabled,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cls(
+        "inline-flex min-h-[54px] cursor-pointer items-center justify-center gap-3 whitespace-nowrap rounded-[13px] border px-6 text-sm font-extrabold transition",
+        active
+          ? "border border-[#CBB5FF] bg-[#F7F2FF] text-[#6D3EE8] shadow-[0_7px_18px_rgba(111,64,229,0.10)]"
+          : "border-transparent bg-[#F4F6FA] text-[#3F4B63] shadow-[0_8px_22px_rgba(15,23,42,0.025)] hover:bg-[#F5F2FF] hover:text-[#6D3EE8]",
+        disabled && "cursor-not-allowed opacity-45 hover:bg-[#F3F5F9]",
+      )}
+      title={disabled ? "Chain Insights is not available yet" : label}
+    >
+      <span className="h-5 w-5">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export default function PortfolioPage() {
   const [data, setData] = useState<PortfolioApiRes | null>(null);
   const [exitStrategies, setExitStrategies] = useState<ExitStrategySummary[]>(
@@ -318,7 +364,7 @@ export default function PortfolioPage() {
                 </div>
 
                 <button
-                  className="px-[18px] py-[10px] rounded-[10px] bg-blue-600 text-white font-semibold hover:bg-blue-700 mt-2"
+                  className="cursor-pointer px-[18px] py-[10px] rounded-[10px] bg-blue-600 text-white font-semibold hover:bg-blue-700 mt-2"
                   onClick={() => setModalOpen(true)}
                 >
                   + Add Asset
@@ -337,62 +383,52 @@ export default function PortfolioPage() {
           <div className="min-w-0 flex flex-col gap-6">
             <HoldingsAllocationCard assets={allocationAssets} />
 
-            <Card className="min-w-0 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.06)] p-0 overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-b border-slate-200 sm:px-6">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <button
+            <Card className="min-w-0 overflow-hidden rounded-[22px] border-[#E3E8F2] p-0 shadow-[0_16px_44px_rgba(85,72,125,0.08)]">
+              <div className="flex min-h-[92px] flex-col gap-4 border-b border-[#E7EBF2] px-4 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 gap-4 overflow-x-auto pb-1">
+                  <PortfolioTabButton
+                    active={activeTab === "assets"}
+                    icon={<GridIcon className="h-5 w-5" />}
+                    label="Your Assets"
                     onClick={() => setActiveTab("assets")}
-                    className={cls(
-                      "px-4 py-2 rounded-full text-sm font-semibold",
-                      activeTab === "assets"
-                        ? "bg-[#f2eaff] text-[#5801cc] border border-[rgba(88,1,204,0.25)]"
-                        : "bg-slate-100 text-slate-600",
-                    )}
-                  >
-                    Your Assets
-                  </button>
-
-                  <button
+                  />
+                  <PortfolioTabButton
+                    active={activeTab === "chains"}
+                    icon={<ChainIcon className="h-5 w-5" />}
+                    label="Chain View"
+                    onClick={() => setActiveTab("chains")}
+                  />
+                  <PortfolioTabButton
+                    active={activeTab === "transactions"}
+                    icon={<ReceiptIcon className="h-5 w-5" />}
+                    label="Recent Transactions"
                     onClick={() => setActiveTab("transactions")}
-                    className={cls(
-                      "px-4 py-2 rounded-full text-sm font-semibold",
-                      activeTab === "transactions"
-                        ? "bg-[#f2eaff] text-[#5801cc] border border-[rgba(88,1,204,0.25)]"
-                      : "bg-slate-100 text-slate-600",
-                    )}
-                  >
-                    Recent Transactions
-                  </button>
-
-                  <button
+                  />
+                  <PortfolioTabButton
+                    active={activeTab === "exitStrategies"}
+                    icon={<StrategyIcon className="h-5 w-5" />}
+                    label="Exit Strategies"
                     onClick={() => setActiveTab("exitStrategies")}
-                    className={cls(
-                      "px-4 py-2 rounded-full text-sm font-semibold",
-                      activeTab === "exitStrategies"
-                        ? "bg-[#f2eaff] text-[#5801cc] border border-[rgba(88,1,204,0.25)]"
-                        : "bg-slate-100 text-slate-600",
-                    )}
-                  >
-                    Exit Strategies
-                  </button>
+                  />
                 </div>
 
-                {activeTab === "assets" && (
-                  <button
-                    className="px-[18px] py-[10px] rounded-[10px] bg-blue-600 text-white font-semibold hover:bg-blue-700"
-                    onClick={() => setModalOpen(true)}
-                  >
-                    + Add Asset
-                  </button>
-                )}
+                <button
+                  className="inline-flex min-h-[55px] cursor-pointer items-center justify-center gap-3 rounded-[13px] bg-[linear-gradient(135deg,#8057EF,#3F4CF4)] px-7 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(79,70,229,0.28)] hover:brightness-105"
+                  onClick={() => setModalOpen(true)}
+                >
+                  <PlusIcon className="h-5 w-5" />
+                  Add Asset
+                </button>
               </div>
 
-              <div className="min-w-0 p-4 sm:p-6">
+              <div className="min-w-0 p-4 sm:p-7">
                 {activeTab === "assets" ? (
                   <AssetsTable
                     assets={data.assets}
                     onAssetClick={(symbol) => setSelectedAsset(symbol)}
                   />
+                ) : activeTab === "chains" ? (
+                  <ChainView assets={data.assets} />
                 ) : activeTab === "transactions" ? (
                   <TransactionsTable
                     rows={data.transactions.slice(0, 10)}

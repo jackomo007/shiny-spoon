@@ -192,7 +192,7 @@ export default function PortfolioHealthCard({
           type="button"
           aria-label="Risk profile help"
           title="Your risk profile is derived from how your holdings are allocated across asset categories."
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-xs font-extrabold text-[#07142F]"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-[#DFE5EF] bg-white text-xs font-extrabold text-[#07142F]"
         >
           ?
         </button>

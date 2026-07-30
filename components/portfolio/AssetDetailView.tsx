@@ -522,7 +522,7 @@ export default function AssetDetailView({
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-slate-700 hover:text-slate-900 font-semibold text-lg"
+            className="flex cursor-pointer items-center gap-2 text-slate-700 hover:text-slate-900 font-semibold text-lg"
           >
             <span className="text-2xl text-slate-400">‹</span> Back
           </button>
@@ -649,7 +649,7 @@ export default function AssetDetailView({
           <Card className="p-6 flex flex-col">
             <div className="mb-4 flex gap-2.5">
               <button
-                className="h-10 rounded-[10px] border border-slate-950 bg-slate-950 px-4 text-xs font-bold text-white"
+                className="h-10 cursor-pointer rounded-[10px] border border-slate-950 bg-slate-950 px-4 text-xs font-bold text-white"
                 type="button"
               >
                 Scale Out Plan
@@ -670,7 +670,7 @@ export default function AssetDetailView({
                 </div>
               </div>
               <button
-                className="rounded-full bg-[#5801cc] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#4d01b3]"
+                className="cursor-pointer rounded-full bg-[#5801cc] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#4d01b3]"
                 onClick={openStrategyModal}
                 type="button"
               >
@@ -718,7 +718,7 @@ export default function AssetDetailView({
                 className="w-[220px] max-w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
               />
               <button
-                className="px-[14px] py-[9px] rounded-[10px] bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                className="cursor-pointer px-[14px] py-[9px] rounded-[10px] bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                 onClick={() => {
                   setSelectedTx(null);
                   setTransactionMode("add");
@@ -855,7 +855,7 @@ export default function AssetDetailView({
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                className="cursor-pointer rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => setStrategyModalOpen(false)}
                 type="button"
                 disabled={savingStrategy}
@@ -863,7 +863,7 @@ export default function AssetDetailView({
                 Cancel
               </button>
               <button
-                className="rounded-xl bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
+                className="cursor-pointer rounded-xl bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => void saveStrategy()}
                 type="button"
                 disabled={savingStrategy}

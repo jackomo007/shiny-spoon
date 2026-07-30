@@ -327,7 +327,7 @@ export default function AddTransactionModal(props: {
           <div className="flex items-center justify-between gap-3">
             {canDelete ? (
               <button
-                className="rounded-xl bg-red-500 text-white px-4 py-2 text-sm hover:bg-red-600 disabled:opacity-50"
+                className="cursor-pointer rounded-xl bg-red-500 text-white px-4 py-2 text-sm hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => revealConfirmDeleteIfOpen(true)}
                 disabled={!canDelete}
                 type="button"
@@ -340,7 +340,7 @@ export default function AddTransactionModal(props: {
 
             <div className="flex items-center justify-end gap-3">
               <button
-                className="rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 disabled:opacity-50"
+                className="cursor-pointer rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => props.onClose()}
                 disabled={busy}
                 type="button"
@@ -350,7 +350,7 @@ export default function AddTransactionModal(props: {
 
               {step === "pick" ? null : (
                 <button
-                  className="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:opacity-50"
+                  className="cursor-pointer rounded-xl bg-gray-900 text-white px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={!canSave}
                   onClick={async () => {
                     if (!selected) return;
@@ -467,7 +467,7 @@ export default function AddTransactionModal(props: {
                   {top.map((a) => (
                     <button
                       key={a.id}
-                      className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
+                      className="cursor-pointer rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
                       onClick={async () => {
                         setSelected(a);
                         setStep("form");
@@ -508,7 +508,7 @@ export default function AddTransactionModal(props: {
                   {results.map((a) => (
                     <button
                       key={a.id}
-                      className="rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
+                      className="cursor-pointer rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
                       onClick={async () => {
                         setSelected(a);
                         setStep("form");
@@ -538,7 +538,7 @@ export default function AddTransactionModal(props: {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 className={cls(
-                  "px-3 py-2 rounded-xl text-sm border",
+                  "cursor-pointer px-3 py-2 rounded-xl text-sm border",
                   side === "buy"
                     ? "bg-emerald-600 text-white border-emerald-600"
                     : "bg-white border-gray-200",
@@ -550,7 +550,7 @@ export default function AddTransactionModal(props: {
               </button>
               <button
                 className={cls(
-                  "px-3 py-2 rounded-xl text-sm border",
+                  "cursor-pointer px-3 py-2 rounded-xl text-sm border",
                   side === "sell"
                     ? "bg-red-600 text-white border-red-600"
                     : "bg-white border-gray-200",
@@ -633,10 +633,10 @@ export default function AddTransactionModal(props: {
             </div>
 
             {mode === "add" && side === "buy" ? (
-              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm">
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300"
                   checked={isStablecoin}
                   onChange={(e) => setIsStablecoin(e.target.checked)}
                 />
@@ -659,7 +659,7 @@ export default function AddTransactionModal(props: {
 
             {!hasLockedInitialAsset && (
               <button
-                className="text-xs text-slate-500 underline justify-self-start"
+                className="cursor-pointer text-xs text-slate-500 underline justify-self-start"
                 onClick={async () => {
                   setStep("pick");
                   setSelected(null);
@@ -688,7 +688,7 @@ export default function AddTransactionModal(props: {
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                className="cursor-pointer rounded-xl border bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => setConfirmDeleteOpen(false)}
                 type="button"
                 disabled={busy}
@@ -696,7 +696,7 @@ export default function AddTransactionModal(props: {
                 Cancel
               </button>
               <button
-                className="rounded-xl bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700 disabled:opacity-50"
+                className="cursor-pointer rounded-xl bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => void handleDeleteNow()}
                 type="button"
                 disabled={busy}

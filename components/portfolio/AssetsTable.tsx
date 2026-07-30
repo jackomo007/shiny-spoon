@@ -117,7 +117,7 @@ export default function AssetsTable(props: {
         <button
           type="button"
           className={cls(
-            "inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-extrabold",
+            "inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm font-extrabold",
             active ? "text-[#5801cc]" : "text-[#69758a] hover:text-slate-700",
           )}
           onClick={() => setSortKey(sortKey)}
