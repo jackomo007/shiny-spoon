@@ -17,6 +17,7 @@ type DbRow = {
   price_usd: unknown;
   trade_datetime: Date;
   fee_usd: unknown;
+  chain_id: string | null;
 };
 
 export async function GET(
@@ -64,12 +65,14 @@ export async function GET(
         price_usd: true,
         trade_datetime: true,
         fee_usd: true,
+        chain_id: true,
       },
     })) as DbRow[];
 
     const transactions: Array<{
       id: string;
       side: "buy" | "sell";
+      chainId: string | null;
       executedAt: string;
       qty: number;
       priceUsd: number;
@@ -94,6 +97,7 @@ export async function GET(
       transactions.push({
         id: tx.id ?? "",
         side: tx.side,
+        chainId: rows.find((row) => row.id === tx.id)?.chain_id ?? null,
         executedAt: tx.executedAt?.toISOString() ?? new Date(0).toISOString(),
         qty: tx.qty,
         priceUsd: tx.priceUsd,

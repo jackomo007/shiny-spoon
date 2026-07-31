@@ -327,6 +327,7 @@ model portfolio_trade {
   price_usd      Decimal  @db.Decimal(18, 8)
   fee_usd        Decimal  @db.Decimal(18, 8)
   cash_delta_usd Decimal  @db.Decimal(18, 8)
+  chain_id       String?  @db.VarChar(80)
   note           String?  @db.Text
   created_at     DateTime @default(now()) @db.DateTime(0)
 

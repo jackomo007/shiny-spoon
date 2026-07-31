@@ -10,6 +10,7 @@ import {
   ensureDefaultExitStrategyForAsset,
 } from "@/services/exit-strategy.service";
 import { getOpenSpotHolding } from "@/services/portfolio-holdings.service";
+import { normalizePortfolioChainId } from "@/lib/portfolio-chains";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ const Body = z.object({
   qty: z.number().positive(),
   priceUsd: z.number().positive(),
   feeUsd: z.number().min(0).optional(),
+  chainId: z.string().min(1).optional().nullable(),
   executedAt: z.string().datetime().optional(),
 });
 
@@ -59,6 +61,7 @@ export async function PUT(req: Request, { params }: RouteContext) {
       qty: input.qty,
       priceUsd: input.priceUsd,
       feeUsd: input.feeUsd ?? 0,
+      chainId: normalizePortfolioChainId(input.chainId),
       executedAt: input.executedAt ? new Date(input.executedAt) : undefined,
     });
 

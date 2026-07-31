@@ -35,6 +35,11 @@ export type CgSearchItem = {
   thumb: string | null
 }
 
+export type CgCoinPlatforms = {
+  id: string
+  platforms: Record<string, string>
+}
+
 type CacheEntry<T> = { value: T; expiresAt: number }
 const memCache = new Map<string, CacheEntry<unknown>>()
 
@@ -185,6 +190,7 @@ type CgCoinsByIdResponse = {
   symbol?: unknown
   name?: unknown
   image?: unknown
+  platforms?: unknown
 }
 
 export async function cgCoinMetaById(id: string): Promise<CgCoinMeta> {
@@ -236,6 +242,55 @@ export async function cgCoinMetaByIdSafe(
     return { ok: true, id: m.id, symbol: m.symbol, name: m.name, imageUrl }
   } catch (e: unknown) {
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error" }
+  }
+}
+
+export async function cgCoinPlatformsById(id: string): Promise<CgCoinPlatforms> {
+  const coinId = normalizeIdCandidate(id)
+
+  const cacheKey = `cg:platforms:${coinId}`
+  const cached = getCache<CgCoinPlatforms>(cacheKey)
+  if (cached) return cached
+
+  const url =
+    `${baseUrl()}/coins/${encodeURIComponent(coinId)}` +
+    `?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`
+
+  const res = await cgFetch(url)
+  if (!res.ok) throw new Error(`CoinGecko /coins/{id} platforms HTTP ${res.status}`)
+
+  const j = (await res.json()) as CgCoinsByIdResponse
+  if (!isPlainObject(j)) throw new Error("Invalid CoinGecko platforms response")
+
+  const rid = toStringSafe(j.id) ?? coinId
+  const platforms: Record<string, string> = {}
+  if (isPlainObject(j.platforms)) {
+    for (const [platformId, contract] of Object.entries(j.platforms)) {
+      if (!platformId) continue
+      platforms[platformId] = typeof contract === "string" ? contract : ""
+    }
+  }
+
+  const out = { id: rid, platforms }
+  setCache(cacheKey, out, 24 * 60 * 60 * 1000)
+  return out
+}
+
+export async function cgCoinPlatformsByIdSafe(
+  id: string,
+): Promise<
+  | { ok: true; id: string; platformIds: string[] }
+  | { ok: false; error: string; platformIds: [] }
+> {
+  try {
+    const p = await cgCoinPlatformsById(id)
+    return { ok: true, id: p.id, platformIds: Object.keys(p.platforms) }
+  } catch (e: unknown) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+      platformIds: [],
+    }
   }
 }
 

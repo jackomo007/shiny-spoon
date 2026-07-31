@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 import Card from "@/components/ui/Card";
-import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { usd } from "@/components/portfolio/format";
+import { PieChart, Pie, ResponsiveContainer, Cell } from "recharts";
 import { buildChainAllocation } from "@/components/portfolio/chain-utils";
 
 export type AllocationAssetRow = {
   symbol: string;
+  chainId?: string | null;
   name: string | null;
   holdingsValueUsd: number;
   totalInvestedUsd: number;
@@ -33,10 +33,6 @@ const ASSET_COLORS = [
   "#7C3AED",
   "#10B981",
 ];
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
 
 export default function HoldingsAllocationCard(props: {
   assets: AllocationAssetRow[];
@@ -141,17 +137,17 @@ function AllocationDonutCard({
   hasData: boolean;
 }) {
   return (
-    <Card className="min-w-0 rounded-2xl border-[#E3E8F2] p-6 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+    <Card className="min-w-0 rounded-2xl border-[#E3E8F2] p-5 shadow-[0_10px_26px_rgba(15,23,42,0.05)]">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-[21px] font-extrabold leading-tight text-[#0F1B34]">
+          <h2 className="text-[19px] font-extrabold leading-tight text-[#0F1B34]">
             {title}
           </h2>
-          <p className="mt-2 max-w-[420px] text-sm font-medium leading-6 text-[#7D8AA5]">
+          <p className="mt-2 max-w-[420px] text-[13px] font-medium leading-5 text-[#8A96AD]">
             {description}
           </p>
         </div>
-        <div className="shrink-0 rounded-full border border-[#E4D8FF] bg-[#F7F2FF] px-4 py-2 text-sm font-extrabold text-[#7C3AED]">
+        <div className="shrink-0 rounded-full border border-[#E4D8FF] bg-[#F7F2FF] px-3.5 py-1.5 text-xs font-extrabold text-[#7C3AED]">
           {badge}
         </div>
       </div>
@@ -161,16 +157,19 @@ function AllocationDonutCard({
           {emptyLabel}
         </div>
       ) : (
-        <div className="flex min-h-[315px] flex-col justify-between gap-4 pt-5">
-          <div className="relative mx-auto h-[230px] w-full max-w-[360px]">
+        <div className="flex min-h-[270px] flex-col justify-between gap-4 pt-4">
+          <div className="relative mx-auto h-[195px] w-full max-w-[310px] [&_.recharts-sector:focus]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper:focus]:outline-none [&_svg:focus]:outline-none">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart
+                className="outline-none [&_*:focus]:outline-none"
+                style={{ outline: "none" }}
+              >
                 <Pie
                   data={pie}
                   dataKey="valueUsd"
                   nameKey="name"
-                  innerRadius={62}
-                  outerRadius={112}
+                  innerRadius={52}
+                  outerRadius={94}
                   stroke="#fff"
                   strokeWidth={1}
                   isAnimationActive={false}
@@ -179,29 +178,15 @@ function AllocationDonutCard({
                     <Cell key={`${title}-${p.symbol}`} fill={p.color} />
                   ))}
                 </Pie>
-                <Tooltip
-                  formatter={(_value, _name, item) => {
-                    const row = item?.payload as PieRow | undefined;
-                    const rowPct = row?.percent ?? 0;
-                    const safePct = Number.isFinite(rowPct)
-                      ? clamp(rowPct, 0, 100)
-                      : 0;
-                    const usdValue = row?.valueUsd ?? 0;
-                    return [
-                      `${safePct.toFixed(2)}% - ${usd(usdValue)}`,
-                      row?.name ?? "Allocation",
-                    ];
-                  }}
-                />
               </PieChart>
             </ResponsiveContainer>
 
             <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
               <div>
-                <div className="text-[34px] font-extrabold leading-none text-[#0F1B34]">
+                <div className="text-[28px] font-extrabold leading-none text-[#0F1B34]">
                   {centerValue}
                 </div>
-                <div className="mt-2 text-sm font-semibold text-[#7D8AA5]">
+                <div className="mt-1.5 text-xs font-semibold text-[#8A96AD]">
                   {centerLabel}
                 </div>
               </div>
@@ -212,7 +197,7 @@ function AllocationDonutCard({
             {pie.map((p) => (
               <div
                 key={`${title}-legend-${p.symbol}`}
-                className="flex items-center gap-2 whitespace-nowrap text-sm font-extrabold text-[#516078]"
+                className="flex items-center gap-2 whitespace-nowrap text-xs font-extrabold text-[#516078]"
               >
                 <span
                   className="h-3 w-3 rounded-[4px]"

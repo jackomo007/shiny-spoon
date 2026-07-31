@@ -10,6 +10,11 @@ import {
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
 import { getStablecoinSymbols } from "@/services/portfolio-asset-settings.service";
+import {
+  getDefaultPortfolioChainId,
+  getPortfolioChainInfo,
+  normalizePortfolioChainId,
+} from "@/lib/portfolio-chains";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +90,7 @@ type DbRow = {
   price_usd: unknown;
   trade_datetime: Date;
   fee_usd: unknown;
+  chain_id: string | null;
 };
 
 export async function GET() {
@@ -112,6 +118,7 @@ export async function GET() {
         price_usd: true,
         trade_datetime: true,
         fee_usd: true,
+        chain_id: true,
       },
     })) as DbRow[];
 
@@ -177,7 +184,10 @@ export async function GET() {
     const st = new Map<
       string,
       {
+        assetKey: string;
         symbol: string;
+        chainId: string;
+        chainName: string;
         name: string | null;
         coingeckoId: string | null;
         iconUrl: string | null;
@@ -194,6 +204,8 @@ export async function GET() {
       id: string;
       side: "buy" | "sell";
       symbol: string;
+      chainId: string;
+      chainName: string;
       name: string | null;
       iconUrl: string | null;
       coingeckoId: string | null;
@@ -206,16 +218,21 @@ export async function GET() {
       gainLossPct: number | null;
     }> = [];
 
-    function getState(symbol: string) {
+    function getState(symbol: string, chainId: string) {
       const s = symbol.toUpperCase();
+      const chain = getPortfolioChainInfo(chainId, s);
+      const assetKey = `${s}:${chain.id}`;
       const meta = metaBySymbol.get(s) ?? {
         name: null,
         coingeckoId: null,
         iconUrl: null,
       };
 
-      const cur = st.get(s) ?? {
+      const cur = st.get(assetKey) ?? {
+        assetKey,
         symbol: s,
+        chainId: chain.id,
+        chainName: chain.name,
         name: meta.name,
         coingeckoId: meta.coingeckoId,
         iconUrl: meta.iconUrl,
@@ -229,8 +246,8 @@ export async function GET() {
         realizedProfitUsd: 0,
       };
 
-      st.set(s, { ...cur });
-      return st.get(s)!;
+      st.set(assetKey, { ...cur });
+      return st.get(assetKey)!;
     }
 
     for (const r of rows) {
@@ -241,6 +258,8 @@ export async function GET() {
 
       const kind = String(r.kind || "").toLowerCase();
       const side: "buy" | "sell" = kind === "sell" ? "sell" : "buy";
+      const chainId =
+        normalizePortfolioChainId(r.chain_id) ?? getDefaultPortfolioChainId(symbol);
 
       const qty = Number(r.qty ?? 0);
       const price = Number(r.price_usd ?? 0);
@@ -249,7 +268,7 @@ export async function GET() {
       if (!Number.isFinite(qty) || qty <= 0) continue;
       if (!Number.isFinite(price) || price <= 0) continue;
 
-      const s = getState(symbol);
+      const s = getState(symbol, chainId);
       const totalUsd = qty * price;
 
       if (side === "buy") {
@@ -261,6 +280,8 @@ export async function GET() {
           id: r.id,
           side: "buy",
           symbol,
+          chainId: s.chainId,
+          chainName: s.chainName,
           name: s.name,
           iconUrl: s.iconUrl,
           coingeckoId: s.coingeckoId,
@@ -301,6 +322,8 @@ export async function GET() {
           id: r.id,
           side: "sell",
           symbol,
+          chainId: s.chainId,
+          chainName: s.chainName,
           name: s.name,
           iconUrl: s.iconUrl,
           coingeckoId: s.coingeckoId,
@@ -334,6 +357,9 @@ export async function GET() {
 
         return {
           symbol: g.symbol,
+          assetKey: g.assetKey,
+          chainId: g.chainId,
+          chainName: g.chainName,
           name: g.name,
           coingeckoId: g.coingeckoId,
           iconUrl: g.iconUrl,

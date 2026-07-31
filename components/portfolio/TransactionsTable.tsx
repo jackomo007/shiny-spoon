@@ -10,6 +10,9 @@ export type TxRow = {
   id: string;
   side: "buy" | "sell";
   symbol: string;
+  chainId?: string | null;
+  chainName?: string | null;
+  coingeckoId?: string | null;
   name: string | null;
   iconUrl: string | null;
   executedAt: string;

@@ -302,6 +302,7 @@ export default function PortfolioPage() {
   const allocationAssets: AllocationAssetRow[] = useMemo(() => {
     return (data?.assets ?? []).map((a) => ({
       symbol: a.symbol,
+      chainId: a.chainId ?? null,
       name: a.name ?? null,
       holdingsValueUsd: a.holdingsValueUsd,
       totalInvestedUsd: a.totalInvestedUsd,

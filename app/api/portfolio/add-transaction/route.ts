@@ -15,6 +15,7 @@ import {
 } from "@/services/exit-strategy.service"
 import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
 import { setPortfolioAssetStablecoin } from "@/services/portfolio-asset-settings.service"
+import { getDefaultPortfolioChainId, normalizePortfolioChainId } from "@/lib/portfolio-chains"
 
 export const dynamic = "force-dynamic"
 
@@ -30,6 +31,7 @@ const Body = z.object({
   qty: z.number().positive().optional(),
   totalUsd: z.number().positive().optional(),
   feeUsd: z.number().min(0).optional(),
+  chainId: z.string().min(1).optional().nullable(),
   isStablecoin: z.boolean().optional(),
   executedAt: z.string().datetime().optional(),
 })
@@ -42,6 +44,8 @@ export async function POST(req: Request) {
     const input = Body.parse(await req.json())
 
     const symbol = input.asset.symbol.trim().toUpperCase()
+    const chainId =
+      normalizePortfolioChainId(input.chainId) ?? getDefaultPortfolioChainId(symbol)
     const executedAt = input.executedAt ? new Date(input.executedAt) : new Date()
     const existingHolding = await getOpenSpotHolding(session.accountId, symbol)
 
@@ -144,8 +148,9 @@ export async function POST(req: Request) {
       qty,
       priceUsd,
       feeUsd,
+      chainId,
       executedAt,
-      notes: `[PORTFOLIO_SPOT_TX] cg:${coingeckoId ?? "unresolved"} chg24h:${change24hPct ?? "n/a"}`,
+      notes: `[PORTFOLIO_SPOT_TX] cg:${coingeckoId ?? "unresolved"} chain:${chainId} chg24h:${change24hPct ?? "n/a"}`,
     })
 
     if (!existingHolding) {

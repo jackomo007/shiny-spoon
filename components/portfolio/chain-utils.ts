@@ -1,14 +1,12 @@
 "use client";
 
 import type { AssetRow } from "@/components/portfolio/AssetsTable";
+import {
+  getPortfolioChainInfo,
+  type PortfolioChainOption,
+} from "@/lib/portfolio-chains";
 
-export type ChainInfo = {
-  id: string;
-  name: string;
-  symbol: string;
-  color: string;
-  accentClass: string;
-};
+export type ChainInfo = PortfolioChainOption;
 
 export type ChainAssetRow = AssetRow & {
   chain: ChainInfo;
@@ -24,88 +22,6 @@ export type ChainAllocationRow = {
   change24hPct: number | null;
 };
 
-const CHAINS: Record<string, ChainInfo> = {
-  bitcoin: {
-    id: "bitcoin",
-    name: "Bitcoin",
-    symbol: "BTC",
-    color: "#F59E0B",
-    accentClass: "from-amber-400 to-orange-500",
-  },
-  ethereum: {
-    id: "ethereum",
-    name: "Ethereum",
-    symbol: "ETH",
-    color: "#5A67D8",
-    accentClass: "from-indigo-500 to-violet-500",
-  },
-  solana: {
-    id: "solana",
-    name: "Solana",
-    symbol: "SOL",
-    color: "#17B897",
-    accentClass: "from-emerald-400 to-teal-500",
-  },
-  hyperliquid: {
-    id: "hyperliquid",
-    name: "Hyperliquid",
-    symbol: "HYPE",
-    color: "#109F91",
-    accentClass: "from-teal-400 to-cyan-600",
-  },
-  sui: {
-    id: "sui",
-    name: "Sui",
-    symbol: "SUI",
-    color: "#54A8F5",
-    accentClass: "from-sky-400 to-blue-500",
-  },
-  xrp: {
-    id: "xrp",
-    name: "XRP Ledger",
-    symbol: "XRP",
-    color: "#4B5563",
-    accentClass: "from-slate-500 to-slate-700",
-  },
-  cardano: {
-    id: "cardano",
-    name: "Cardano",
-    symbol: "ADA",
-    color: "#2F7BC7",
-    accentClass: "from-blue-500 to-indigo-600",
-  },
-  other: {
-    id: "other",
-    name: "Other Chain",
-    symbol: "OTHER",
-    color: "#8B5CF6",
-    accentClass: "from-purple-400 to-fuchsia-500",
-  },
-};
-
-const SYMBOL_TO_CHAIN: Record<string, keyof typeof CHAINS> = {
-  BTC: "bitcoin",
-  WBTC: "bitcoin",
-  ETH: "ethereum",
-  WETH: "ethereum",
-  USDT: "ethereum",
-  USDC: "ethereum",
-  DAI: "ethereum",
-  LINK: "ethereum",
-  UNI: "ethereum",
-  AAVE: "ethereum",
-  PEPE: "ethereum",
-  SHIB: "ethereum",
-  SOL: "solana",
-  BONK: "solana",
-  JUP: "solana",
-  RAY: "solana",
-  HYPE: "hyperliquid",
-  SUI: "sui",
-  XRP: "xrp",
-  ADA: "cardano",
-};
-
 function safeValue(asset: AssetRow) {
   const holdingsValue =
     Number.isFinite(asset.holdingsValueUsd) && asset.holdingsValueUsd > 0
@@ -116,9 +32,10 @@ function safeValue(asset: AssetRow) {
     : 0;
 }
 
-export function getAssetChainInfo(asset: Pick<AssetRow, "symbol">): ChainInfo {
-  const symbol = (asset.symbol ?? "").trim().toUpperCase();
-  return CHAINS[SYMBOL_TO_CHAIN[symbol] ?? "other"];
+export function getAssetChainInfo(
+  asset: Pick<AssetRow, "symbol" | "chainId">,
+): ChainInfo {
+  return getPortfolioChainInfo(asset.chainId, asset.symbol);
 }
 
 export function buildChainAllocation(assets: AssetRow[]): ChainAllocationRow[] {
@@ -172,4 +89,3 @@ export function buildChainAllocation(assets: AssetRow[]): ChainAllocationRow[] {
     })
     .sort((a, b) => b.valueUsd - a.valueUsd);
 }
-

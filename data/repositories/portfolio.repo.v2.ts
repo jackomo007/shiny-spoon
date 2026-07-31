@@ -24,6 +24,7 @@ function assertFiniteTradeNumbers(values: {
 export type SpotTxRow = {
   id: string
   symbol: string
+  chainId: string | null
   side: Side
   qty: number
   priceUsd: number
@@ -46,6 +47,7 @@ export const PortfolioRepoV2 = {
         qty: true,
         price_usd: true,
         fee_usd: true,
+        chain_id: true,
         trade_datetime: true,
       },
       orderBy: { trade_datetime: "desc" },
@@ -59,6 +61,7 @@ export const PortfolioRepoV2 = {
       return {
         id: r.id,
         symbol: String(r.asset_name).toUpperCase(),
+        chainId: r.chain_id ?? null,
         side,
         qty: Number(r.qty ?? 0),
         priceUsd: Number(r.price_usd ?? 0),
@@ -75,6 +78,7 @@ export const PortfolioRepoV2 = {
     qty: number
     priceUsd: number
     feeUsd?: number
+    chainId?: string | null
     executedAt: Date
     notes?: string | null
   }) {
@@ -99,6 +103,7 @@ export const PortfolioRepoV2 = {
         price_usd: priceUsd,
         fee_usd: feeUsd,
         cash_delta_usd: cashDeltaUsd,
+        chain_id: params.chainId ?? null,
         note: params.notes ?? null,
       },
       select: { id: true },
@@ -113,6 +118,7 @@ export const PortfolioRepoV2 = {
     qty: number
     priceUsd: number
     feeUsd?: number
+    chainId?: string | null
     executedAt: Date
     notes?: string | null
   }) {
@@ -132,6 +138,7 @@ export const PortfolioRepoV2 = {
         price_usd: priceUsd,
         fee_usd: feeUsd,
         cash_delta_usd: -(priceUsd * qty + feeUsd),
+        chain_id: params.chainId ?? null,
         note: params.notes ?? null,
       },
       select: { id: true },
@@ -147,6 +154,7 @@ export const PortfolioRepoV2 = {
     qty: number
     priceUsd: number
     feeUsd?: number
+    chainId?: string | null
     executedAt?: Date
   }): Promise<boolean> {
     const qty = Number(params.qty)
@@ -172,6 +180,7 @@ export const PortfolioRepoV2 = {
         price_usd: priceUsd,
         fee_usd: feeUsd,
         cash_delta_usd: cashDeltaUsd,
+        chain_id: params.chainId ?? null,
         ...(params.executedAt ? { trade_datetime: params.executedAt } : {}),
       },
     })

@@ -9,6 +9,7 @@ import type { AssetRow } from "@/components/portfolio/AssetsTable";
 import {
   buildChainAllocation,
   type ChainAllocationRow,
+  type ChainInfo,
 } from "@/components/portfolio/chain-utils";
 
 type SortKey = "value" | "allocation" | "chain" | "assets";
@@ -165,7 +166,7 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
               : "Add assets to calculate chain exposure"
           }
           iconClass="bg-[#F0EDFF] text-[#5848DF]"
-          icon={<EthereumIcon />}
+          icon={topChain ? <ChainMark chain={topChain.chain} /> : <ChainMark />}
           sparkline
         />
         <SummaryCard
@@ -178,8 +179,8 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
               : "bg-[#FFF0F1] text-[#EF2C37]",
           )}
           icon={<PnlIcon down={chain24hUsd < 0} />}
-          centeredLabel
           valueClass={chain24hUsd >= 0 ? "text-[#0BA36D]" : "text-[#EF2C37]"}
+          subtextClass={chain24hUsd >= 0 ? "text-[#0BA36D]" : "text-[#EF2C37]"}
         />
         <SummaryCard
           label="Top Performing Chain"
@@ -187,8 +188,8 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
           subtext={`Current ROI ${pct(topPerformerRoi)}`}
           iconClass="bg-[#E5FAF4] text-[#05AA7C]"
           icon={<DropIcon />}
-          centeredLabel
           valueClass="text-[#05A978]"
+          subtextClass="text-[#05A978]"
         />
       </div>
 
@@ -265,7 +266,7 @@ function SummaryCard({
   icon,
   iconClass,
   valueClass,
-  centeredLabel,
+  subtextClass,
   sparkline,
 }: {
   label: string;
@@ -274,17 +275,12 @@ function SummaryCard({
   icon: ReactNode;
   iconClass: string;
   valueClass?: string;
-  centeredLabel?: boolean;
+  subtextClass?: string;
   sparkline?: boolean;
 }) {
   return (
     <div className="relative min-h-[104px] overflow-hidden rounded-[12px] border border-[#E1E5EE] bg-white p-4 shadow-[0_2px_8px_rgba(37,47,75,0.018)]">
-      <div
-        className={cls(
-          "text-[11px] font-extrabold uppercase tracking-[0.075em] text-[#536078]",
-          centeredLabel && "text-center",
-        )}
-      >
+      <div className="text-left text-[11px] font-extrabold uppercase tracking-[0.075em] text-[#536078]">
         {label}
       </div>
       <div className="mt-3 flex min-h-[58px] items-center gap-3.5">
@@ -306,10 +302,7 @@ function SummaryCard({
             {value}
           </div>
           <div
-            className={cls(
-              "mt-1.5 text-xs font-medium text-[#667085]",
-              valueClass,
-            )}
+            className={cls("mt-1.5 text-xs font-medium text-[#7D8AA5]", subtextClass)}
           >
             {subtext}
           </div>
@@ -329,7 +322,6 @@ function ChainPanel({
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const topAsset = chain.assets[0] ?? null;
   const changeUsd = chainChangeUsd(chain);
   const changeUp = (chain.change24hPct ?? 0) >= 0;
 
@@ -341,17 +333,12 @@ function ChainPanel({
         onClick={onToggle}
       >
         <div className="flex min-w-0 items-center gap-4">
-          <CoinBadge
-            symbol={topAsset?.symbol ?? chain.chain.symbol}
-            iconUrl={topAsset?.iconUrl ?? null}
-            size="md"
-            className="h-[62px] w-[62px] text-base shadow-[0_8px_18px_rgba(72,65,190,0.10)]"
-          />
+          <ChainBadge chain={chain.chain} />
           <div className="min-w-0">
             <strong className="block truncate text-base font-extrabold text-[#17213A]">
               {chain.chain.name}
             </strong>
-            <small className="mt-1 block text-xs font-medium text-[#7D8AA5]">
+            <small className="mt-1 block text-xs font-medium text-[#8A96AD]">
               {chain.assets.length} held{" "}
               {chain.assets.length === 1 ? "asset" : "assets"}
             </small>
@@ -505,6 +492,33 @@ function AssetCell({
   );
 }
 
+function ChainBadge({ chain }: { chain: ChainInfo }) {
+  return (
+    <span
+      className="grid h-[62px] w-[62px] shrink-0 place-items-center rounded-full shadow-[0_8px_18px_rgba(72,65,190,0.10)]"
+      style={{ backgroundColor: `${chain.color}18`, color: chain.color }}
+      aria-label={chain.name}
+      title={chain.name}
+    >
+      <ChainMark chain={chain} />
+    </span>
+  );
+}
+
+function ChainMark({ chain }: { chain?: ChainInfo }) {
+  const id = chain?.id ?? "ethereum";
+  if (id === "ethereum") return <EthereumIcon />;
+  if (id === "solana") return <SolanaIcon />;
+  if (id === "xrp-ledger") return <XrpIcon />;
+  if (id === "bitcoin") return <span className="text-2xl font-black">B</span>;
+  if (id === "cardano") return <span className="text-xl font-black">ADA</span>;
+  return (
+    <span className="text-base font-black">
+      {chain?.symbol ?? "ETH"}
+    </span>
+  );
+}
+
 function EthereumIcon() {
   return (
     <svg viewBox="0 0 40 40" className="h-6 w-6" aria-hidden="true">
@@ -514,6 +528,28 @@ function EthereumIcon() {
       />
       <path
         d="M20 28.2 30 22.4 20 36 10 22.4l10 5.8Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function SolanaIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="h-8 w-8" aria-hidden="true">
+      <path
+        d="M10 11.5h22l-4.2 4.5h-22L10 11.5Zm2.2 6.2h22L30 22.2H8l4.2-4.5Zm-4 6.3h22L26 28.5H4l4.2-4.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function XrpIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="h-8 w-8" aria-hidden="true">
+      <path
+        d="M9 11.5h5.1l5.9 5.7 5.9-5.7H31l-8.4 8.1a3.7 3.7 0 0 1-5.2 0L9 11.5Zm22 17h-5.1L20 22.8l-5.9 5.7H9l8.4-8.1a3.7 3.7 0 0 1 5.2 0L31 28.5Z"
         fill="currentColor"
       />
     </svg>

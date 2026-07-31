@@ -39,6 +39,7 @@ type AssetDetail = {
   transactions: Array<{
     id: string;
     side: "buy" | "sell";
+    chainId?: string | null;
     executedAt: string;
     qty: number;
     priceUsd: number;
@@ -381,6 +382,8 @@ export default function AssetDetailView({
     return {
       id: tx.id,
       symbol: data?.symbol ?? symbol,
+      chainId: tx.chainId ?? null,
+      coingeckoId: undefined,
       name: data?.name ?? symbol,
       iconUrl: data?.iconUrl ?? null,
       side: tx.side,

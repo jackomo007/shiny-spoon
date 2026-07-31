@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import { MoneyInputStandalone } from "@/components/form/MaskedFields";
 import { cls, usd } from "@/components/portfolio/format";
 import type { TxRow } from "@/components/portfolio/TransactionsTable";
+import { ChevronDown } from "@/components/portfolio/icons";
 
 type AssetPick = {
   id: string;
@@ -13,6 +14,12 @@ type AssetPick = {
   thumb?: string | null;
   priceUsd?: number | null;
   change24hPct?: number | null;
+};
+
+type ChainOption = {
+  id: string;
+  name: string;
+  symbol: string;
 };
 
 type Step = "pick" | "form";
@@ -54,6 +61,8 @@ export default function AddTransactionModal(props: {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AssetPick[]>([]);
   const [selected, setSelected] = useState<AssetPick | null>(null);
+  const [chainOptions, setChainOptions] = useState<ChainOption[]>([]);
+  const [selectedChainId, setSelectedChainId] = useState<string>("");
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
 
@@ -93,6 +102,8 @@ export default function AddTransactionModal(props: {
     setQuery("");
     setResults([]);
     setSelected(null);
+    setChainOptions([]);
+    setSelectedChainId("");
 
     setSide("buy");
     setPriceRaw("");
@@ -131,11 +142,12 @@ export default function AddTransactionModal(props: {
     lastChanged.current = null;
 
     setSelected({
-      id: t.symbol.toLowerCase(),
+      id: t.coingeckoId ?? t.symbol.toLowerCase(),
       symbol: t.symbol,
       name: t.name ?? t.symbol,
       thumb: t.iconUrl ?? null,
     });
+    setSelectedChainId(t.chainId ?? "");
   }, [props.open, mode, props.initialTx]);
 
   const loadMarketPrice = useCallback(async (id: string) => {
@@ -158,6 +170,7 @@ export default function AddTransactionModal(props: {
 
     const asset = props.initialAsset;
     setSelected(asset);
+    setSelectedChainId("");
     setStep("form");
     setSide("buy");
     setPriceRaw(
@@ -176,6 +189,38 @@ export default function AddTransactionModal(props: {
       void loadMarketPrice(asset.id);
     }
   }, [loadMarketPrice, props.open, mode, props.initialAsset]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    if (!selected) return;
+
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(
+        `/api/portfolio/assets/chains?id=${encodeURIComponent(selected.id)}&symbol=${encodeURIComponent(selected.symbol)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => null)) as {
+        defaultChainId?: string;
+        items?: ChainOption[];
+      } | null;
+      if (cancelled) return;
+
+      const options = json?.items ?? [];
+      setChainOptions(options);
+      setSelectedChainId((current) => {
+        if (current && options.some((option) => option.id === current)) {
+          return current;
+        }
+        return json?.defaultChainId ?? options[0]?.id ?? "other";
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open, selected]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -368,6 +413,7 @@ export default function AddTransactionModal(props: {
                         qty?: number;
                         totalUsd?: number;
                         feeUsd: number;
+                        chainId?: string;
                         isStablecoin?: boolean;
                         executedAt: string;
                       } = {
@@ -388,6 +434,7 @@ export default function AddTransactionModal(props: {
                             ? undefined
                             : total || undefined,
                         feeUsd: fee,
+                        chainId: selectedChainId || undefined,
                         isStablecoin:
                           mode === "add" && side === "buy"
                             ? isStablecoin
@@ -412,6 +459,7 @@ export default function AddTransactionModal(props: {
                                 qty: amount,
                                 priceUsd: priceUsd,
                                 feeUsd: fee,
+                                chainId: selectedChainId || undefined,
                                 executedAt: props.initialTx?.executedAt,
                               }
                             : payload,
@@ -470,6 +518,7 @@ export default function AddTransactionModal(props: {
                       className="cursor-pointer rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
                       onClick={async () => {
                         setSelected(a);
+                        setSelectedChainId("");
                         setStep("form");
                         setSide("buy");
                         setPriceRaw("");
@@ -511,6 +560,7 @@ export default function AddTransactionModal(props: {
                       className="cursor-pointer rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50"
                       onClick={async () => {
                         setSelected(a);
+                        setSelectedChainId("");
                         setStep("form");
                         setSide("buy");
                         setPriceRaw("");
@@ -561,6 +611,33 @@ export default function AddTransactionModal(props: {
                 Sell
               </button>
             </div>
+
+            <label className="grid gap-1">
+              <span className="text-xs text-gray-500">Chain</span>
+              <span className="relative block">
+                <select
+                  className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-12"
+                  value={selectedChainId}
+                  onChange={(event) => setSelectedChainId(event.target.value)}
+                >
+                  {(chainOptions.length
+                    ? chainOptions
+                    : [
+                        {
+                          id: selectedChainId || "other",
+                          name: "Other Chain",
+                          symbol: "OTHER",
+                        },
+                      ]
+                  ).map((chain) => (
+                    <option key={chain.id} value={chain.id}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+              </span>
+            </label>
 
             <label className="grid gap-1">
               <span className="text-xs text-gray-500">
@@ -663,6 +740,8 @@ export default function AddTransactionModal(props: {
                 onClick={async () => {
                   setStep("pick");
                   setSelected(null);
+                  setChainOptions([]);
+                  setSelectedChainId("");
                   setAmountRaw("");
                   setTotalRaw("");
                   setFeeRaw("0");

@@ -11,6 +11,7 @@ import {
   cgNormalizeOrResolveCoinId,
 } from "@/lib/markets/coingecko"
 import { setPortfolioAssetStablecoin } from "@/services/portfolio-asset-settings.service"
+import { getDefaultPortfolioChainId, normalizePortfolioChainId } from "@/lib/portfolio-chains"
 
 export const dynamic = "force-dynamic"
 
@@ -19,6 +20,7 @@ const Body = z.object({
   amount: z.number().positive(),
   priceUsd: z.number().positive(),
   feeUsd: z.number().min(0).optional(),
+  chainId: z.string().min(1).optional().nullable(),
   isStablecoin: z.boolean().optional(),
   strategyId: z.string().min(1).optional(),
   executedAt: z.string().datetime(), 
@@ -33,6 +35,8 @@ export async function POST(req: Request) {
     const accountId = session.accountId
     const data = Body.parse(await req.json())
     const symbol = data.symbol.toUpperCase()
+    const chainId =
+      normalizePortfolioChainId(data.chainId) ?? getDefaultPortfolioChainId(symbol)
     const existingHolding = await getOpenSpotHolding(accountId, symbol)
 
     let coingeckoId: string | null = null
@@ -87,8 +91,9 @@ export async function POST(req: Request) {
       qty: data.amount,
       priceUsd: data.priceUsd,
       feeUsd: data.feeUsd,
+      chainId,
       executedAt: new Date(data.executedAt),
-      notes: "[PORTFOLIO_INIT]",
+      notes: `[PORTFOLIO_INIT] chain:${chainId}`,
     })
 
     if (!existingHolding) {
