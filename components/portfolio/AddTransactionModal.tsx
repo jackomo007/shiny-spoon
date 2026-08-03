@@ -5,7 +5,6 @@ import Modal from "@/components/ui/Modal";
 import { MoneyInputStandalone } from "@/components/form/MaskedFields";
 import { cls, usd } from "@/components/portfolio/format";
 import type { TxRow } from "@/components/portfolio/TransactionsTable";
-import { ChevronDown } from "@/components/portfolio/icons";
 
 type AssetPick = {
   id: string;
@@ -20,6 +19,7 @@ type ChainOption = {
   id: string;
   name: string;
   symbol: string;
+  color?: string;
 };
 
 type Step = "pick" | "form";
@@ -63,6 +63,7 @@ export default function AddTransactionModal(props: {
   const [selected, setSelected] = useState<AssetPick | null>(null);
   const [chainOptions, setChainOptions] = useState<ChainOption[]>([]);
   const [selectedChainId, setSelectedChainId] = useState<string>("");
+  const [chainQuery, setChainQuery] = useState("");
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
 
@@ -104,6 +105,7 @@ export default function AddTransactionModal(props: {
     setSelected(null);
     setChainOptions([]);
     setSelectedChainId("");
+    setChainQuery("");
 
     setSide("buy");
     setPriceRaw("");
@@ -148,6 +150,7 @@ export default function AddTransactionModal(props: {
       thumb: t.iconUrl ?? null,
     });
     setSelectedChainId(t.chainId ?? "");
+    setChainQuery("");
   }, [props.open, mode, props.initialTx]);
 
   const loadMarketPrice = useCallback(async (id: string) => {
@@ -171,6 +174,7 @@ export default function AddTransactionModal(props: {
     const asset = props.initialAsset;
     setSelected(asset);
     setSelectedChainId("");
+    setChainQuery("");
     setStep("form");
     setSide("buy");
     setPriceRaw(
@@ -196,8 +200,15 @@ export default function AddTransactionModal(props: {
 
     let cancelled = false;
     (async () => {
+      const params = new URLSearchParams({
+        id: selected.id,
+        symbol: selected.symbol,
+      });
+      if (chainQuery.trim()) {
+        params.set("q", chainQuery.trim());
+      }
       const res = await fetch(
-        `/api/portfolio/assets/chains?id=${encodeURIComponent(selected.id)}&symbol=${encodeURIComponent(selected.symbol)}`,
+        `/api/portfolio/assets/chains?${params.toString()}`,
         { cache: "no-store" },
       );
       if (!res.ok) return;
@@ -210,7 +221,7 @@ export default function AddTransactionModal(props: {
       const options = json?.items ?? [];
       setChainOptions(options);
       setSelectedChainId((current) => {
-        if (current && options.some((option) => option.id === current)) {
+        if (current) {
           return current;
         }
         return json?.defaultChainId ?? options[0]?.id ?? "other";
@@ -220,7 +231,7 @@ export default function AddTransactionModal(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.open, selected]);
+  }, [chainQuery, props.open, selected]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -519,6 +530,7 @@ export default function AddTransactionModal(props: {
                       onClick={async () => {
                         setSelected(a);
                         setSelectedChainId("");
+                        setChainQuery("");
                         setStep("form");
                         setSide("buy");
                         setPriceRaw("");
@@ -614,29 +626,16 @@ export default function AddTransactionModal(props: {
 
             <label className="grid gap-1">
               <span className="text-xs text-gray-500">Chain</span>
-              <span className="relative block">
-                <select
-                  className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-12"
-                  value={selectedChainId}
-                  onChange={(event) => setSelectedChainId(event.target.value)}
-                >
-                  {(chainOptions.length
-                    ? chainOptions
-                    : [
-                        {
-                          id: selectedChainId || "other",
-                          name: "Other Chain",
-                          symbol: "OTHER",
-                        },
-                      ]
-                  ).map((chain) => (
-                    <option key={chain.id} value={chain.id}>
-                      {chain.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-              </span>
+              <ChainPicker
+                options={chainOptions}
+                query={chainQuery}
+                selectedChainId={selectedChainId}
+                onQueryChange={setChainQuery}
+                onSelect={(chain) => {
+                  setSelectedChainId(chain.id);
+                  setChainQuery("");
+                }}
+              />
             </label>
 
             <label className="grid gap-1">
@@ -742,6 +741,7 @@ export default function AddTransactionModal(props: {
                   setSelected(null);
                   setChainOptions([]);
                   setSelectedChainId("");
+                  setChainQuery("");
                   setAmountRaw("");
                   setTotalRaw("");
                   setFeeRaw("0");
@@ -801,5 +801,65 @@ export default function AddTransactionModal(props: {
         </Modal>
       )}
     </>
+  );
+}
+
+function ChainPicker({
+  options,
+  query,
+  selectedChainId,
+  onQueryChange,
+  onSelect,
+}: {
+  options: ChainOption[];
+  query: string;
+  selectedChainId: string;
+  onQueryChange: (value: string) => void;
+  onSelect: (chain: ChainOption) => void;
+}) {
+  const fallback =
+    selectedChainId && !options.some((chain) => chain.id === selectedChainId)
+      ? {
+          id: selectedChainId,
+          name: selectedChainId,
+          symbol: selectedChainId.slice(0, 5).toUpperCase(),
+        }
+      : null;
+  const selected =
+    options.find((chain) => chain.id === selectedChainId) ?? fallback;
+
+  return (
+    <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-2">
+      <input
+        className="h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-[#CBB5FF]"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder={selected ? selected.name : "Search chains..."}
+      />
+      <div className="grid max-h-[194px] gap-1 overflow-y-auto">
+        {(options.length ? options : selected ? [selected] : []).map((chain) => {
+          const active = chain.id === selectedChainId;
+
+          return (
+            <button
+              key={chain.id}
+              type="button"
+              className={cls(
+                "flex min-h-[34px] cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 text-left text-sm",
+                active
+                  ? "bg-[#F5F0FF] font-semibold text-[#5F35D5]"
+                  : "text-slate-700 hover:bg-gray-50",
+              )}
+              onClick={() => onSelect(chain)}
+            >
+              <span className="min-w-0 truncate">{chain.name}</span>
+              <span className="shrink-0 text-xs font-semibold text-slate-400">
+                {chain.symbol}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

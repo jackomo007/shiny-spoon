@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildChainAllocation } from "@/components/portfolio/chain-utils";
 import type { AssetRow } from "@/components/portfolio/AssetsTable";
+import { buildPortfolioChainOptions } from "@/lib/portfolio-chains";
 
 function asset(overrides: Partial<AssetRow> & Pick<AssetRow, "symbol">): AssetRow {
   return {
@@ -44,5 +45,42 @@ describe("buildChainAllocation", () => {
 
     expect(rows[0].chain.name).toBe("Other Chain");
     expect(rows[0].chain.symbol).toBe("OTHER");
+  });
+});
+
+describe("buildPortfolioChainOptions", () => {
+  it("prefers CoinGecko platform chains, limits defaults, and supports search", () => {
+    const platforms = [
+      { id: "made-up-chain", name: "Made Up Chain", shortname: "MUC" },
+      { id: "another-network", name: "Another Network", shortname: "AN" },
+      { id: "third-network", name: "Third Network", shortname: "TN" },
+      { id: "fourth-network", name: "Fourth Network", shortname: "FN" },
+      { id: "fifth-network", name: "Fifth Network", shortname: "FIVE" },
+      { id: "sixth-network", name: "Sixth Network", shortname: "SIX" },
+    ];
+
+    const defaults = buildPortfolioChainOptions({
+      symbol: "XYZ",
+      platformIds: ["made-up-chain"],
+      platforms,
+    });
+
+    expect(defaults).toHaveLength(5);
+    expect(defaults[0]).toMatchObject({
+      id: "made-up-chain",
+      name: "Made Up Chain",
+      symbol: "MUC",
+    });
+
+    const searched = buildPortfolioChainOptions({
+      symbol: "XYZ",
+      platformIds: ["made-up-chain"],
+      platforms,
+      query: "sixth",
+    });
+
+    expect(searched).toEqual([
+      expect.objectContaining({ id: "sixth-network" }),
+    ]);
   });
 });

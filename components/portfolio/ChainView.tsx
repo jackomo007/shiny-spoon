@@ -112,6 +112,8 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
     topPerformer && topPerformer.investedUsd > 0
       ? (topPerformer.profitUsd / topPerformer.investedUsd) * 100
       : 0;
+  const topChainColor = topChain?.chain.color ?? "#5848DF";
+  const topPerformerColor = topPerformer?.chain.color ?? "#05AA7C";
 
   function toggleChain(id: string) {
     setOpenChainIds((current) => {
@@ -165,7 +167,7 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
               ? `${pct(topChain.percent)} of portfolio value`
               : "Add assets to calculate chain exposure"
           }
-          iconClass="bg-[#F0EDFF] text-[#5848DF]"
+          accentColor={topChainColor}
           icon={topChain ? <ChainMark chain={topChain.chain} /> : <ChainMark />}
           sparkline
         />
@@ -186,10 +188,10 @@ export default function ChainView({ assets }: { assets: AssetRow[] }) {
           label="Top Performing Chain"
           value={topPerformer?.chain.name ?? "No Chain"}
           subtext={`Current ROI ${pct(topPerformerRoi)}`}
-          iconClass="bg-[#E5FAF4] text-[#05AA7C]"
-          icon={<DropIcon />}
-          valueClass="text-[#05A978]"
-          subtextClass="text-[#05A978]"
+          accentColor={topPerformerColor}
+          icon={topPerformer ? <ChainMark chain={topPerformer.chain} /> : <ChainMark />}
+          valueColor={topPerformerColor}
+          subtextColor={topPerformerColor}
         />
       </div>
 
@@ -265,19 +267,29 @@ function SummaryCard({
   subtext,
   icon,
   iconClass,
+  accentColor,
   valueClass,
   subtextClass,
+  valueColor,
+  subtextColor,
   sparkline,
 }: {
   label: string;
   value: string;
   subtext: string;
   icon: ReactNode;
-  iconClass: string;
+  iconClass?: string;
+  accentColor?: string;
   valueClass?: string;
   subtextClass?: string;
+  valueColor?: string;
+  subtextColor?: string;
   sparkline?: boolean;
 }) {
+  const accentStyle = accentColor
+    ? { backgroundColor: `${accentColor}18`, color: accentColor }
+    : undefined;
+
   return (
     <div className="relative min-h-[104px] overflow-hidden rounded-[12px] border border-[#E1E5EE] bg-white p-4 shadow-[0_2px_8px_rgba(37,47,75,0.018)]">
       <div className="text-left text-[11px] font-extrabold uppercase tracking-[0.075em] text-[#536078]">
@@ -289,6 +301,7 @@ function SummaryCard({
             "grid h-11 w-11 shrink-0 place-items-center rounded-full",
             iconClass,
           )}
+          style={accentStyle}
         >
           {icon}
         </div>
@@ -298,17 +311,19 @@ function SummaryCard({
               "truncate text-[18px] font-extrabold leading-tight text-[#101828]",
               valueClass,
             )}
+            style={valueColor ? { color: valueColor } : undefined}
           >
             {value}
           </div>
           <div
             className={cls("mt-1.5 text-xs font-medium text-[#7D8AA5]", subtextClass)}
+            style={subtextColor ? { color: subtextColor } : undefined}
           >
             {subtext}
           </div>
         </div>
       </div>
-      {sparkline ? <SummarySparkline /> : null}
+      {sparkline ? <SummarySparkline color={accentColor ?? "#9D74FF"} /> : null}
     </div>
   );
 }
@@ -579,18 +594,7 @@ function PnlIcon({ down }: { down: boolean }) {
   );
 }
 
-function DropIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
-      <path
-        d="M12 3c4 5.1 6 8.2 6 11a6 6 0 1 1-12 0c0-2.8 2-5.9 6-11Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function SummarySparkline() {
+function SummarySparkline({ color }: { color: string }) {
   return (
     <svg
       className="pointer-events-none absolute bottom-3 right-2 h-9 w-20 opacity-90"
@@ -598,20 +602,15 @@ function SummarySparkline() {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="chainSummarySparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#9D74FF" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#9D74FF" stopOpacity="0" />
-        </linearGradient>
-      </defs>
       <path
         d="M1 45 C14 45,18 37,29 37 C40 37,42 43,52 35 C62 27,66 22,75 27 C85 32,91 26,97 14 C102 5,107 4,111 3 L111 50 L1 50 Z"
-        fill="url(#chainSummarySparkFill)"
+        fill={color}
+        opacity="0.16"
       />
       <path
         d="M1 45 C14 45,18 37,29 37 C40 37,42 43,52 35 C62 27,66 22,75 27 C85 32,91 26,97 14 C102 5,107 4,111 3"
         fill="none"
-        stroke="#B79CFF"
+        stroke={color}
         strokeWidth="1.65"
         strokeLinecap="round"
       />

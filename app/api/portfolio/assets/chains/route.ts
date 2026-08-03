@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { cgCoinPlatformsByIdSafe } from "@/lib/markets/coingecko";
+import {
+  cgAssetPlatformsSafe,
+  cgCoinPlatformsByIdSafe,
+} from "@/lib/markets/coingecko";
 import { buildPortfolioChainOptions } from "@/lib/portfolio-chains";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +18,27 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = (searchParams.get("id") ?? "").trim();
   const symbol = (searchParams.get("symbol") ?? "").trim().toUpperCase();
+  const query = (searchParams.get("q") ?? "").trim();
 
   if (!symbol) {
     return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
   }
 
-  const platforms = id ? await cgCoinPlatformsByIdSafe(id) : null;
+  const [coinPlatforms, assetPlatforms] = await Promise.all([
+    id ? cgCoinPlatformsByIdSafe(id) : null,
+    cgAssetPlatformsSafe(),
+  ]);
   const options = buildPortfolioChainOptions({
     symbol,
-    platformIds: platforms?.platformIds ?? [],
+    platformIds: coinPlatforms?.platformIds ?? [],
+    platforms: assetPlatforms.items.map((platform) => ({
+      id: platform.id,
+      name: platform.name,
+      shortname: platform.shortname,
+      nativeCoinId: platform.native_coin_id,
+    })),
+    query,
+    limit: 5,
   });
 
   return NextResponse.json({

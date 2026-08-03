@@ -109,7 +109,7 @@ function BalanceCardFilled({ summary: s }: { summary: Summary }) {
   const unrealizedUp = s.profit.unrealized.usd >= 0;
 
   return (
-    <Card className="rounded-[14px] shadow-[0_8px_20px_rgba(0,0,0,0.04)] flex flex-col p-6">
+    <Card className="flex min-h-[312px] flex-col rounded-[14px] p-6 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[15px] font-medium text-slate-400 flex items-center gap-2">
           Current Balance

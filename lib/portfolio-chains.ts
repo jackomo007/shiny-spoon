@@ -6,6 +6,13 @@ export type PortfolioChainOption = {
   accentClass: string;
 };
 
+export type PortfolioAssetPlatform = {
+  id: string;
+  name: string;
+  shortname?: string | null;
+  nativeCoinId?: string | null;
+};
+
 export const PORTFOLIO_CHAINS: Record<string, PortfolioChainOption> = {
   bitcoin: {
     id: "bitcoin",
@@ -157,6 +164,17 @@ const PLATFORM_ALIASES: Record<string, string> = {
   "base-network": "base",
 };
 
+const GENERATED_CHAIN_COLORS = [
+  "#5A67D8",
+  "#17B897",
+  "#F59E0B",
+  "#109F91",
+  "#4B5563",
+  "#2F7BC7",
+  "#8247E5",
+  "#E84142",
+];
+
 const COMMON_PORTFOLIO_CHAIN_IDS = [
   "ethereum",
   "solana",
@@ -184,6 +202,55 @@ export function getDefaultPortfolioChainId(symbol: string) {
   return SYMBOL_TO_DEFAULT_CHAIN[symbol.trim().toUpperCase()] ?? "other";
 }
 
+function shortSymbol(name: string) {
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 5)
+    .toUpperCase();
+}
+
+function colorForChainId(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return GENERATED_CHAIN_COLORS[hash % GENERATED_CHAIN_COLORS.length];
+}
+
+export function getPortfolioChainOption(
+  chainId: string | null | undefined,
+  platforms: PortfolioAssetPlatform[] = [],
+): PortfolioChainOption | null {
+  const normalized = normalizePortfolioChainId(chainId);
+  if (!normalized) return null;
+
+  const known = PORTFOLIO_CHAINS[normalized];
+  if (known) return known;
+
+  const platform = platforms.find(
+    (item) => normalizePortfolioChainId(item.id) === normalized,
+  );
+  if (!platform) return null;
+
+  const name = platform.name.trim() || platform.id;
+  const symbol =
+    platform.shortname?.trim().toUpperCase() ||
+    shortSymbol(name) ||
+    "CHAIN";
+  const color = colorForChainId(normalized);
+
+  return {
+    id: normalized,
+    name,
+    symbol,
+    color,
+    accentClass: "from-slate-500 to-slate-700",
+  };
+}
+
 export function getPortfolioChainInfo(
   chainId: string | null | undefined,
   symbol?: string,
@@ -200,23 +267,37 @@ export function getPortfolioChainInfo(
 export function buildPortfolioChainOptions(params: {
   symbol: string;
   platformIds?: string[];
+  platforms?: PortfolioAssetPlatform[];
+  query?: string;
+  limit?: number;
 }) {
   const seen = new Set<string>();
   const options: PortfolioChainOption[] = [];
+  const platforms = params.platforms ?? [];
+  const platformIds = params.platformIds ?? [];
+  const limit = Math.max(1, params.limit ?? 5);
 
   function add(id: string | null | undefined) {
     const normalized = normalizePortfolioChainId(id);
     if (!normalized || seen.has(normalized)) return;
-    const chain = PORTFOLIO_CHAINS[normalized];
+    const chain = getPortfolioChainOption(normalized, platforms);
     if (!chain) return;
     seen.add(normalized);
     options.push(chain);
   }
 
+  for (const platformId of platformIds) add(platformId);
   add(getDefaultPortfolioChainId(params.symbol));
-  for (const platformId of params.platformIds ?? []) add(platformId);
   for (const chainId of COMMON_PORTFOLIO_CHAIN_IDS) add(chainId);
+  for (const platform of platforms) add(platform.id);
   add("other");
 
-  return options;
+  const q = params.query?.trim().toLowerCase();
+  const filtered = q
+    ? options.filter((chain) =>
+        [chain.name, chain.symbol, chain.id].join(" ").toLowerCase().includes(q),
+      )
+    : options;
+
+  return filtered.slice(0, limit);
 }

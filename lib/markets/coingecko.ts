@@ -40,6 +40,13 @@ export type CgCoinPlatforms = {
   platforms: Record<string, string>
 }
 
+export type CgAssetPlatform = {
+  id: string
+  name: string
+  shortname: string | null
+  native_coin_id: string | null
+}
+
 type CacheEntry<T> = { value: T; expiresAt: number }
 const memCache = new Map<string, CacheEntry<unknown>>()
 
@@ -191,6 +198,60 @@ type CgCoinsByIdResponse = {
   name?: unknown
   image?: unknown
   platforms?: unknown
+}
+
+type CgAssetPlatformRaw = {
+  id?: unknown
+  name?: unknown
+  shortname?: unknown
+  native_coin_id?: unknown
+}
+
+export async function cgAssetPlatforms(): Promise<CgAssetPlatform[]> {
+  const cacheKey = "cg:asset-platforms"
+  const cached = getCache<CgAssetPlatform[]>(cacheKey)
+  if (cached) return cached
+
+  const url = `${baseUrl()}/asset_platforms`
+  const res = await cgFetch(url)
+  if (!res.ok) throw new Error(`CoinGecko /asset_platforms HTTP ${res.status}`)
+
+  const j = (await res.json()) as unknown
+  if (!Array.isArray(j)) throw new Error("Invalid CoinGecko asset platforms response")
+
+  const out: CgAssetPlatform[] = []
+  for (const item of j) {
+    if (!isPlainObject(item)) continue
+    const raw = item as CgAssetPlatformRaw
+    const id = toStringSafe(raw.id) ?? ""
+    const name = toStringSafe(raw.name) ?? ""
+    if (!id || !name) continue
+
+    out.push({
+      id,
+      name,
+      shortname: toStringSafe(raw.shortname),
+      native_coin_id: toStringSafe(raw.native_coin_id),
+    })
+  }
+
+  setCache(cacheKey, out, 24 * 60 * 60 * 1000)
+  return out
+}
+
+export async function cgAssetPlatformsSafe(): Promise<
+  | { ok: true; items: CgAssetPlatform[] }
+  | { ok: false; error: string; items: [] }
+> {
+  try {
+    return { ok: true, items: await cgAssetPlatforms() }
+  } catch (e: unknown) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+      items: [],
+    }
+  }
 }
 
 export async function cgCoinMetaById(id: string): Promise<CgCoinMeta> {
