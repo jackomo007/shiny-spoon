@@ -19,6 +19,8 @@ import { getDefaultPortfolioChainId, normalizePortfolioChainId } from "@/lib/por
 
 export const dynamic = "force-dynamic"
 
+const STABLECOIN_SYMBOLS = new Set(["USDT", "USDC", "DAI", "TUSD", "USDP"])
+
 const Body = z.object({
   asset: z.object({
     id: z.string().min(1),
@@ -34,6 +36,16 @@ const Body = z.object({
   chainId: z.string().min(1).optional().nullable(),
   isStablecoin: z.boolean().optional(),
   executedAt: z.string().datetime().optional(),
+  convertProceeds: z
+    .object({
+      enabled: z.boolean().default(false),
+      asset: z.object({
+        id: z.string().min(1),
+        symbol: z.string().min(1),
+        name: z.string().optional().nullable(),
+      }),
+    })
+    .optional(),
 })
 
 export async function POST(req: Request) {
@@ -152,6 +164,109 @@ export async function POST(req: Request) {
       executedAt,
       notes: `[PORTFOLIO_SPOT_TX] cg:${coingeckoId ?? "unresolved"} chain:${chainId} chg24h:${change24hPct ?? "n/a"}`,
     })
+
+    if (input.side === "sell" && input.convertProceeds?.enabled) {
+      const receiveSymbol = input.convertProceeds.asset.symbol
+        .trim()
+        .toUpperCase()
+      if (!receiveSymbol || receiveSymbol === symbol) {
+        return NextResponse.json(
+          { error: "Select a different asset to receive." },
+          { status: 400 },
+        )
+      }
+      const receiveExistingHolding = await getOpenSpotHolding(
+        session.accountId,
+        receiveSymbol,
+      )
+      const receiveExistingAsset = await prisma.verified_asset.findUnique({
+        where: { symbol: receiveSymbol },
+        select: { coingecko_id: true, name: true, image_url: true },
+      })
+      const receiveCoingeckoId =
+        receiveExistingAsset?.coingecko_id ??
+        (await cgNormalizeOrResolveCoinId({
+          assetId: input.convertProceeds.asset.id,
+          assetSymbol: receiveSymbol,
+        }))
+
+      let receivePriceUsd = STABLECOIN_SYMBOLS.has(receiveSymbol) ? 1 : 0
+      let receiveChange24hPct: number | null = null
+      if (receiveCoingeckoId) {
+        const receivePrice = await cgPriceUsdById(receiveCoingeckoId)
+        receivePriceUsd = receivePrice.priceUsd
+        receiveChange24hPct = receivePrice.change24hPct
+      }
+      if (!Number.isFinite(receivePriceUsd) || receivePriceUsd <= 0) {
+        return NextResponse.json(
+          { error: `Could not resolve market price for ${receiveSymbol}.` },
+          { status: 400 },
+        )
+      }
+
+      let receiveImageUrl: string | null =
+        receiveExistingAsset?.image_url ?? null
+      let receiveName: string | null =
+        (input.convertProceeds.asset.name ?? null) &&
+        String(input.convertProceeds.asset.name).trim()
+          ? String(input.convertProceeds.asset.name).trim()
+          : receiveExistingAsset?.name ?? null
+
+      if (receiveCoingeckoId && (!receiveImageUrl || !receiveName)) {
+        const receiveMeta = await cgCoinMetaByIdSafe(receiveCoingeckoId)
+        if (receiveMeta.ok) {
+          receiveImageUrl = receiveImageUrl ?? receiveMeta.imageUrl
+          if (!receiveName) receiveName = receiveMeta.name || null
+        }
+      }
+
+      await prisma.verified_asset.upsert({
+        where: { symbol: receiveSymbol },
+        update: {
+          name: receiveName ?? undefined,
+          coingecko_id: receiveCoingeckoId ?? undefined,
+          image_url: receiveImageUrl ?? undefined,
+        },
+        create: {
+          symbol: receiveSymbol,
+          name: receiveName,
+          exchange: "Binance",
+          coingecko_id: receiveCoingeckoId,
+          image_url: receiveImageUrl,
+        },
+        select: { id: true },
+      })
+
+      if (STABLECOIN_SYMBOLS.has(receiveSymbol) && !receiveExistingHolding) {
+        await setPortfolioAssetStablecoin({
+          accountId: session.accountId,
+          symbol: receiveSymbol,
+          isStablecoin: true,
+        })
+      }
+
+      const netProceedsUsd = qty * priceUsd - feeUsd
+      if (netProceedsUsd > 0) {
+        await PortfolioRepoV2.createSpotTransaction({
+          accountId: session.accountId,
+          symbol: receiveSymbol,
+          side: "buy",
+          qty: netProceedsUsd / receivePriceUsd,
+          priceUsd: receivePriceUsd,
+          feeUsd: 0,
+          chainId: getDefaultPortfolioChainId(receiveSymbol),
+          executedAt,
+          notes: `[PORTFOLIO_SELL_CONVERT] from:${symbol} cg:${receiveCoingeckoId ?? "unresolved"} chg24h:${receiveChange24hPct ?? "n/a"}`,
+        })
+
+        if (!receiveExistingHolding && !STABLECOIN_SYMBOLS.has(receiveSymbol)) {
+          await ensureDefaultExitStrategyForAsset(
+            session.accountId,
+            receiveSymbol,
+          )
+        }
+      }
+    }
 
     if (!existingHolding) {
       const holding = await getOpenSpotHolding(session.accountId, symbol)

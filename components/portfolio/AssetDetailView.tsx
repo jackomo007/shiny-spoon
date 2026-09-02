@@ -285,6 +285,13 @@ export default function AssetDetailView({
   const [completedScaleOutLevels, setCompletedScaleOutLevels] = useState<
     Record<string, boolean>
   >({});
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [removeAssetOpen, setRemoveAssetOpen] = useState(false);
+  const [removeMode, setRemoveMode] = useState<"keepHistory" | "deleteHistory">(
+    "keepHistory",
+  );
+  const [removingAsset, setRemovingAsset] = useState(false);
+  const [removeAssetError, setRemoveAssetError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -415,6 +422,43 @@ export default function AssetDetailView({
     await onPortfolioChange?.();
   }
 
+  function openRemoveAssetModal() {
+    setActionsOpen(false);
+    setRemoveMode("keepHistory");
+    setRemoveAssetError(null);
+    setRemoveAssetOpen(true);
+  }
+
+  async function removeAsset() {
+    setRemovingAsset(true);
+    setRemoveAssetError(null);
+
+    try {
+      const res = await fetch(`/api/portfolio/${encodeURIComponent(symbol)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: removeMode }),
+      });
+
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        throw new Error(
+          typeof j?.error === "string" ? j.error : "Failed to remove asset",
+        );
+      }
+
+      setRemoveAssetOpen(false);
+      await onPortfolioChange?.();
+      onBack();
+    } catch (e) {
+      setRemoveAssetError(e instanceof Error ? e.message : "Failed to remove");
+    } finally {
+      setRemovingAsset(false);
+    }
+  }
+
   if (loading) {
     return (
       <Card className="p-6">
@@ -522,19 +566,86 @@ export default function AssetDetailView({
   return (
     <>
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={onBack}
-            className="flex cursor-pointer items-center gap-2 text-slate-700 hover:text-slate-900 font-semibold text-lg"
-          >
-            <span className="text-2xl text-slate-400">‹</span> Back
-          </button>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <Card className="p-6">
-            <div className="text-[13px] font-bold text-slate-400">
-              {symbol} Balance
+            <div className="mb-5 grid grid-cols-[40px_minmax(0,1fr)_40px] grid-rows-[40px_auto] items-start gap-x-3">
+              <button
+                onClick={onBack}
+                className="col-start-1 row-start-1 grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full border border-slate-200 bg-white text-xl font-bold leading-none text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:bg-slate-50"
+                type="button"
+                aria-label="Back to portfolio"
+              >
+                ←
+              </button>
+              <div className="col-start-2 row-start-1 min-w-0 text-[15px] font-extrabold leading-10 text-slate-950">
+                Portfolio
+              </div>
+              <div className="col-start-1 col-span-2 row-start-2 mt-4 min-w-0 text-[13px] font-bold leading-none text-slate-400">
+                {symbol} Balance
+              </div>
+
+              <div className="relative col-start-3 row-start-1 shrink-0">
+                <button
+                  className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl border border-slate-200 bg-white text-xl font-extrabold leading-none text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:bg-slate-50"
+                  type="button"
+                  aria-label="Asset actions"
+                  aria-expanded={actionsOpen}
+                  onClick={() => setActionsOpen((open) => !open)}
+                >
+                  ⋯
+                </button>
+
+                {actionsOpen ? (
+                  <div className="absolute right-0 top-12 z-10 w-[210px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.14)]">
+                    <button
+                      className="flex w-full cursor-not-allowed items-center justify-between gap-3 px-4 py-2.5 text-left text-xs font-semibold text-slate-400"
+                      type="button"
+                      disabled
+                    >
+                      Export transactions
+                      <svg
+                        className="h-3.5 w-3.5 text-slate-300"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="5" y="11" width="14" height="10" rx="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                        <path d="M12 16h.01" />
+                      </svg>
+                    </button>
+                    <div className="my-1 border-t border-slate-100" />
+                    <button
+                      className="flex w-full cursor-pointer items-center gap-2 px-4 py-2.5 text-left text-xs font-extrabold text-red-600 hover:bg-red-50"
+                      type="button"
+                      aria-label={`Delete ${symbol} Position`}
+                      onClick={openRemoveAssetModal}
+                    >
+                      <svg
+                        className="h-3.5 w-3.5 text-red-500"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 15H6L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                      Delete {symbol} Position
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="mt-4 flex items-center justify-between rounded-[14px] border border-slate-200 bg-slate-50 px-5 py-4">
@@ -848,6 +959,108 @@ export default function AssetDetailView({
             : null
         }
       />
+
+      {removeAssetOpen ? (
+        <Modal
+          open
+          widthClass="max-w-xl"
+          title={`Remove ${symbol}?`}
+          onClose={() => (removingAsset ? null : setRemoveAssetOpen(false))}
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <button
+                className="cursor-pointer rounded-xl bg-gray-100 px-4 py-2 text-sm hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setRemoveAssetOpen(false)}
+                disabled={removingAsset}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="cursor-pointer rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void removeAsset()}
+                disabled={removingAsset}
+                type="button"
+              >
+                {removingAsset ? "Removing..." : "Remove Asset"}
+              </button>
+            </div>
+          }
+        >
+          <div className="grid gap-5 text-sm text-slate-700">
+            <p>This will remove {symbol} from your portfolio.</p>
+
+            <div className="grid gap-2">
+              <div className="text-xs font-bold uppercase tracking-[0.04em] text-slate-400">
+                Current holdings
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <span className="font-semibold text-slate-800">
+                  {data.balance.quantity.toLocaleString("en-US", {
+                    maximumFractionDigits: 8,
+                  })}{" "}
+                  {symbol}
+                </span>
+                <span className="font-bold text-slate-950">
+                  {usd(data.balance.valueUsd)}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              ⚠ {symbol} has {data.transactions.length} recorded transactions.
+            </div>
+
+            <div className="grid gap-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <input
+                  className="mt-1 h-4 w-4 cursor-pointer"
+                  type="radio"
+                  name="removeAssetMode"
+                  value="keepHistory"
+                  aria-label="Keep transaction history"
+                  checked={removeMode === "keepHistory"}
+                  onChange={() => setRemoveMode("keepHistory")}
+                />
+                <span className="grid gap-1">
+                  <span className="font-semibold text-slate-900">
+                    Keep transaction history
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {symbol} will no longer appear in your current portfolio.
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <input
+                  className="mt-1 h-4 w-4 cursor-pointer"
+                  type="radio"
+                  name="removeAssetMode"
+                  value="deleteHistory"
+                  aria-label="Delete asset and transaction history"
+                  checked={removeMode === "deleteHistory"}
+                  onChange={() => setRemoveMode("deleteHistory")}
+                />
+                <span className="grid gap-1">
+                  <span className="font-semibold text-slate-900">
+                    Delete asset and transaction history
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    Permanently removes all {symbol} portfolio transactions.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            {removeAssetError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {removeAssetError}
+              </div>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
 
       {strategyModalOpen && (
         <Modal

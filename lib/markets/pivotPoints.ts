@@ -16,6 +16,21 @@ type PivotLevels = {
   s3: number;
 };
 
+function fallbackKeyLevels(currentPrice: number) {
+  return {
+    supports: [
+      { price: currentPrice * 0.96, distance: "4.0%", timeframe: "Daily" },
+      { price: currentPrice * 0.93, distance: "7.0%", timeframe: "Weekly" },
+      { price: currentPrice * 0.9, distance: "10.0%", timeframe: "HTF" },
+    ],
+    resistances: [
+      { price: currentPrice * 1.04, distance: "4.0%", timeframe: "Daily" },
+      { price: currentPrice * 1.07, distance: "7.0%", timeframe: "Weekly" },
+      { price: currentPrice * 1.1, distance: "10.0%", timeframe: "HTF" },
+    ],
+  };
+}
+
 async function fetchOHLC(
   coingeckoId: string,
   days: number,
@@ -30,7 +45,7 @@ async function fetchOHLC(
     });
 
     if (!res.ok) {
-      throw new Error(`CoinGecko OHLC failed: ${res.status}`);
+      return [];
     }
 
     const data = await res.json();
@@ -42,8 +57,7 @@ async function fetchOHLC(
       low: candle[3],
       close: candle[4],
     }));
-  } catch (error) {
-    console.error(`Failed to fetch OHLC for ${coingeckoId}:`, error);
+  } catch {
     return [];
   }
 }
@@ -74,25 +88,14 @@ export async function calculateKeyLevels(
   resistances: Array<{ price: number; distance: string; timeframe: string }>;
 }> {
   if (!coingeckoId || currentPrice <= 0) {
-    return {
-      supports: [
-        { price: currentPrice * 0.96, distance: "4.0%", timeframe: "Daily" },
-        { price: currentPrice * 0.93, distance: "7.0%", timeframe: "Weekly" },
-        { price: currentPrice * 0.9, distance: "10.0%", timeframe: "HTF" },
-      ],
-      resistances: [
-        { price: currentPrice * 1.04, distance: "4.0%", timeframe: "Daily" },
-        { price: currentPrice * 1.07, distance: "7.0%", timeframe: "Weekly" },
-        { price: currentPrice * 1.1, distance: "10.0%", timeframe: "HTF" },
-      ],
-    };
+    return fallbackKeyLevels(currentPrice);
   }
 
   try {
     const ohlcData = await fetchOHLC(coingeckoId, 30);
 
     if (ohlcData.length === 0) {
-      throw new Error("No OHLC data available");
+      return fallbackKeyLevels(currentPrice);
     }
 
     const allSupports: Array<{
@@ -217,19 +220,7 @@ export async function calculateKeyLevels(
     }
 
     return { supports, resistances };
-  } catch (error) {
-    console.error("Failed to calculate key levels:", error);
-    return {
-      supports: [
-        { price: currentPrice * 0.96, distance: "4.0%", timeframe: "Daily" },
-        { price: currentPrice * 0.93, distance: "7.0%", timeframe: "Weekly" },
-        { price: currentPrice * 0.9, distance: "10.0%", timeframe: "HTF" },
-      ],
-      resistances: [
-        { price: currentPrice * 1.04, distance: "4.0%", timeframe: "Daily" },
-        { price: currentPrice * 1.07, distance: "7.0%", timeframe: "Weekly" },
-        { price: currentPrice * 1.1, distance: "10.0%", timeframe: "HTF" },
-      ],
-    };
+  } catch {
+    return fallbackKeyLevels(currentPrice);
   }
 }

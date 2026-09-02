@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +7,8 @@ import { cgPriceUsdByIdSafe } from "@/lib/markets/coingecko";
 import { calculateKeyLevels } from "@/lib/markets/pivotPoints";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
+import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2";
+import { deleteAssetExitStrategiesIfNoHolding } from "@/services/exit-strategy.service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,14 @@ type DbRow = {
   fee_usd: unknown;
   chain_id: string | null;
 };
+
+const DeleteBody = z.object({
+  mode: z.enum(["keepHistory", "deleteHistory"]).default("keepHistory"),
+});
+
+function symbolFromParam(symbol: string) {
+  return decodeURIComponent(symbol).trim().toUpperCase();
+}
 
 export async function GET(
   request: Request,
@@ -34,7 +45,7 @@ export async function GET(
     const accountId = session.accountId;
     await migrateLegacyPortfolioTrades(accountId);
     const { symbol: symbolParam } = await params;
-    symbol = symbolParam.toUpperCase();
+    symbol = symbolFromParam(symbolParam);
 
     const assetMeta = await prisma.verified_asset.findUnique({
       where: { symbol },
@@ -173,6 +184,139 @@ export async function GET(
     });
   } catch (e) {
     console.error(`[GET /api/portfolio/${symbol}] error:`, e);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ symbol: string }> },
+) {
+  let symbol = "[unknown]";
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.accountId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const accountId = session.accountId;
+    await migrateLegacyPortfolioTrades(accountId);
+    const { symbol: symbolParam } = await params;
+    symbol = symbolFromParam(symbolParam);
+    if (!symbol || symbol === "CASH") {
+      return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    }
+
+    const body = DeleteBody.parse(await req.json().catch(() => ({})));
+
+    if (body.mode === "deleteHistory") {
+      const result = await prisma.portfolio_trade.deleteMany({
+        where: {
+          account_id: accountId,
+          asset_name: symbol,
+          kind: { in: ["buy", "sell", "init"] },
+        },
+      });
+
+      await prisma.portfolio_asset_setting.deleteMany({
+        where: { account_id: accountId, asset_symbol: symbol },
+      });
+      await deleteAssetExitStrategiesIfNoHolding(accountId, symbol);
+
+      return NextResponse.json({ ok: true, deletedTransactions: result.count });
+    }
+
+    const rows = (await prisma.portfolio_trade.findMany({
+      where: {
+        account_id: accountId,
+        asset_name: symbol,
+        kind: { in: ["buy", "sell", "init"] },
+      },
+      orderBy: { trade_datetime: "asc" },
+      select: {
+        id: true,
+        asset_name: true,
+        kind: true,
+        qty: true,
+        price_usd: true,
+        trade_datetime: true,
+        fee_usd: true,
+        chain_id: true,
+      },
+    })) as DbRow[];
+
+    if (!rows.length) {
+      return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    }
+
+    const assetMeta = await prisma.verified_asset.findUnique({
+      where: { symbol },
+      select: { coingecko_id: true },
+    });
+
+    const positions = Array.from(
+      rows
+        .reduce((map, row) => {
+          const key = row.chain_id ?? "other";
+          const list = map.get(key) ?? [];
+          list.push(row);
+          map.set(key, list);
+          return map;
+        }, new Map<string, DbRow[]>())
+        .entries(),
+    ).map(([chainId, chainRows]) => {
+      const pnl = calculatePortfolioPnl(
+        chainRows.map((row) => ({
+          id: row.id,
+          executedAt: row.trade_datetime,
+          kind: row.kind,
+          qty: row.qty,
+          priceUsd: row.price_usd,
+          feeUsd: row.fee_usd,
+        })),
+      );
+
+      return {
+        chainId: chainId === "other" ? null : chainId,
+        qtyHeld: pnl.qtyHeld,
+        avgPriceUsd: pnl.qtyHeld > 0 ? pnl.costBasisUsd / pnl.qtyHeld : 0,
+      };
+    });
+
+    let marketPrice = 0;
+    if (assetMeta?.coingecko_id) {
+      const price = await cgPriceUsdByIdSafe(assetMeta.coingecko_id);
+      if (price.ok) marketPrice = price.priceUsd;
+    }
+
+    let closedTransactions = 0;
+    for (const position of positions) {
+      if (position.qtyHeld <= 0) continue;
+      const priceUsd = marketPrice > 0 ? marketPrice : position.avgPriceUsd;
+      if (!Number.isFinite(priceUsd) || priceUsd <= 0) continue;
+
+      await PortfolioRepoV2.createSpotTransaction({
+        accountId,
+        symbol,
+        side: "sell",
+        qty: position.qtyHeld,
+        priceUsd,
+        feeUsd: 0,
+        chainId: position.chainId,
+        executedAt: new Date(),
+        notes: "[PORTFOLIO_REMOVE_ASSET] keep-history close position",
+      });
+      closedTransactions += 1;
+    }
+
+    await deleteAssetExitStrategiesIfNoHolding(accountId, symbol);
+
+    return NextResponse.json({ ok: true, closedTransactions });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.flatten() }, { status: 400 });
+    }
+    console.error(`[DELETE /api/portfolio/${symbol}] error:`, err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

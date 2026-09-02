@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Card from "@/components/ui/Card";
-import { PieChart, Pie, ResponsiveContainer, Cell } from "recharts";
+import { PieChart, Pie, ResponsiveContainer, Cell, Tooltip } from "recharts";
 import { buildChainAllocation } from "@/components/portfolio/chain-utils";
 
 export type AllocationAssetRow = {
@@ -33,6 +33,14 @@ const ASSET_COLORS = [
   "#7C3AED",
   "#10B981",
 ];
+
+function usd(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0);
+}
 
 export default function HoldingsAllocationCard(props: {
   assets: AllocationAssetRow[];
@@ -178,6 +186,32 @@ function AllocationDonutCard({
                     <Cell key={`${title}-${p.symbol}`} fill={p.color} />
                   ))}
                 </Pie>
+                <Tooltip
+                  cursor={false}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as PieRow | undefined;
+                    if (!row) return null;
+
+                    return (
+                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-[0_12px_30px_rgba(15,23,42,0.14)]">
+                        <div className="flex items-center gap-2 font-extrabold text-[#0F1B34]">
+                          <span
+                            className="h-2.5 w-2.5 rounded-[4px]"
+                            style={{ background: row.color }}
+                          />
+                          <span>{row.name}</span>
+                        </div>
+                        <div className="mt-1 grid gap-0.5 pl-4 font-semibold text-[#64748B]">
+                          <span>{row.symbol}</span>
+                          <span>
+                            {row.percent.toFixed(1)}% · {usd(row.valueUsd)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
 

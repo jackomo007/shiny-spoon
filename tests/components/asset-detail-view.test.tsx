@@ -1,5 +1,6 @@
 import AssetDetailView from "@/components/portfolio/AssetDetailView";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const assetResponse = {
@@ -70,5 +71,19 @@ describe("AssetDetailView", () => {
     expect(await screen.findByText("Hyperliquid Transactions")).toBeInTheDocument();
     expect(screen.getAllByText("$4,481.00")).toHaveLength(2);
     expect(screen.getByText("-$17.86 fee")).toBeInTheDocument();
+  });
+
+  it("opens the remove asset confirmation with keep history selected by default", async () => {
+    const user = userEvent.setup();
+
+    render(<AssetDetailView symbol="HYPE" onBack={vi.fn()} />);
+
+    await screen.findByText("Hyperliquid Transactions");
+    await user.click(screen.getByLabelText("Asset actions"));
+    await user.click(screen.getByRole("button", { name: "Delete HYPE Position" }));
+
+    expect(screen.getByText("This will remove HYPE from your portfolio.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Keep transaction history")).toBeChecked();
+    expect(screen.getByLabelText("Delete asset and transaction history")).not.toBeChecked();
   });
 });

@@ -454,6 +454,9 @@ export default function PortfolioPage() {
         open={modalOpen}
         mode={editingTx ? "edit" : "add"}
         initialTx={editingTx}
+        stablecoinSymbols={(data?.assets ?? [])
+          .filter((asset) => asset.isStablecoin)
+          .map((asset) => asset.symbol)}
         onClose={() => {
           setModalOpen(false);
           setEditingTx(null);

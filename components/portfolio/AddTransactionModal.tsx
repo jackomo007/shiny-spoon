@@ -47,6 +47,15 @@ type SearchAssetsResponse = {
 
 type PriceResponse = { priceUsd: number; change24hPct: number | null };
 
+const CONVERT_PROCEEDS_ENABLED_KEY = "stakk.sellConvert.enabled";
+const CONVERT_PROCEEDS_ASSET_KEY = "stakk.sellConvert.asset";
+const STABLECOIN_SYMBOLS = new Set(["USDT", "USDC", "DAI", "TUSD", "USDP"]);
+const DEFAULT_RECEIVE_ASSET: AssetPick = {
+  id: "tether",
+  symbol: "USDT",
+  name: "Tether",
+};
+
 export default function AddTransactionModal(props: {
   open: boolean;
   onClose: () => void;
@@ -54,6 +63,7 @@ export default function AddTransactionModal(props: {
   mode?: "add" | "edit";
   initialTx?: TxRow | null;
   initialAsset?: AssetPick | null;
+  stablecoinSymbols?: string[];
 }) {
   const mode = props.mode ?? "add";
   const [step, setStep] = useState<Step>("pick");
@@ -73,6 +83,9 @@ export default function AddTransactionModal(props: {
   const [totalRaw, setTotalRaw] = useState<string>("");
   const [feeRaw, setFeeRaw] = useState<string>("0");
   const [isStablecoin, setIsStablecoin] = useState(false);
+  const [convertProceeds, setConvertProceeds] = useState(false);
+  const [receiveAsset, setReceiveAsset] =
+    useState<AssetPick>(DEFAULT_RECEIVE_ASSET);
   const [busy, setBusy] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -114,6 +127,8 @@ export default function AddTransactionModal(props: {
     setTotalRaw("");
     setFeeRaw("0");
     setIsStablecoin(false);
+    setConvertProceeds(false);
+    setReceiveAsset(DEFAULT_RECEIVE_ASSET);
     setBusy(false);
 
     setConfirmDeleteOpen(false);
@@ -124,6 +139,32 @@ export default function AddTransactionModal(props: {
 
   useEffect(() => {
     if (!props.open) resetAll();
+  }, [props.open]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    if (typeof window === "undefined") return;
+
+    setConvertProceeds(
+      window.localStorage.getItem(CONVERT_PROCEEDS_ENABLED_KEY) === "true",
+    );
+
+    const storedAsset = window.localStorage.getItem(CONVERT_PROCEEDS_ASSET_KEY);
+    if (!storedAsset) return;
+
+    try {
+      const parsed = JSON.parse(storedAsset) as Partial<AssetPick>;
+      if (parsed.id && parsed.symbol && parsed.name) {
+        setReceiveAsset({
+          id: String(parsed.id),
+          symbol: String(parsed.symbol).toUpperCase(),
+          name: String(parsed.name),
+          thumb: parsed.thumb ?? null,
+        });
+      }
+    } catch {
+      setReceiveAsset(DEFAULT_RECEIVE_ASSET);
+    }
   }, [props.open]);
 
   useEffect(() => {
@@ -326,6 +367,77 @@ export default function AddTransactionModal(props: {
   const canDelete =
     mode === "edit" && step !== "pick" && !!props.initialTx?.id && !busy;
   const hasLockedInitialAsset = mode === "add" && !!props.initialAsset;
+  const selectedSymbol = selected?.symbol.trim().toUpperCase() ?? "";
+  const configuredStablecoins = useMemo(
+    () =>
+      new Set(
+        (props.stablecoinSymbols ?? [])
+          .map((symbol) => symbol.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    [props.stablecoinSymbols],
+  );
+  const isSelectedStablecoin =
+    isStablecoin ||
+    (!!selectedSymbol &&
+      (STABLECOIN_SYMBOLS.has(selectedSymbol) ||
+        configuredStablecoins.has(selectedSymbol)));
+  const canConvertSellProceeds =
+    mode === "add" && side === "sell" && !!selected && !isSelectedStablecoin;
+  const receiveOptions = useMemo(() => {
+    const rows = [receiveAsset, DEFAULT_RECEIVE_ASSET, ...top]
+      .filter((asset) => asset.symbol.trim().toUpperCase() !== selectedSymbol)
+      .filter(
+        (asset, index, list) =>
+          list.findIndex(
+            (item) =>
+              item.symbol.trim().toUpperCase() ===
+              asset.symbol.trim().toUpperCase(),
+          ) === index,
+      );
+
+    return rows.length ? rows : [DEFAULT_RECEIVE_ASSET];
+  }, [receiveAsset, selectedSymbol, top]);
+  const effectiveReceiveAsset =
+    receiveOptions.find((asset) => asset.symbol === receiveAsset.symbol) ??
+    receiveOptions[0] ??
+    DEFAULT_RECEIVE_ASSET;
+  const netSellProceedsUsd = Math.max(
+    numFromRaw(totalRaw) - numFromRaw(feeRaw),
+    0,
+  );
+  const effectiveReceivePriceUsd =
+    effectiveReceiveAsset.priceUsd && effectiveReceiveAsset.priceUsd > 0
+      ? effectiveReceiveAsset.priceUsd
+      : STABLECOIN_SYMBOLS.has(effectiveReceiveAsset.symbol)
+        ? 1
+        : 0;
+  const estimatedReceiveQty =
+    effectiveReceivePriceUsd > 0
+      ? netSellProceedsUsd / effectiveReceivePriceUsd
+      : netSellProceedsUsd;
+
+  function setConvertProceedsPreference(next: boolean) {
+    setConvertProceeds(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CONVERT_PROCEEDS_ENABLED_KEY, String(next));
+    }
+  }
+
+  function setReceiveAssetPreference(next: AssetPick) {
+    setReceiveAsset(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        CONVERT_PROCEEDS_ASSET_KEY,
+        JSON.stringify({
+          id: next.id,
+          symbol: next.symbol,
+          name: next.name,
+          thumb: next.thumb ?? null,
+        }),
+      );
+    }
+  }
 
   async function handleDeleteNow() {
     if (!props.initialTx?.id) return;
@@ -427,6 +539,10 @@ export default function AddTransactionModal(props: {
                         chainId?: string;
                         isStablecoin?: boolean;
                         executedAt: string;
+                        convertProceeds?: {
+                          enabled: boolean;
+                          asset: { id: string; symbol: string; name: string };
+                        };
                       } = {
                         asset: {
                           id: selected.id,
@@ -451,6 +567,17 @@ export default function AddTransactionModal(props: {
                             ? isStablecoin
                             : undefined,
                         executedAt: new Date().toISOString(),
+                        convertProceeds:
+                          canConvertSellProceeds && convertProceeds
+                            ? {
+                                enabled: true,
+                                asset: {
+                                  id: effectiveReceiveAsset.id,
+                                  symbol: effectiveReceiveAsset.symbol,
+                                  name: effectiveReceiveAsset.name,
+                                },
+                              }
+                            : undefined,
                       };
 
                       const url =
@@ -498,7 +625,11 @@ export default function AddTransactionModal(props: {
                   }}
                   type="button"
                 >
-                  {mode === "edit" ? "Save changes" : "Save"}
+                  {canConvertSellProceeds && convertProceeds
+                    ? "Sell & Convert"
+                    : mode === "edit"
+                      ? "Save changes"
+                      : "Save"}
                 </button>
               )}
             </div>
@@ -728,6 +859,80 @@ export default function AddTransactionModal(props: {
               </label>
             ) : null}
 
+            {canConvertSellProceeds ? (
+              <div className="grid gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300"
+                    checked={convertProceeds}
+                    onChange={(e) =>
+                      setConvertProceedsPreference(e.target.checked)
+                    }
+                  />
+                  <span className="font-semibold text-slate-800">
+                    Convert proceeds to another asset
+                  </span>
+                </label>
+
+                {convertProceeds ? (
+                  <div className="grid gap-3 border-t border-gray-100 pt-3">
+                    <label className="grid gap-1">
+                      <span className="text-xs text-gray-500">Receive</span>
+                      <select
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#CBB5FF]"
+                        value={effectiveReceiveAsset.symbol}
+                        onChange={(event) => {
+                          const next =
+                            receiveOptions.find(
+                              (asset) => asset.symbol === event.target.value,
+                            ) ?? DEFAULT_RECEIVE_ASSET;
+                          setReceiveAssetPreference(next);
+                        }}
+                      >
+                        {receiveOptions.map((asset) => (
+                          <option key={asset.symbol} value={asset.symbol}>
+                            {asset.symbol} - {asset.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="grid gap-1 text-xs text-slate-600">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>You Sell</span>
+                        <span className="font-semibold text-slate-800">
+                          {numFromRaw(amountRaw).toLocaleString("en-US", {
+                            maximumFractionDigits: 8,
+                          })}{" "}
+                          {selected.symbol}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Value</span>
+                        <span className="font-semibold text-slate-800">
+                          {usd(netSellProceedsUsd)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>You Receive</span>
+                        <span className="font-semibold text-slate-800">
+                          ≈{" "}
+                          {estimatedReceiveQty.toLocaleString("en-US", {
+                            maximumFractionDigits: 8,
+                          })}{" "}
+                          {effectiveReceiveAsset.symbol}
+                        </span>
+                      </div>
+                      <div className="pt-2 font-semibold text-slate-700">
+                        {selected.symbol} → {effectiveReceiveAsset.symbol}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="text-xs text-gray-500">
               Price is pre-filled with the current market price and can be
               edited. Amount and Total are calculated from each other.
@@ -817,6 +1022,7 @@ function ChainPicker({
   onQueryChange: (value: string) => void;
   onSelect: (chain: ChainOption) => void;
 }) {
+  const [showOptions, setShowOptions] = useState(false);
   const fallback =
     selectedChainId && !options.some((chain) => chain.id === selectedChainId)
       ? {
@@ -827,17 +1033,32 @@ function ChainPicker({
       : null;
   const selected =
     options.find((chain) => chain.id === selectedChainId) ?? fallback;
+  const visibleOptions =
+    showOptions || query.trim()
+      ? options.length
+        ? options
+        : selected
+          ? [selected]
+          : []
+      : selected
+        ? [selected]
+        : [];
 
   return (
     <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-2">
       <input
         className="h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-[#CBB5FF]"
         value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
+        onChange={(event) => {
+          setShowOptions(true);
+          onQueryChange(event.target.value);
+        }}
+        onFocus={() => setShowOptions(true)}
+        onClick={() => setShowOptions(true)}
         placeholder={selected ? selected.name : "Search chains..."}
       />
       <div className="grid max-h-[194px] gap-1 overflow-y-auto">
-        {(options.length ? options : selected ? [selected] : []).map((chain) => {
+        {visibleOptions.map((chain) => {
           const active = chain.id === selectedChainId;
 
           return (
@@ -850,7 +1071,10 @@ function ChainPicker({
                   ? "bg-[#F5F0FF] font-semibold text-[#5F35D5]"
                   : "text-slate-700 hover:bg-gray-50",
               )}
-              onClick={() => onSelect(chain)}
+              onClick={() => {
+                onSelect(chain);
+                setShowOptions(false);
+              }}
             >
               <span className="min-w-0 truncate">{chain.name}</span>
               <span className="shrink-0 text-xs font-semibold text-slate-400">

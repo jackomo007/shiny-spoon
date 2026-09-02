@@ -132,4 +132,87 @@ describe("/api/portfolio/add-transaction", () => {
       }),
     )
   })
+
+  it("creates an automatic buy transaction from net sell proceeds when converting", async () => {
+    getOpenSpotHoldingMock.mockReset()
+    getOpenSpotHoldingMock
+      .mockResolvedValueOnce({
+        symbol: "ETH",
+        qty: 2,
+        investedUsd: 4000,
+        avgEntryPriceUsd: 2000,
+      })
+      .mockResolvedValueOnce(null)
+    findUniqueMock.mockImplementation(({ where }: { where: { symbol: string } }) => {
+      if (where.symbol === "ETH") {
+        return Promise.resolve({
+          coingecko_id: "ethereum",
+          name: "Ethereum",
+          image_url: "https://example.com/eth.png",
+        })
+      }
+
+      return Promise.resolve({
+        coingecko_id: "tether",
+        name: "Tether",
+        image_url: "https://example.com/usdt.png",
+      })
+    })
+    cgPriceUsdByIdMock.mockImplementation((id: string) => {
+      if (id === "tether") {
+        return Promise.resolve({ priceUsd: 1, change24hPct: 0 })
+      }
+
+      return Promise.resolve({ priceUsd: 3000, change24hPct: 2 })
+    })
+
+    const response = await POST(
+      new Request("http://localhost/api/portfolio/add-transaction", {
+        method: "POST",
+        body: JSON.stringify({
+          asset: { id: "ethereum", symbol: "ETH", name: "Ethereum" },
+          side: "sell",
+          priceMode: "custom",
+          priceUsd: 3000,
+          qty: 1.5,
+          feeUsd: 2,
+          executedAt: "2026-06-26T12:00:00.000Z",
+          convertProceeds: {
+            enabled: true,
+            asset: { id: "tether", symbol: "USDT", name: "Tether" },
+          },
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(createSpotTransactionMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        accountId: "acc_1",
+        symbol: "ETH",
+        side: "sell",
+        qty: 1.5,
+        priceUsd: 3000,
+        feeUsd: 2,
+      }),
+    )
+    expect(createSpotTransactionMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        accountId: "acc_1",
+        symbol: "USDT",
+        side: "buy",
+        qty: 4498,
+        priceUsd: 1,
+        feeUsd: 0,
+        chainId: "ethereum",
+      }),
+    )
+    expect(setPortfolioAssetStablecoinMock).toHaveBeenCalledWith({
+      accountId: "acc_1",
+      symbol: "USDT",
+      isStablecoin: true,
+    })
+  })
 })
