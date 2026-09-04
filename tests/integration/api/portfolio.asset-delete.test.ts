@@ -7,7 +7,7 @@ const {
   findUniqueMock,
   deleteManyTradesMock,
   deleteManySettingsMock,
-  createSpotTransactionMock,
+  setPortfolioAssetHiddenMock,
   deleteAssetExitStrategiesIfNoHoldingMock,
   cgPriceUsdByIdSafeMock,
 } = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const {
   findUniqueMock: vi.fn(),
   deleteManyTradesMock: vi.fn(),
   deleteManySettingsMock: vi.fn(),
-  createSpotTransactionMock: vi.fn(),
+  setPortfolioAssetHiddenMock: vi.fn(),
   deleteAssetExitStrategiesIfNoHoldingMock: vi.fn(),
   cgPriceUsdByIdSafeMock: vi.fn(),
 }));
@@ -49,14 +49,13 @@ vi.mock("@/services/portfolio-legacy-migration.service", () => ({
   migrateLegacyPortfolioTrades: migrateLegacyPortfolioTradesMock,
 }));
 
-vi.mock("@/data/repositories/portfolio.repo.v2", () => ({
-  PortfolioRepoV2: {
-    createSpotTransaction: createSpotTransactionMock,
-  },
+vi.mock("@/services/exit-strategy.service", () => ({
+  deleteAssetExitStrategiesIfNoHolding:
+    deleteAssetExitStrategiesIfNoHoldingMock,
 }));
 
-vi.mock("@/services/exit-strategy.service", () => ({
-  deleteAssetExitStrategiesIfNoHolding: deleteAssetExitStrategiesIfNoHoldingMock,
+vi.mock("@/services/portfolio-asset-settings.service", () => ({
+  setPortfolioAssetHidden: setPortfolioAssetHiddenMock,
 }));
 
 vi.mock("@/lib/markets/coingecko", () => ({
@@ -76,13 +75,13 @@ describe("/api/portfolio/[symbol] DELETE", () => {
     migrateLegacyPortfolioTradesMock.mockResolvedValue(undefined);
     findUniqueMock.mockResolvedValue({ coingecko_id: "hyperliquid" });
     cgPriceUsdByIdSafeMock.mockResolvedValue({ ok: true, priceUsd: 82 });
-    createSpotTransactionMock.mockResolvedValue("tx_close");
+    setPortfolioAssetHiddenMock.mockResolvedValue(undefined);
     deleteManyTradesMock.mockResolvedValue({ count: 3 });
     deleteManySettingsMock.mockResolvedValue({ count: 1 });
     deleteAssetExitStrategiesIfNoHoldingMock.mockResolvedValue(undefined);
   });
 
-  it("keeps history by creating a closing sell transaction", async () => {
+  it("keeps history by hiding the asset without creating transactions", async () => {
     findManyMock.mockResolvedValue([
       {
         id: "tx_1",
@@ -105,16 +104,11 @@ describe("/api/portfolio/[symbol] DELETE", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(createSpotTransactionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountId: "acc_1",
-        symbol: "HYPE",
-        side: "sell",
-        qty: 2,
-        priceUsd: 82,
-        chainId: "hyperliquid",
-      }),
-    );
+    expect(setPortfolioAssetHiddenMock).toHaveBeenCalledWith({
+      accountId: "acc_1",
+      symbol: "HYPE",
+      isHidden: true,
+    });
     expect(deleteManyTradesMock).not.toHaveBeenCalled();
     expect(deleteAssetExitStrategiesIfNoHoldingMock).toHaveBeenCalledWith(
       "acc_1",
@@ -142,6 +136,6 @@ describe("/api/portfolio/[symbol] DELETE", () => {
     expect(deleteManySettingsMock).toHaveBeenCalledWith({
       where: { account_id: "acc_1", asset_symbol: "HYPE" },
     });
-    expect(createSpotTransactionMock).not.toHaveBeenCalled();
+    expect(setPortfolioAssetHiddenMock).not.toHaveBeenCalled();
   });
 });

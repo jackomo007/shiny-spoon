@@ -210,9 +210,7 @@ function ScaleOutPlanList({
                 {signedPct(row.gainPercent, 0)}
               </div>
 
-              <div
-                className={cls(isCompleted && "text-slate-500")}
-              >
+              <div className={cls(isCompleted && "text-slate-500")}>
                 <div className="text-[10px] font-bold text-slate-600">
                   Scale Out
                 </div>
@@ -231,10 +229,7 @@ function ScaleOutPlanList({
               </div>
 
               <div
-                className={cls(
-                  "text-right",
-                  isCompleted && "text-slate-500",
-                )}
+                className={cls("text-right", isCompleted && "text-slate-500")}
               >
                 {isCompleted ? (
                   <div className="mb-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
@@ -268,9 +263,7 @@ export default function AssetDetailView({
   const [error, setError] = useState<string | null>(null);
 
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
-  const [transactionMode, setTransactionMode] = useState<"add" | "edit">(
-    "add",
-  );
+  const [transactionMode, setTransactionMode] = useState<"add" | "edit">("add");
   const [selectedTx, setSelectedTx] = useState<TxRow | null>(null);
   const [strategies, setStrategies] = useState<ExitStrategySummary[]>([]);
   const [strategyLoading, setStrategyLoading] = useState(true);
@@ -511,7 +504,9 @@ export default function AssetDetailView({
     if (!data) return;
     setSellPercent(activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT);
     setGainPercent(activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT);
-    setStartingQuantity(activeStrategy?.startingQuantity ?? data.balance.quantity);
+    setStartingQuantity(
+      activeStrategy?.startingQuantity ?? data.balance.quantity,
+    );
     setModalPlanStepCount(6);
     setStrategyError(null);
     setStrategyModalOpen(true);
@@ -571,11 +566,23 @@ export default function AssetDetailView({
             <div className="mb-5 grid grid-cols-[40px_minmax(0,1fr)_40px] grid-rows-[40px_auto] items-start gap-x-3">
               <button
                 onClick={onBack}
-                className="col-start-1 row-start-1 grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full border border-slate-200 bg-white text-xl font-bold leading-none text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:bg-slate-50"
+                className="col-start-1 row-start-1 grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:bg-slate-50"
                 type="button"
                 aria-label="Back to portfolio"
               >
-                ←
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M19 12H5" />
+                  <path d="M12 19l-7-7 7-7" />
+                </svg>
               </button>
               <div className="col-start-2 row-start-1 min-w-0 text-[15px] font-extrabold leading-10 text-slate-950">
                 Portfolio
@@ -777,10 +784,10 @@ export default function AssetDetailView({
                 </div>
                 <div className="text-xs font-semibold text-slate-500">
                   Strategy: Sell{" "}
-                  {num(activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT, 0)}
-                  % of your remaining position every{" "}
-                  {num(activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT, 0)}
-                  % gain.
+                  {num(activeStrategy?.sellPercent ?? DEFAULT_SELL_PERCENT, 0)}%
+                  of your remaining position every{" "}
+                  {num(activeStrategy?.gainPercent ?? DEFAULT_GAIN_PERCENT, 0)}%
+                  gain.
                 </div>
               </div>
               <button
@@ -988,6 +995,17 @@ export default function AssetDetailView({
           }
         >
           <div className="grid gap-5 text-sm text-slate-700">
+            {removingAsset ? (
+              <div className="grid gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                <div className="text-xs font-semibold text-red-700">
+                  Removing asset...
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-red-100">
+                  <div className="h-full w-1/2 animate-[pulse_1.1s_ease-in-out_infinite] rounded-full bg-red-500" />
+                </div>
+              </div>
+            ) : null}
+
             <p>This will remove {symbol} from your portfolio.</p>
 
             <div className="grid gap-2">
@@ -1149,9 +1167,7 @@ export default function AssetDetailView({
               </label>
 
               <label className="grid gap-1">
-                <span className="text-xs text-gray-500">
-                  Starting Quantity
-                </span>
+                <span className="text-xs text-gray-500">Starting Quantity</span>
                 <input
                   type="number"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2"

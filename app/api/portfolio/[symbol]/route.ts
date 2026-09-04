@@ -7,8 +7,8 @@ import { cgPriceUsdByIdSafe } from "@/lib/markets/coingecko";
 import { calculateKeyLevels } from "@/lib/markets/pivotPoints";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
-import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2";
 import { deleteAssetExitStrategiesIfNoHolding } from "@/services/exit-strategy.service";
+import { setPortfolioAssetHidden } from "@/services/portfolio-asset-settings.service";
 
 export const dynamic = "force-dynamic";
 
@@ -249,69 +249,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Asset not found" }, { status: 404 });
     }
 
-    const assetMeta = await prisma.verified_asset.findUnique({
-      where: { symbol },
-      select: { coingecko_id: true },
-    });
-
-    const positions = Array.from(
-      rows
-        .reduce((map, row) => {
-          const key = row.chain_id ?? "other";
-          const list = map.get(key) ?? [];
-          list.push(row);
-          map.set(key, list);
-          return map;
-        }, new Map<string, DbRow[]>())
-        .entries(),
-    ).map(([chainId, chainRows]) => {
-      const pnl = calculatePortfolioPnl(
-        chainRows.map((row) => ({
-          id: row.id,
-          executedAt: row.trade_datetime,
-          kind: row.kind,
-          qty: row.qty,
-          priceUsd: row.price_usd,
-          feeUsd: row.fee_usd,
-        })),
-      );
-
-      return {
-        chainId: chainId === "other" ? null : chainId,
-        qtyHeld: pnl.qtyHeld,
-        avgPriceUsd: pnl.qtyHeld > 0 ? pnl.costBasisUsd / pnl.qtyHeld : 0,
-      };
-    });
-
-    let marketPrice = 0;
-    if (assetMeta?.coingecko_id) {
-      const price = await cgPriceUsdByIdSafe(assetMeta.coingecko_id);
-      if (price.ok) marketPrice = price.priceUsd;
-    }
-
-    let closedTransactions = 0;
-    for (const position of positions) {
-      if (position.qtyHeld <= 0) continue;
-      const priceUsd = marketPrice > 0 ? marketPrice : position.avgPriceUsd;
-      if (!Number.isFinite(priceUsd) || priceUsd <= 0) continue;
-
-      await PortfolioRepoV2.createSpotTransaction({
-        accountId,
-        symbol,
-        side: "sell",
-        qty: position.qtyHeld,
-        priceUsd,
-        feeUsd: 0,
-        chainId: position.chainId,
-        executedAt: new Date(),
-        notes: "[PORTFOLIO_REMOVE_ASSET] keep-history close position",
-      });
-      closedTransactions += 1;
-    }
-
+    await setPortfolioAssetHidden({ accountId, symbol, isHidden: true });
     await deleteAssetExitStrategiesIfNoHolding(accountId, symbol);
 
-    return NextResponse.json({ ok: true, closedTransactions });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.flatten() }, { status: 400 });

@@ -9,7 +9,7 @@ import {
 } from "@/lib/markets/coingecko";
 import { migrateLegacyPortfolioTrades } from "@/services/portfolio-legacy-migration.service";
 import { calculatePortfolioPnl } from "@/lib/portfolio-pnl";
-import { getStablecoinSymbols } from "@/services/portfolio-asset-settings.service";
+import { getPortfolioAssetSettings } from "@/services/portfolio-asset-settings.service";
 import {
   getDefaultPortfolioChainId,
   getPortfolioChainInfo,
@@ -101,7 +101,8 @@ export async function GET() {
 
     const accountId = session.accountId;
     await migrateLegacyPortfolioTrades(accountId);
-    const stablecoinSymbols = await getStablecoinSymbols(accountId);
+    const { stablecoinSymbols, hiddenSymbols } =
+      await getPortfolioAssetSettings(accountId);
 
     const rows = (await prisma.portfolio_trade.findMany({
       where: {
@@ -172,9 +173,7 @@ export async function GET() {
       ]),
     );
     const marketResult = await cgMarketsByIdsSafe(
-      enriched
-        .map((m) => m.coingeckoId)
-        .filter((id): id is string => !!id),
+      enriched.map((m) => m.coingeckoId).filter((id): id is string => !!id),
     );
     const marketRows = marketResult.markets;
     const marketById = new Map(
@@ -259,7 +258,8 @@ export async function GET() {
       const kind = String(r.kind || "").toLowerCase();
       const side: "buy" | "sell" = kind === "sell" ? "sell" : "buy";
       const chainId =
-        normalizePortfolioChainId(r.chain_id) ?? getDefaultPortfolioChainId(symbol);
+        normalizePortfolioChainId(r.chain_id) ??
+        getDefaultPortfolioChainId(symbol);
 
       const qty = Number(r.qty ?? 0);
       const price = Number(r.price_usd ?? 0);
@@ -338,7 +338,9 @@ export async function GET() {
       }
     }
 
-    const openStates = Array.from(st.values()).filter((g) => g.qtyHeld > 0);
+    const openStates = Array.from(st.values()).filter(
+      (g) => g.qtyHeld > 0 && !hiddenSymbols.has(g.symbol),
+    );
 
     const assetRows = await Promise.all(
       openStates.map(async (g) => {
@@ -428,14 +430,16 @@ export async function GET() {
       totalInvestedUsd > 0 ? (totalProfitUsd / totalInvestedUsd) * 100 : 0;
 
     const top =
-      assetsSorted.filter((asset) => !asset.isStablecoin).sort((a, b) => {
-        const ap = a.currentProfitPct;
-        const bp = b.currentProfitPct;
-        if (ap != null && bp != null) return bp - ap;
-        if (ap != null && bp == null) return -1;
-        if (ap == null && bp != null) return 1;
-        return (b.currentProfitUsd ?? 0) - (a.currentProfitUsd ?? 0);
-      })[0] ?? null;
+      assetsSorted
+        .filter((asset) => !asset.isStablecoin)
+        .sort((a, b) => {
+          const ap = a.currentProfitPct;
+          const bp = b.currentProfitPct;
+          if (ap != null && bp != null) return bp - ap;
+          if (ap != null && bp == null) return -1;
+          if (ap == null && bp != null) return 1;
+          return (b.currentProfitUsd ?? 0) - (a.currentProfitUsd ?? 0);
+        })[0] ?? null;
 
     return NextResponse.json({
       summary: {

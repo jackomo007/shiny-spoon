@@ -1,19 +1,25 @@
-import { NextResponse } from "next/server"
-import { z } from "zod"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2"
-import { getOpenSpotHolding } from "@/services/portfolio-holdings.service"
-import { ensureDefaultExitStrategyForAsset } from "@/services/exit-strategy.service"
-import { prisma } from "@/lib/prisma"
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { PortfolioRepoV2 } from "@/data/repositories/portfolio.repo.v2";
+import { getOpenSpotHolding } from "@/services/portfolio-holdings.service";
+import { ensureDefaultExitStrategyForAsset } from "@/services/exit-strategy.service";
+import { prisma } from "@/lib/prisma";
 import {
   cgCoinMetaByIdSafe,
   cgNormalizeOrResolveCoinId,
-} from "@/lib/markets/coingecko"
-import { setPortfolioAssetStablecoin } from "@/services/portfolio-asset-settings.service"
-import { getDefaultPortfolioChainId, normalizePortfolioChainId } from "@/lib/portfolio-chains"
+} from "@/lib/markets/coingecko";
+import {
+  setPortfolioAssetHidden,
+  setPortfolioAssetStablecoin,
+} from "@/services/portfolio-asset-settings.service";
+import {
+  getDefaultPortfolioChainId,
+  normalizePortfolioChainId,
+} from "@/lib/portfolio-chains";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 const Body = z.object({
   symbol: z.string().min(1),
@@ -23,41 +29,45 @@ const Body = z.object({
   chainId: z.string().min(1).optional().nullable(),
   isStablecoin: z.boolean().optional(),
   strategyId: z.string().min(1).optional(),
-  executedAt: z.string().datetime(), 
-})
+  executedAt: z.string().datetime(),
+});
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.accountId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const accountId = session.accountId
-    const data = Body.parse(await req.json())
-    const symbol = data.symbol.toUpperCase()
+    const accountId = session.accountId;
+    const data = Body.parse(await req.json());
+    const symbol = data.symbol.toUpperCase();
     const chainId =
-      normalizePortfolioChainId(data.chainId) ?? getDefaultPortfolioChainId(symbol)
-    const existingHolding = await getOpenSpotHolding(accountId, symbol)
+      normalizePortfolioChainId(data.chainId) ??
+      getDefaultPortfolioChainId(symbol);
+    const existingHolding = await getOpenSpotHolding(accountId, symbol);
 
-    let coingeckoId: string | null = null
-    let name: string | null = null
-    let imageUrl: string | null = null
+    let coingeckoId: string | null = null;
+    let name: string | null = null;
+    let imageUrl: string | null = null;
 
     try {
       coingeckoId = await cgNormalizeOrResolveCoinId({
         assetId: symbol,
         assetSymbol: symbol,
-      })
+      });
 
       if (coingeckoId) {
-        const meta = await cgCoinMetaByIdSafe(coingeckoId)
+        const meta = await cgCoinMetaByIdSafe(coingeckoId);
         if (meta.ok) {
-          name = meta.name || null
-          imageUrl = meta.imageUrl
+          name = meta.name || null;
+          imageUrl = meta.imageUrl;
         }
       }
     } catch (error) {
-      console.warn("[POST /api/portfolio/add-asset] metadata lookup failed:", error)
+      console.warn(
+        "[POST /api/portfolio/add-asset] metadata lookup failed:",
+        error,
+      );
     }
 
     await prisma.verified_asset.upsert({
@@ -75,15 +85,17 @@ export async function POST(req: Request) {
         image_url: imageUrl,
       },
       select: { id: true },
-    })
+    });
 
     if (data.isStablecoin != null) {
       await setPortfolioAssetStablecoin({
         accountId,
         symbol,
         isStablecoin: data.isStablecoin,
-      })
+      });
     }
+
+    await setPortfolioAssetHidden({ accountId, symbol, isHidden: false });
 
     await PortfolioRepoV2.createInitTransaction({
       accountId,
@@ -94,18 +106,18 @@ export async function POST(req: Request) {
       chainId,
       executedAt: new Date(data.executedAt),
       notes: `[PORTFOLIO_INIT] chain:${chainId}`,
-    })
+    });
 
     if (!existingHolding) {
-      await ensureDefaultExitStrategyForAsset(accountId, symbol)
+      await ensureDefaultExitStrategyForAsset(accountId, symbol);
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.flatten() }, { status: 400 })
+      return NextResponse.json({ error: err.flatten() }, { status: 400 });
     }
-    console.error("[POST /api/portfolio/add-asset] error:", err)
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    console.error("[POST /api/portfolio/add-asset] error:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

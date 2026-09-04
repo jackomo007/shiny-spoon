@@ -166,7 +166,7 @@ function AllocationDonutCard({
         </div>
       ) : (
         <div className="flex flex-1 flex-col justify-between gap-3 pt-2">
-          <div className="relative mx-auto h-[165px] w-full max-w-[270px] [&_.recharts-sector:focus]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper:focus]:outline-none [&_svg:focus]:outline-none">
+          <div className="relative mx-auto h-[165px] w-full max-w-[270px] overflow-visible [&_.recharts-sector:focus]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-tooltip-wrapper]:!z-30 [&_.recharts-wrapper:focus]:outline-none [&_svg:focus]:outline-none">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart
                 className="outline-none [&_*:focus]:outline-none"
@@ -188,6 +188,8 @@ function AllocationDonutCard({
                 </Pie>
                 <Tooltip
                   cursor={false}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  wrapperStyle={{ zIndex: 30, pointerEvents: "none" }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const row = payload[0]?.payload as PieRow | undefined;
@@ -215,7 +217,7 @@ function AllocationDonutCard({
               </PieChart>
             </ResponsiveContainer>
 
-            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+            <div className="pointer-events-none absolute inset-0 z-0 grid place-items-center text-center">
               <div>
                 <div className="text-[24px] font-extrabold leading-none text-[#0F1B34]">
                   {centerValue}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   getServerSessionMock,
@@ -11,6 +11,7 @@ const {
   ensureDefaultExitStrategyForAssetMock,
   deleteAssetExitStrategiesIfNoHoldingMock,
   getOpenSpotHoldingMock,
+  setPortfolioAssetHiddenMock,
   setPortfolioAssetStablecoinMock,
 } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
@@ -23,22 +24,23 @@ const {
   ensureDefaultExitStrategyForAssetMock: vi.fn(),
   deleteAssetExitStrategiesIfNoHoldingMock: vi.fn(),
   getOpenSpotHoldingMock: vi.fn(),
+  setPortfolioAssetHiddenMock: vi.fn(),
   setPortfolioAssetStablecoinMock: vi.fn(),
-}))
+}));
 
 vi.mock("next-auth", () => ({
   getServerSession: getServerSessionMock,
-}))
+}));
 
 vi.mock("@/lib/auth", () => ({
   authOptions: {},
-}))
+}));
 
 vi.mock("@/data/repositories/portfolio.repo.v2", () => ({
   PortfolioRepoV2: {
     createSpotTransaction: createSpotTransactionMock,
   },
-}))
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -47,62 +49,65 @@ vi.mock("@/lib/prisma", () => ({
       upsert: upsertMock,
     },
   },
-}))
+}));
 
 vi.mock("@/lib/markets/coingecko", () => ({
   cgNormalizeOrResolveCoinId: cgNormalizeOrResolveCoinIdMock,
   cgPriceUsdById: cgPriceUsdByIdMock,
   cgCoinMetaByIdSafe: cgCoinMetaByIdSafeMock,
-}))
+}));
 
 vi.mock("@/services/exit-strategy.service", () => ({
   ensureDefaultExitStrategyForAsset: ensureDefaultExitStrategyForAssetMock,
-  deleteAssetExitStrategiesIfNoHolding: deleteAssetExitStrategiesIfNoHoldingMock,
-}))
+  deleteAssetExitStrategiesIfNoHolding:
+    deleteAssetExitStrategiesIfNoHoldingMock,
+}));
 
 vi.mock("@/services/portfolio-holdings.service", () => ({
   getOpenSpotHolding: getOpenSpotHoldingMock,
-}))
+}));
 
 vi.mock("@/services/portfolio-asset-settings.service", () => ({
+  setPortfolioAssetHidden: setPortfolioAssetHiddenMock,
   setPortfolioAssetStablecoin: setPortfolioAssetStablecoinMock,
-}))
+}));
 
-import { POST } from "@/app/api/portfolio/add-transaction/route"
+import { POST } from "@/app/api/portfolio/add-transaction/route";
 
 describe("/api/portfolio/add-transaction", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    getServerSessionMock.mockResolvedValue({ accountId: "acc_1" })
+    vi.clearAllMocks();
+    getServerSessionMock.mockResolvedValue({ accountId: "acc_1" });
     findUniqueMock.mockResolvedValue({
       coingecko_id: "hyperliquid",
       name: "Hyperliquid",
       image_url: "https://example.com/hype.png",
-    })
-    upsertMock.mockResolvedValue({ id: "asset_1" })
-    cgNormalizeOrResolveCoinIdMock.mockResolvedValue("hyperliquid")
+    });
+    upsertMock.mockResolvedValue({ id: "asset_1" });
+    cgNormalizeOrResolveCoinIdMock.mockResolvedValue("hyperliquid");
     cgPriceUsdByIdMock.mockResolvedValue({
       priceUsd: 59,
       change24hPct: 2,
-    })
+    });
     cgCoinMetaByIdSafeMock.mockResolvedValue({
       ok: true,
       id: "hyperliquid",
       symbol: "hype",
       name: "Hyperliquid",
       imageUrl: "https://example.com/hype.png",
-    })
-    createSpotTransactionMock.mockResolvedValue("tx_1")
-    ensureDefaultExitStrategyForAssetMock.mockResolvedValue(undefined)
-    deleteAssetExitStrategiesIfNoHoldingMock.mockResolvedValue(undefined)
+    });
+    createSpotTransactionMock.mockResolvedValue("tx_1");
+    ensureDefaultExitStrategyForAssetMock.mockResolvedValue(undefined);
+    deleteAssetExitStrategiesIfNoHoldingMock.mockResolvedValue(undefined);
     getOpenSpotHoldingMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
       symbol: "HYPE",
       qty: 1,
       investedUsd: 100,
       avgEntryPriceUsd: 100,
-    })
-    setPortfolioAssetStablecoinMock.mockResolvedValue(undefined)
-  })
+    });
+    setPortfolioAssetHiddenMock.mockResolvedValue(undefined);
+    setPortfolioAssetStablecoinMock.mockResolvedValue(undefined);
+  });
 
   it("derives quantity from gross total without subtracting the buy fee", async () => {
     const response = await POST(
@@ -118,9 +123,9 @@ describe("/api/portfolio/add-transaction", () => {
           executedAt: "2026-06-26T12:00:00.000Z",
         }),
       }),
-    )
+    );
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(200);
     expect(createSpotTransactionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: "acc_1",
@@ -130,11 +135,16 @@ describe("/api/portfolio/add-transaction", () => {
         priceUsd: 59,
         feeUsd: 17.86,
       }),
-    )
-  })
+    );
+    expect(setPortfolioAssetHiddenMock).toHaveBeenCalledWith({
+      accountId: "acc_1",
+      symbol: "HYPE",
+      isHidden: false,
+    });
+  });
 
   it("creates an automatic buy transaction from net sell proceeds when converting", async () => {
-    getOpenSpotHoldingMock.mockReset()
+    getOpenSpotHoldingMock.mockReset();
     getOpenSpotHoldingMock
       .mockResolvedValueOnce({
         symbol: "ETH",
@@ -142,29 +152,31 @@ describe("/api/portfolio/add-transaction", () => {
         investedUsd: 4000,
         avgEntryPriceUsd: 2000,
       })
-      .mockResolvedValueOnce(null)
-    findUniqueMock.mockImplementation(({ where }: { where: { symbol: string } }) => {
-      if (where.symbol === "ETH") {
-        return Promise.resolve({
-          coingecko_id: "ethereum",
-          name: "Ethereum",
-          image_url: "https://example.com/eth.png",
-        })
-      }
+      .mockResolvedValueOnce(null);
+    findUniqueMock.mockImplementation(
+      ({ where }: { where: { symbol: string } }) => {
+        if (where.symbol === "ETH") {
+          return Promise.resolve({
+            coingecko_id: "ethereum",
+            name: "Ethereum",
+            image_url: "https://example.com/eth.png",
+          });
+        }
 
-      return Promise.resolve({
-        coingecko_id: "tether",
-        name: "Tether",
-        image_url: "https://example.com/usdt.png",
-      })
-    })
+        return Promise.resolve({
+          coingecko_id: "tether",
+          name: "Tether",
+          image_url: "https://example.com/usdt.png",
+        });
+      },
+    );
     cgPriceUsdByIdMock.mockImplementation((id: string) => {
       if (id === "tether") {
-        return Promise.resolve({ priceUsd: 1, change24hPct: 0 })
+        return Promise.resolve({ priceUsd: 1, change24hPct: 0 });
       }
 
-      return Promise.resolve({ priceUsd: 3000, change24hPct: 2 })
-    })
+      return Promise.resolve({ priceUsd: 3000, change24hPct: 2 });
+    });
 
     const response = await POST(
       new Request("http://localhost/api/portfolio/add-transaction", {
@@ -183,9 +195,9 @@ describe("/api/portfolio/add-transaction", () => {
           },
         }),
       }),
-    )
+    );
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(200);
     expect(createSpotTransactionMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -196,7 +208,7 @@ describe("/api/portfolio/add-transaction", () => {
         priceUsd: 3000,
         feeUsd: 2,
       }),
-    )
+    );
     expect(createSpotTransactionMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -208,11 +220,21 @@ describe("/api/portfolio/add-transaction", () => {
         feeUsd: 0,
         chainId: "ethereum",
       }),
-    )
+    );
     expect(setPortfolioAssetStablecoinMock).toHaveBeenCalledWith({
       accountId: "acc_1",
       symbol: "USDT",
       isStablecoin: true,
-    })
-  })
-})
+    });
+    expect(setPortfolioAssetHiddenMock).toHaveBeenCalledWith({
+      accountId: "acc_1",
+      symbol: "ETH",
+      isHidden: false,
+    });
+    expect(setPortfolioAssetHiddenMock).toHaveBeenCalledWith({
+      accountId: "acc_1",
+      symbol: "USDT",
+      isHidden: false,
+    });
+  });
+});

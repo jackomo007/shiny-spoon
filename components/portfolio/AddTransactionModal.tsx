@@ -55,6 +55,15 @@ const DEFAULT_RECEIVE_ASSET: AssetPick = {
   symbol: "USDT",
   name: "Tether",
 };
+const COMMON_RECEIVE_ASSETS: AssetPick[] = [
+  DEFAULT_RECEIVE_ASSET,
+  { id: "usd-coin", symbol: "USDC", name: "USDC" },
+  { id: "bitcoin", symbol: "BTC", name: "Bitcoin" },
+  { id: "ethereum", symbol: "ETH", name: "Ethereum" },
+  { id: "solana", symbol: "SOL", name: "Solana" },
+  { id: "binancecoin", symbol: "BNB", name: "BNB" },
+  { id: "hyperliquid", symbol: "HYPE", name: "Hyperliquid" },
+];
 
 export default function AddTransactionModal(props: {
   open: boolean;
@@ -74,6 +83,9 @@ export default function AddTransactionModal(props: {
   const [chainOptions, setChainOptions] = useState<ChainOption[]>([]);
   const [selectedChainId, setSelectedChainId] = useState<string>("");
   const [chainQuery, setChainQuery] = useState("");
+  const [chainsLoading, setChainsLoading] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [topLoading, setTopLoading] = useState(false);
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
 
@@ -84,8 +96,9 @@ export default function AddTransactionModal(props: {
   const [feeRaw, setFeeRaw] = useState<string>("0");
   const [isStablecoin, setIsStablecoin] = useState(false);
   const [convertProceeds, setConvertProceeds] = useState(false);
-  const [receiveAsset, setReceiveAsset] =
-    useState<AssetPick>(DEFAULT_RECEIVE_ASSET);
+  const [receiveAsset, setReceiveAsset] = useState<AssetPick>(
+    DEFAULT_RECEIVE_ASSET,
+  );
   const [busy, setBusy] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -119,6 +132,9 @@ export default function AddTransactionModal(props: {
     setChainOptions([]);
     setSelectedChainId("");
     setChainQuery("");
+    setChainsLoading(false);
+    setPriceLoading(false);
+    setTopLoading(false);
 
     setSide("buy");
     setPriceRaw("");
@@ -197,14 +213,19 @@ export default function AddTransactionModal(props: {
   const loadMarketPrice = useCallback(async (id: string) => {
     setConfirmDeleteOpen(false);
 
-    const res = await fetch(
-      `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return;
-    const j = (await res.json()) as PriceResponse;
-    const p = Number(j.priceUsd ?? 0);
-    setPriceRaw(p > 0 ? String(p) : "");
+    setPriceLoading(true);
+    try {
+      const res = await fetch(
+        `/api/portfolio/assets/price?id=${encodeURIComponent(id)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const j = (await res.json()) as PriceResponse;
+      const p = Number(j.priceUsd ?? 0);
+      setPriceRaw(p > 0 ? String(p) : "");
+    } finally {
+      setPriceLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -240,33 +261,38 @@ export default function AddTransactionModal(props: {
     if (!selected) return;
 
     let cancelled = false;
+    setChainsLoading(true);
     (async () => {
-      const params = new URLSearchParams({
-        id: selected.id,
-        symbol: selected.symbol,
-      });
-      if (chainQuery.trim()) {
-        params.set("q", chainQuery.trim());
-      }
-      const res = await fetch(
-        `/api/portfolio/assets/chains?${params.toString()}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) return;
-      const json = (await res.json().catch(() => null)) as {
-        defaultChainId?: string;
-        items?: ChainOption[];
-      } | null;
-      if (cancelled) return;
-
-      const options = json?.items ?? [];
-      setChainOptions(options);
-      setSelectedChainId((current) => {
-        if (current) {
-          return current;
+      try {
+        const params = new URLSearchParams({
+          id: selected.id,
+          symbol: selected.symbol,
+        });
+        if (chainQuery.trim()) {
+          params.set("q", chainQuery.trim());
         }
-        return json?.defaultChainId ?? options[0]?.id ?? "other";
-      });
+        const res = await fetch(
+          `/api/portfolio/assets/chains?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const json = (await res.json().catch(() => null)) as {
+          defaultChainId?: string;
+          items?: ChainOption[];
+        } | null;
+        if (cancelled) return;
+
+        const options = json?.items ?? [];
+        setChainOptions(options);
+        setSelectedChainId((current) => {
+          if (current) {
+            return current;
+          }
+          return json?.defaultChainId ?? options[0]?.id ?? "other";
+        });
+      } finally {
+        if (!cancelled) setChainsLoading(false);
+      }
     })();
 
     return () => {
@@ -277,22 +303,27 @@ export default function AddTransactionModal(props: {
   useEffect(() => {
     if (!props.open) return;
     (async () => {
-      const res = await fetch("/api/portfolio/assets/top", {
-        cache: "no-store",
-      });
-      if (!res.ok) return;
+      setTopLoading(true);
+      try {
+        const res = await fetch("/api/portfolio/assets/top", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
 
-      const j = (await res.json()) as TopAssetsResponse;
-      setTop(
-        (j.items ?? []).map((x) => ({
-          id: x.id,
-          symbol: x.symbol,
-          name: x.name,
-          thumb: x.image ?? null,
-          priceUsd: x.priceUsd ?? null,
-          change24hPct: x.change24hPct ?? null,
-        })),
-      );
+        const j = (await res.json()) as TopAssetsResponse;
+        setTop(
+          (j.items ?? []).map((x) => ({
+            id: x.id,
+            symbol: x.symbol,
+            name: x.name,
+            thumb: x.image ?? null,
+            priceUsd: x.priceUsd ?? null,
+            change24hPct: x.change24hPct ?? null,
+          })),
+        );
+      } finally {
+        setTopLoading(false);
+      }
     })();
   }, [props.open]);
 
@@ -385,7 +416,7 @@ export default function AddTransactionModal(props: {
   const canConvertSellProceeds =
     mode === "add" && side === "sell" && !!selected && !isSelectedStablecoin;
   const receiveOptions = useMemo(() => {
-    const rows = [receiveAsset, DEFAULT_RECEIVE_ASSET, ...top]
+    const rows = [receiveAsset, ...COMMON_RECEIVE_ASSETS, ...top]
       .filter((asset) => asset.symbol.trim().toUpperCase() !== selectedSymbol)
       .filter(
         (asset, index, list) =>
@@ -416,6 +447,7 @@ export default function AddTransactionModal(props: {
     effectiveReceivePriceUsd > 0
       ? netSellProceedsUsd / effectiveReceivePriceUsd
       : netSellProceedsUsd;
+  const formInfoLoading = chainsLoading || priceLoading || topLoading;
 
   function setConvertProceedsPreference(next: boolean) {
     setConvertProceeds(next);
@@ -638,6 +670,7 @@ export default function AddTransactionModal(props: {
       >
         {step === "pick" && mode !== "edit" ? (
           <div className="grid gap-4">
+            {topLoading ? <LoadingBar label="Loading assets..." /> : null}
             <label className="grid gap-1">
               <span className="text-xs text-gray-500">Search asset</span>
               <input
@@ -728,6 +761,9 @@ export default function AddTransactionModal(props: {
           </div>
         ) : (
           <div className="grid gap-4">
+            {formInfoLoading ? (
+              <LoadingBar label="Loading asset data..." />
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 className={cls(
@@ -1009,6 +1045,20 @@ export default function AddTransactionModal(props: {
   );
 }
 
+function LoadingBar({ label }: { label: string }) {
+  return (
+    <div
+      className="grid gap-2 rounded-xl border border-[#E6EAF2] bg-[#F8FAFC] px-3 py-2"
+      aria-live="polite"
+    >
+      <div className="text-xs font-semibold text-slate-500">{label}</div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+        <div className="h-full w-1/2 animate-[pulse_1.1s_ease-in-out_infinite] rounded-full bg-[#7C3AED]" />
+      </div>
+    </div>
+  );
+}
+
 function ChainPicker({
   options,
   query,
@@ -1023,6 +1073,10 @@ function ChainPicker({
   onSelect: (chain: ChainOption) => void;
 }) {
   const [showOptions, setShowOptions] = useState(false);
+  const inputId = useMemo(
+    () => `chain-search-${Math.random().toString(36).slice(2)}`,
+    [],
+  );
   const fallback =
     selectedChainId && !options.some((chain) => chain.id === selectedChainId)
       ? {
@@ -1045,45 +1099,64 @@ function ChainPicker({
         : [];
 
   return (
-    <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-2">
-      <input
-        className="h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-[#CBB5FF]"
-        value={query}
-        onChange={(event) => {
-          setShowOptions(true);
-          onQueryChange(event.target.value);
-        }}
-        onFocus={() => setShowOptions(true)}
-        onClick={() => setShowOptions(true)}
-        placeholder={selected ? selected.name : "Search chains..."}
-      />
-      <div className="grid max-h-[194px] gap-1 overflow-y-auto">
-        {visibleOptions.map((chain) => {
-          const active = chain.id === selectedChainId;
-
-          return (
-            <button
-              key={chain.id}
-              type="button"
-              className={cls(
-                "flex min-h-[34px] cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 text-left text-sm",
-                active
-                  ? "bg-[#F5F0FF] font-semibold text-[#5F35D5]"
-                  : "text-slate-700 hover:bg-gray-50",
-              )}
-              onClick={() => {
-                onSelect(chain);
-                setShowOptions(false);
-              }}
-            >
-              <span className="min-w-0 truncate">{chain.name}</span>
-              <span className="shrink-0 text-xs font-semibold text-slate-400">
-                {chain.symbol}
-              </span>
-            </button>
-          );
-        })}
+    <div className="relative grid gap-2">
+      <div
+        className={cls(
+          "flex min-h-12 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2",
+          showOptions && "border-[#CBB5FF]",
+        )}
+      >
+        {selected ? (
+          <span className="inline-flex min-w-0 max-w-[58%] items-center gap-2 rounded-full bg-[#F5F0FF] px-3 py-1.5 text-sm font-semibold text-[#5F35D5]">
+            <span className="min-w-0 truncate">{selected.name}</span>
+          </span>
+        ) : null}
+        <input
+          id={inputId}
+          aria-label="Chain"
+          className="min-w-[130px] flex-1 border-0 bg-transparent text-sm outline-none"
+          value={query}
+          onChange={(event) => {
+            setShowOptions(true);
+            onQueryChange(event.target.value);
+          }}
+          onFocus={() => setShowOptions(true)}
+          onClick={() => setShowOptions(true)}
+          onBlur={() => {
+            window.setTimeout(() => setShowOptions(false), 120);
+          }}
+          placeholder={selected ? "Search another chain" : "Search chains..."}
+        />
       </div>
+      {showOptions ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 grid max-h-[194px] gap-1 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          {visibleOptions.map((chain) => {
+            const active = chain.id === selectedChainId;
+
+            return (
+              <button
+                key={chain.id}
+                type="button"
+                className={cls(
+                  "flex min-h-[34px] cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 text-left text-sm",
+                  active
+                    ? "bg-[#F5F0FF] font-semibold text-[#5F35D5]"
+                    : "text-slate-700 hover:bg-gray-50",
+                )}
+                onClick={() => {
+                  onSelect(chain);
+                  setShowOptions(false);
+                }}
+              >
+                <span className="min-w-0 truncate">{chain.name}</span>
+                <span className="shrink-0 text-xs font-semibold text-slate-400">
+                  {chain.symbol}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
